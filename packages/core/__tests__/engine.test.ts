@@ -949,3 +949,243 @@ describe('SqliteMemoryEngine with contradiction detection', () => {
     expect(contradicts).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Time Model Extension
+// ---------------------------------------------------------------------------
+describe('SqliteMemoryEngine time model', () => {
+  let engine: SqliteMemoryEngine;
+
+  beforeEach(async () => {
+    engine = new SqliteMemoryEngine({ dbPath: ':memory:' });
+    await engine.initialize();
+  });
+
+  afterEach(async () => {
+    await engine.close();
+  });
+
+  describe('store with event dates', () => {
+    it('stores memory with eventDateStart and eventDateEnd', async () => {
+      const memory = await engine.store(
+        makeInput({
+          content: 'Conference in Seoul',
+          eventDateStart: '2026-04-01T09:00:00Z',
+          eventDateEnd: '2026-04-03T18:00:00Z',
+        }),
+      );
+
+      expect(memory.memoryId).toMatch(/^mem-/);
+      expect(memory.eventDateStart).toBe('2026-04-01T09:00:00Z');
+      expect(memory.eventDateEnd).toBe('2026-04-03T18:00:00Z');
+    });
+
+    it('stores memory with only eventDateStart', async () => {
+      const memory = await engine.store(
+        makeInput({
+          content: 'Project kickoff',
+          eventDateStart: '2026-05-01T00:00:00Z',
+        }),
+      );
+
+      expect(memory.eventDateStart).toBe('2026-05-01T00:00:00Z');
+      expect(memory.eventDateEnd).toBeUndefined();
+    });
+
+    it('eventDateStart/End are undefined when not provided', async () => {
+      const memory = await engine.store(makeInput());
+
+      expect(memory.eventDateStart).toBeUndefined();
+      expect(memory.eventDateEnd).toBeUndefined();
+    });
+
+    it('getById returns event dates', async () => {
+      const stored = await engine.store(
+        makeInput({
+          content: 'Sprint review meeting',
+          eventDateStart: '2026-03-20T14:00:00Z',
+          eventDateEnd: '2026-03-20T15:00:00Z',
+        }),
+      );
+
+      const retrieved = await engine.getById(stored.memoryId);
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.eventDateStart).toBe('2026-03-20T14:00:00Z');
+      expect(retrieved!.eventDateEnd).toBe('2026-03-20T15:00:00Z');
+    });
+  });
+
+  describe('search with eventDateRange filter', () => {
+    it('filters by eventDateRange.start', async () => {
+      await engine.store(
+        makeInput({
+          content: 'Early event conference',
+          eventDateStart: '2026-01-15T00:00:00Z',
+          keywords: ['conference'],
+        }),
+      );
+      await engine.store(
+        makeInput({
+          content: 'Late event conference',
+          eventDateStart: '2026-06-15T00:00:00Z',
+          keywords: ['conference'],
+        }),
+      );
+
+      const response = await engine.search({
+        userId: 'user-1',
+        query: 'conference',
+        filters: {
+          eventDateRange: { start: '2026-03-01T00:00:00Z' },
+          excludeInvalidated: false,
+        },
+      });
+
+      expect(response.results.length).toBe(1);
+      expect(response.results[0].memory.eventDateStart).toBe(
+        '2026-06-15T00:00:00Z',
+      );
+    });
+
+    it('filters by eventDateRange.end', async () => {
+      await engine.store(
+        makeInput({
+          content: 'Short workshop event',
+          eventDateEnd: '2026-02-01T00:00:00Z',
+          keywords: ['workshop'],
+        }),
+      );
+      await engine.store(
+        makeInput({
+          content: 'Long workshop event',
+          eventDateEnd: '2026-12-01T00:00:00Z',
+          keywords: ['workshop'],
+        }),
+      );
+
+      const response = await engine.search({
+        userId: 'user-1',
+        query: 'workshop',
+        filters: {
+          eventDateRange: { end: '2026-06-01T00:00:00Z' },
+          excludeInvalidated: false,
+        },
+      });
+
+      expect(response.results.length).toBe(1);
+      expect(response.results[0].memory.eventDateEnd).toBe(
+        '2026-02-01T00:00:00Z',
+      );
+    });
+  });
+
+  describe('excludeInvalidated filter', () => {
+    it('excludes invalidated memories by default', async () => {
+      const m1 = await engine.store(
+        makeInput({
+          content: 'Valid programming fact',
+          keywords: ['programming'],
+        }),
+      );
+      const m2 = await engine.store(
+        makeInput({
+          content: 'Outdated programming fact',
+          keywords: ['programming'],
+        }),
+      );
+
+      await engine.invalidate(m2.memoryId);
+
+      const response = await engine.search({
+        userId: 'user-1',
+        query: 'programming',
+      });
+
+      const ids = response.results.map((r) => r.memory.memoryId);
+      expect(ids).toContain(m1.memoryId);
+      expect(ids).not.toContain(m2.memoryId);
+    });
+
+    it('includes invalidated memories when excludeInvalidated=false', async () => {
+      const m1 = await engine.store(
+        makeInput({
+          content: 'Valid coding fact',
+          keywords: ['coding'],
+        }),
+      );
+      const m2 = await engine.store(
+        makeInput({
+          content: 'Outdated coding fact',
+          keywords: ['coding'],
+        }),
+      );
+
+      await engine.invalidate(m2.memoryId);
+
+      const response = await engine.search({
+        userId: 'user-1',
+        query: 'coding',
+        filters: { excludeInvalidated: false },
+      });
+
+      const ids = response.results.map((r) => r.memory.memoryId);
+      expect(ids).toContain(m1.memoryId);
+      expect(ids).toContain(m2.memoryId);
+    });
+  });
+
+  describe('invalidate', () => {
+    it('sets invalidatedAt timestamp', async () => {
+      const memory = await engine.store(
+        makeInput({ content: 'Soon to be invalidated' }),
+      );
+
+      const before = await engine.getById(memory.memoryId);
+      expect(before!.invalidatedAt).toBeUndefined();
+
+      await engine.invalidate(memory.memoryId);
+
+      const after = await engine.getById(memory.memoryId);
+      expect(after!.invalidatedAt).toBeDefined();
+      // Check it is a valid ISO timestamp
+      expect(new Date(after!.invalidatedAt!).toISOString()).toBe(
+        after!.invalidatedAt,
+      );
+    });
+
+    it('invalidated memory excluded from default search', async () => {
+      const m = await engine.store(
+        makeInput({
+          content: 'Temporary database fact',
+          keywords: ['database'],
+        }),
+      );
+
+      // Before invalidation: found
+      const before = await engine.search({
+        userId: 'user-1',
+        query: 'database',
+      });
+      expect(before.results.some((r) => r.memory.memoryId === m.memoryId)).toBe(
+        true,
+      );
+
+      await engine.invalidate(m.memoryId);
+
+      // After invalidation: not found (default excludeInvalidated=true)
+      const after = await engine.search({
+        userId: 'user-1',
+        query: 'database',
+      });
+      expect(after.results.some((r) => r.memory.memoryId === m.memoryId)).toBe(
+        false,
+      );
+    });
+
+    it('invalidate on non-existent memory does not throw', async () => {
+      await expect(
+        engine.invalidate('mem-nonexistent'),
+      ).resolves.not.toThrow();
+    });
+  });
+});

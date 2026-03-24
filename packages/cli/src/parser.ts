@@ -20,6 +20,7 @@ const COMMANDS = new Set([
   'count',
   'clear',
   'relate',
+  'invalidate',
   'status',
   'init',
 ]);

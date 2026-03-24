@@ -17,6 +17,9 @@ export interface MemoryRow {
   readonly is_latest: number;
   readonly embedding: Buffer | null;
   readonly keywords: string | null;
+  readonly event_date_start: string | null;
+  readonly event_date_end: string | null;
+  readonly invalidated_at: string | null;
 }
 
 export function rowToMemory(row: MemoryRow): Memory {
@@ -35,6 +38,9 @@ export function rowToMemory(row: MemoryRow): Memory {
     isLatest: row.is_latest === 1,
     ...(row.embedding != null ? { embedding: deserializeEmbedding(row.embedding) } : {}),
     keywords: stringToKeywords(row.keywords),
+    ...(row.event_date_start != null ? { eventDateStart: row.event_date_start } : {}),
+    ...(row.event_date_end != null ? { eventDateEnd: row.event_date_end } : {}),
+    ...(row.invalidated_at != null ? { invalidatedAt: row.invalidated_at } : {}),
   };
 }
 

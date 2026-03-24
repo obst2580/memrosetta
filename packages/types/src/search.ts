@@ -16,6 +16,12 @@ export interface SearchFilters {
   };
   readonly minConfidence?: number;
   readonly onlyLatest?: boolean;
+  readonly eventDateRange?: {
+    readonly start?: string;
+    readonly end?: string;
+  };
+  /** When true (default), exclude memories that have been invalidated */
+  readonly excludeInvalidated?: boolean;
 }
 
 export type MatchType = 'fts' | 'vector' | 'hybrid';

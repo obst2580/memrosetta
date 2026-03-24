@@ -61,7 +61,7 @@ export async function run(options: StatusOptions): Promise<void> {
       process.stdout.write(`Users: 0\n`);
     }
     process.stdout.write(
-      `Embeddings: ${embeddingsEnabled ? 'enabled (all-MiniLM-L6-v2)' : 'disabled'}\n`,
+      `Embeddings: ${embeddingsEnabled ? 'enabled (bge-small-en-v1.5)' : 'disabled'}\n`,
     );
     return;
   }

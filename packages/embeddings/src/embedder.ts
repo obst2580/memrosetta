@@ -15,14 +15,14 @@ export interface Embedder {
   /** Embed multiple texts efficiently. Returns array of Float32Array. */
   embedBatch(texts: readonly string[]): Promise<readonly Float32Array[]>;
 
-  /** Get the embedding dimension (384 for all-MiniLM-L6-v2) */
+  /** Get the embedding dimension (384 for bge-small-en-v1.5) */
   readonly dimension: number;
 }
 
 /**
- * HuggingFace Transformers.js embedder using all-MiniLM-L6-v2.
+ * HuggingFace Transformers.js embedder using bge-small-en-v1.5.
  *
- * Uses q8 quantized model (~22MB) for fast CPU inference.
+ * Uses q8 quantized model for fast CPU inference.
  * Model is downloaded on first use and cached locally.
  */
 export class HuggingFaceEmbedder implements Embedder {
@@ -31,7 +31,7 @@ export class HuggingFaceEmbedder implements Embedder {
   private readonly modelId: string;
 
   constructor(options?: { readonly modelId?: string }) {
-    this.modelId = options?.modelId ?? 'Xenova/all-MiniLM-L6-v2';
+    this.modelId = options?.modelId ?? 'Xenova/bge-small-en-v1.5';
   }
 
   async initialize(): Promise<void> {

@@ -17,7 +17,10 @@ CREATE TABLE memories (
   salience        REAL DEFAULT 1.0,
   is_latest       INTEGER NOT NULL DEFAULT 1,
   embedding       BLOB,
-  keywords        TEXT
+  keywords        TEXT,
+  event_date_start TEXT,
+  event_date_end   TEXT,
+  invalidated_at   TEXT
 );
 
 CREATE INDEX idx_memories_user_id ON memories(user_id);
@@ -26,6 +29,8 @@ CREATE INDEX idx_memories_memory_type ON memories(memory_type);
 CREATE INDEX idx_memories_is_latest ON memories(is_latest);
 CREATE INDEX idx_memories_source_id ON memories(source_id);
 CREATE INDEX idx_memories_learned_at ON memories(learned_at);
+CREATE INDEX idx_memories_event_date ON memories(event_date_start, event_date_end);
+CREATE INDEX idx_memories_invalidated ON memories(invalidated_at);
 
 -- relations table
 CREATE TABLE memory_relations (
@@ -72,6 +77,15 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories USING vec0(
 );
 `;
 
+const SCHEMA_V3 = `
+ALTER TABLE memories ADD COLUMN event_date_start TEXT;
+ALTER TABLE memories ADD COLUMN event_date_end TEXT;
+ALTER TABLE memories ADD COLUMN invalidated_at TEXT;
+
+CREATE INDEX idx_memories_event_date ON memories(event_date_start, event_date_end);
+CREATE INDEX idx_memories_invalidated ON memories(invalidated_at);
+`;
+
 export function ensureSchema(db: Database.Database, options?: SchemaOptions): void {
   const hasVersionTable = db.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -81,12 +95,14 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
     db.exec('CREATE TABLE schema_version (version INTEGER NOT NULL)');
     db.exec(SCHEMA_V1);
 
+    let version = 1;
     if (options?.vectorEnabled) {
       db.exec(SCHEMA_V2);
-      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(2);
-    } else {
-      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(1);
+      version = 2;
     }
+    // Fresh databases already include v3 columns in SCHEMA_V1
+    version = 3;
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(version);
     return;
   }
 
@@ -101,5 +117,14 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
   if (currentVersion < 2 && options?.vectorEnabled) {
     db.exec(SCHEMA_V2);
     db.prepare('UPDATE schema_version SET version = ?').run(2);
+  }
+
+  if (currentVersion < 3) {
+    // Only run ALTER TABLE for pre-v3 databases.
+    // Fresh databases already have these columns in SCHEMA_V1.
+    if (currentVersion >= 1) {
+      db.exec(SCHEMA_V3);
+    }
+    db.prepare('UPDATE schema_version SET version = ?').run(3);
   }
 }

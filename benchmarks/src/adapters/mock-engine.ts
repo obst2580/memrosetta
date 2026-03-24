@@ -120,4 +120,14 @@ export class MockEngine implements IMemoryEngine {
       }
     }
   }
+
+  async invalidate(memoryId: string, _reason?: string): Promise<void> {
+    const memory = this.memories.get(memoryId);
+    if (memory) {
+      this.memories.set(memoryId, {
+        ...memory,
+        invalidatedAt: new Date().toISOString(),
+      });
+    }
+  }
 }

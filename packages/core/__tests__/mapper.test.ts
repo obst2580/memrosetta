@@ -19,6 +19,9 @@ function makeRow(overrides: Partial<MemoryRow> = {}): MemoryRow {
     is_latest: 1,
     embedding: null,
     keywords: 'typescript javascript typing',
+    event_date_start: null,
+    event_date_end: null,
+    invalidated_at: null,
     ...overrides,
   };
 }
@@ -91,6 +94,39 @@ describe('rowToMemory', () => {
     const row = makeRow({ embedding: null });
     const memory = rowToMemory(row);
     expect(memory).not.toHaveProperty('embedding');
+  });
+
+  it('converts event_date_start to eventDateStart', () => {
+    const row = makeRow({ event_date_start: '2026-04-01T09:00:00Z' });
+    expect(rowToMemory(row).eventDateStart).toBe('2026-04-01T09:00:00Z');
+  });
+
+  it('omits eventDateStart when null', () => {
+    const row = makeRow({ event_date_start: null });
+    const memory = rowToMemory(row);
+    expect(memory).not.toHaveProperty('eventDateStart');
+  });
+
+  it('converts event_date_end to eventDateEnd', () => {
+    const row = makeRow({ event_date_end: '2026-04-03T18:00:00Z' });
+    expect(rowToMemory(row).eventDateEnd).toBe('2026-04-03T18:00:00Z');
+  });
+
+  it('omits eventDateEnd when null', () => {
+    const row = makeRow({ event_date_end: null });
+    const memory = rowToMemory(row);
+    expect(memory).not.toHaveProperty('eventDateEnd');
+  });
+
+  it('converts invalidated_at to invalidatedAt', () => {
+    const row = makeRow({ invalidated_at: '2026-03-20T12:00:00Z' });
+    expect(rowToMemory(row).invalidatedAt).toBe('2026-03-20T12:00:00Z');
+  });
+
+  it('omits invalidatedAt when null', () => {
+    const row = makeRow({ invalidated_at: null });
+    const memory = rowToMemory(row);
+    expect(memory).not.toHaveProperty('invalidatedAt');
   });
 
   it('deserializes embedding from Buffer', () => {

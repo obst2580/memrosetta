@@ -193,6 +193,14 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     clearTransaction(userId);
   }
 
+  async invalidate(memoryId: string, _reason?: string): Promise<void> {
+    this.ensureInitialized();
+    const now = new Date().toISOString();
+    this.db!.prepare(
+      'UPDATE memories SET invalidated_at = ? WHERE memory_id = ?',
+    ).run(now, memoryId);
+  }
+
   async clearNamespace(userId: string, namespace: string): Promise<void> {
     this.ensureInitialized();
     const db = this.db!;

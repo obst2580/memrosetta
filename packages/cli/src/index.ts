@@ -16,6 +16,7 @@ Commands:
   count       Count memories for a user
   clear       Clear all memories for a user
   relate      Create a relation between memories
+  invalidate  Mark a memory as invalidated
   status      Show database status
   init        Initialize database
 
@@ -93,6 +94,11 @@ async function main(): Promise<void> {
       }
       case 'relate': {
         const mod = await import('./commands/relate.js');
+        await mod.run(commandOptions);
+        break;
+      }
+      case 'invalidate': {
+        const mod = await import('./commands/invalidate.js');
         await mod.run(commandOptions);
         break;
       }

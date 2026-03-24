@@ -32,11 +32,14 @@ function insertTestMemory(
     is_latest: 1,
     embedding: null,
     keywords: null,
+    event_date_start: null,
+    event_date_end: null,
+    invalidated_at: null,
   };
   const row = { ...defaults, ...overrides };
   db.prepare(`
-    INSERT INTO memories (memory_id, user_id, namespace, memory_type, content, raw_text, document_date, learned_at, source_id, confidence, salience, is_latest, embedding, keywords)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO memories (memory_id, user_id, namespace, memory_type, content, raw_text, document_date, learned_at, source_id, confidence, salience, is_latest, embedding, keywords, event_date_start, event_date_end, invalidated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     row.memory_id,
     row.user_id,
@@ -52,6 +55,9 @@ function insertTestMemory(
     row.is_latest,
     row.embedding,
     row.keywords,
+    row.event_date_start,
+    row.event_date_end,
+    row.invalidated_at,
   );
 }
 
@@ -235,6 +241,48 @@ describe('buildSearchSql', () => {
     const { sql } = buildSearchSql(query);
 
     expect(sql).not.toContain('m.is_latest');
+  });
+
+  it('includes eventDateRange.start filter', () => {
+    const query: SearchQuery = {
+      userId: 'user1',
+      query: 'test',
+      filters: { eventDateRange: { start: '2026-01-01' } },
+    };
+    const { sql, params } = buildSearchSql(query);
+
+    expect(sql).toContain('m.event_date_start >= ?');
+    expect(params).toContain('2026-01-01');
+  });
+
+  it('includes eventDateRange.end filter', () => {
+    const query: SearchQuery = {
+      userId: 'user1',
+      query: 'test',
+      filters: { eventDateRange: { end: '2026-12-31' } },
+    };
+    const { sql, params } = buildSearchSql(query);
+
+    expect(sql).toContain('m.event_date_end <= ?');
+    expect(params).toContain('2026-12-31');
+  });
+
+  it('excludes invalidated by default', () => {
+    const query: SearchQuery = { userId: 'user1', query: 'test' };
+    const { sql } = buildSearchSql(query);
+
+    expect(sql).toContain('m.invalidated_at IS NULL');
+  });
+
+  it('includes invalidated when excludeInvalidated=false', () => {
+    const query: SearchQuery = {
+      userId: 'user1',
+      query: 'test',
+      filters: { excludeInvalidated: false },
+    };
+    const { sql } = buildSearchSql(query);
+
+    expect(sql).not.toContain('m.invalidated_at IS NULL');
   });
 
   it('uses default limit of 20 when not specified', () => {
@@ -572,6 +620,81 @@ describe('searchMemories', () => {
     expect(typeof result.queryTimeMs).toBe('number');
     expect(result.queryTimeMs).toBeGreaterThanOrEqual(0);
   });
+
+  it('filters by eventDateRange', () => {
+    insertTestMemory(db, {
+      memory_id: 'mem-early-event',
+      content: 'early sprint planning',
+      keywords: 'sprint',
+      event_date_start: '2026-01-10T00:00:00Z',
+      event_date_end: '2026-01-10T01:00:00Z',
+    });
+    insertTestMemory(db, {
+      memory_id: 'mem-late-event',
+      content: 'late sprint planning',
+      keywords: 'sprint',
+      event_date_start: '2026-06-10T00:00:00Z',
+      event_date_end: '2026-06-10T01:00:00Z',
+    });
+
+    const result = searchMemories(db, {
+      userId: 'user1',
+      query: 'sprint',
+      filters: {
+        eventDateRange: { start: '2026-03-01T00:00:00Z' },
+        excludeInvalidated: false,
+      },
+    });
+
+    expect(result.results.length).toBe(1);
+    expect(result.results[0].memory.memoryId).toBe('mem-late-event');
+  });
+
+  it('excludes invalidated memories by default', () => {
+    insertTestMemory(db, {
+      memory_id: 'mem-valid',
+      content: 'valid release note',
+      keywords: 'release',
+      invalidated_at: null,
+    });
+    insertTestMemory(db, {
+      memory_id: 'mem-invalidated',
+      content: 'outdated release note',
+      keywords: 'release',
+      invalidated_at: '2026-03-01T00:00:00Z',
+    });
+
+    const result = searchMemories(db, {
+      userId: 'user1',
+      query: 'release',
+    });
+
+    expect(result.results.length).toBe(1);
+    expect(result.results[0].memory.memoryId).toBe('mem-valid');
+  });
+
+  it('includes invalidated memories when excludeInvalidated=false', () => {
+    insertTestMemory(db, {
+      memory_id: 'mem-valid2',
+      content: 'valid deployment note',
+      keywords: 'deployment',
+      invalidated_at: null,
+    });
+    insertTestMemory(db, {
+      memory_id: 'mem-invalidated2',
+      content: 'outdated deployment note',
+      keywords: 'deployment',
+      invalidated_at: '2026-03-01T00:00:00Z',
+    });
+
+    const result = searchMemories(db, {
+      userId: 'user1',
+      query: 'deployment',
+      filters: { excludeInvalidated: false },
+    });
+
+    expect(result.results.length).toBe(2);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -750,16 +873,20 @@ describe('bruteForceVectorSearch', () => {
       salience: 1.0,
       is_latest: 1,
       keywords: null,
+      event_date_start: null,
+      event_date_end: null,
+      invalidated_at: null,
     };
     const row = { ...defaults, ...overrides };
     db.prepare(`
-      INSERT INTO memories (memory_id, user_id, namespace, memory_type, content, raw_text, document_date, learned_at, source_id, confidence, salience, is_latest, embedding, keywords)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO memories (memory_id, user_id, namespace, memory_type, content, raw_text, document_date, learned_at, source_id, confidence, salience, is_latest, embedding, keywords, event_date_start, event_date_end, invalidated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       row.memory_id, row.user_id, row.namespace, row.memory_type,
       row.content, row.raw_text, row.document_date, row.learned_at,
       row.source_id, row.confidence, row.salience, row.is_latest,
       row.embedding, row.keywords,
+      row.event_date_start, row.event_date_end, row.invalidated_at,
     );
   }
 

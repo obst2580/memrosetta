@@ -15,7 +15,7 @@ MemRosetta is a local-first memory engine that stores, connects, and retrieves k
 - **Atomic memories** — One fact = one memory. Not text blobs, but independent knowledge units.
 - **Hybrid search** — FTS5 keyword search + vector similarity + Reciprocal Rank Fusion.
 - **Relational versioning** — `updates`, `extends`, `derives`, `contradicts`, `supports` relations between memories. Non-destructive: nothing is deleted, history is preserved.
-- **Local embeddings** — all-MiniLM-L6-v2 runs on CPU. No API calls for search.
+- **Local embeddings** — bge-small-en-v1.5 runs on CPU. No API calls for search.
 - **SQLite storage** — Single file database. `npm install` and go.
 - **CLI interface** — `memrosetta store`, `search`, `ingest` from any tool or script.
 
@@ -45,7 +45,7 @@ memrosetta relate --src mem-xxx --dst mem-yyy --type extends
 | Package | Description |
 |---------|-------------|
 | `@memrosetta/core` | Memory engine — SQLite + FTS5 + vector search |
-| `@memrosetta/embeddings` | Local sentence embeddings (all-MiniLM-L6-v2) |
+| `@memrosetta/embeddings` | Local sentence embeddings (bge-small-en-v1.5) |
 | `@memrosetta/cli` | Command-line interface |
 | `@memrosetta/api` | REST API server (development/testing) |
 | `@memrosetta/llm` | LLM provider abstraction for fact extraction |

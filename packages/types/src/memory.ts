@@ -11,6 +11,12 @@ export interface MemoryInput {
   readonly confidence?: number;
   readonly salience?: number;
   readonly keywords?: readonly string[];
+  /** ISO 8601 - when the event started */
+  readonly eventDateStart?: string;
+  /** ISO 8601 - when the event ended */
+  readonly eventDateEnd?: string;
+  /** ISO 8601 - when this fact became invalid */
+  readonly invalidatedAt?: string;
 }
 
 export interface Memory extends MemoryInput {

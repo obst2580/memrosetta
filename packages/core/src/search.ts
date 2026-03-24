@@ -113,6 +113,22 @@ export function buildSearchSql(query: SearchQuery): SearchSqlResult {
     whereClauses.push('m.is_latest = 1');
   }
 
+  if (filters?.eventDateRange?.start) {
+    whereClauses.push('m.event_date_start >= ?');
+    params.push(filters.eventDateRange.start);
+  }
+
+  if (filters?.eventDateRange?.end) {
+    whereClauses.push('m.event_date_end <= ?');
+    params.push(filters.eventDateRange.end);
+  }
+
+  // Default excludeInvalidated to true
+  const excludeInvalidated = filters?.excludeInvalidated ?? true;
+  if (excludeInvalidated) {
+    whereClauses.push('m.invalidated_at IS NULL');
+  }
+
   const limit = query.limit ?? DEFAULT_LIMIT;
   params.push(limit);
 
@@ -251,6 +267,21 @@ export function bruteForceVectorSearch(
     params.push(filters.minConfidence);
   }
 
+  if (filters?.eventDateRange?.start) {
+    whereClauses.push('event_date_start >= ?');
+    params.push(filters.eventDateRange.start);
+  }
+
+  if (filters?.eventDateRange?.end) {
+    whereClauses.push('event_date_end <= ?');
+    params.push(filters.eventDateRange.end);
+  }
+
+  const excludeInvalidated = filters?.excludeInvalidated ?? true;
+  if (excludeInvalidated) {
+    whereClauses.push('invalidated_at IS NULL');
+  }
+
   const sql = `SELECT * FROM memories WHERE ${whereClauses.join(' AND ')}`;
   const rows = db.prepare(sql).all(...params) as readonly MemoryRow[];
 
@@ -343,6 +374,21 @@ export function vectorSearch(
   if (filters?.minConfidence != null) {
     sql += ' AND confidence >= ?';
     params.push(filters.minConfidence);
+  }
+
+  if (filters?.eventDateRange?.start) {
+    sql += ' AND event_date_start >= ?';
+    params.push(filters.eventDateRange.start);
+  }
+
+  if (filters?.eventDateRange?.end) {
+    sql += ' AND event_date_end <= ?';
+    params.push(filters.eventDateRange.end);
+  }
+
+  const excludeInvalidated = filters?.excludeInvalidated ?? true;
+  if (excludeInvalidated) {
+    sql += ' AND invalidated_at IS NULL';
   }
 
   const rows = db.prepare(sql).all(...params) as readonly MemoryRow[];

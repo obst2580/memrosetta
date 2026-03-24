@@ -51,13 +51,15 @@ describe('ensureSchema', () => {
     expect(indexNames).toContain('idx_memories_is_latest');
     expect(indexNames).toContain('idx_memories_source_id');
     expect(indexNames).toContain('idx_memories_learned_at');
+    expect(indexNames).toContain('idx_memories_event_date');
+    expect(indexNames).toContain('idx_memories_invalidated');
   });
 
-  it('sets schema version to 1', () => {
+  it('sets schema version to 3 for fresh database', () => {
     ensureSchema(db);
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(1);
+    expect(row.version).toBe(3);
   });
 
   it('is idempotent - running twice does not error', () => {
@@ -65,7 +67,7 @@ describe('ensureSchema', () => {
     expect(() => ensureSchema(db)).not.toThrow();
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(1);
+    expect(row.version).toBe(3);
   });
 
   it('FTS5 syncs with memories table on insert', () => {

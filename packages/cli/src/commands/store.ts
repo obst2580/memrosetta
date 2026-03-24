@@ -74,6 +74,8 @@ export async function run(options: StoreOptions): Promise<void> {
     const keywordsRaw = optionalOption(args, '--keywords');
     const confidenceRaw = optionalOption(args, '--confidence');
     const sourceId = optionalOption(args, '--source-id');
+    const eventStart = optionalOption(args, '--event-start');
+    const eventEnd = optionalOption(args, '--event-end');
 
     input = {
       userId,
@@ -83,6 +85,8 @@ export async function run(options: StoreOptions): Promise<void> {
       keywords: keywordsRaw ? keywordsRaw.split(',') : undefined,
       confidence: confidenceRaw ? parseFloat(confidenceRaw) : undefined,
       sourceId,
+      eventDateStart: eventStart,
+      eventDateEnd: eventEnd,
     };
   }
 

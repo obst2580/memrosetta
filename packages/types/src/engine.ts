@@ -24,4 +24,7 @@ export interface IMemoryEngine {
   count(userId: string): Promise<number>;
   clear(userId: string): Promise<void>;
   clearNamespace(userId: string, namespace: string): Promise<void>;
+
+  /** Mark a memory as invalidated. Sets invalidated_at to current timestamp. */
+  invalidate(memoryId: string, reason?: string): Promise<void>;
 }

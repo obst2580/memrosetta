@@ -14,8 +14,8 @@ export interface PreparedStatements {
 export function createPreparedStatements(db: Database.Database): PreparedStatements {
   return {
     insertMemory: db.prepare(`
-      INSERT INTO memories (memory_id, user_id, namespace, memory_type, content, raw_text, document_date, learned_at, source_id, confidence, salience, is_latest, embedding, keywords)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO memories (memory_id, user_id, namespace, memory_type, content, raw_text, document_date, learned_at, source_id, confidence, salience, is_latest, embedding, keywords, event_date_start, event_date_end, invalidated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `),
     getById: db.prepare('SELECT * FROM memories WHERE id = ?'),
     getByMemoryId: db.prepare('SELECT * FROM memories WHERE memory_id = ?'),
@@ -51,6 +51,9 @@ export function storeMemory(
     1, // is_latest
     null, // embedding
     keywords,
+    input.eventDateStart ?? null,
+    input.eventDateEnd ?? null,
+    input.invalidatedAt ?? null,
   );
 
   // Read back the stored row to get the canonical representation
@@ -96,6 +99,9 @@ export async function storeMemoryAsync(
     1, // is_latest
     embeddingBlob,
     keywords,
+    input.eventDateStart ?? null,
+    input.eventDateEnd ?? null,
+    input.invalidatedAt ?? null,
   );
 
   // Insert into vec_memories if embedding was computed
@@ -176,6 +182,9 @@ export async function storeBatchAsync(
         1, // is_latest
         embeddingBlob,
         keywords,
+        input.eventDateStart ?? null,
+        input.eventDateEnd ?? null,
+        input.invalidatedAt ?? null,
       );
 
       if (info.lastInsertRowid) {
