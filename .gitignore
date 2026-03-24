@@ -26,3 +26,7 @@ benchmarks/results/*
 memrosetta.db*
 *.db-shm
 *.db-wal
+
+# Project internal docs (not for public repo)
+decisions.md
+CLAUDE.md
