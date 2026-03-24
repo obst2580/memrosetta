@@ -1,0 +1,32 @@
+{
+  "name": "benchmarks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/cli.ts --format esm --dts",
+    "bench": "tsx src/cli.ts",
+    "bench:mock": "tsx src/cli.ts --engine mock",
+    "bench:phase1": "tsx src/cli.ts --phase 1",
+    "bench:sqlite": "tsx src/cli.ts --engine sqlite",
+    "bench:hybrid": "tsx src/cli.ts --engine hybrid",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@memrosetta/core": "workspace:*",
+    "@memrosetta/embeddings": "workspace:*",
+    "@memrosetta/llm": "workspace:*",
+    "@memrosetta/types": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/better-sqlite3": "^7.6.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

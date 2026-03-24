@@ -1,0 +1,28 @@
+node_modules/
+dist/
+benchmarks/data/*
+benchmarks/results/*
+*.db
+*.sqlite
+!benchmarks/data/.gitkeep
+!benchmarks/results/.gitkeep
+
+# Secrets
+.env
+.env.*
+
+# OS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+
+# MemRosetta local data
+.memrosetta/
+
+# pnpm
+*.tgz
+memrosetta.db*
+*.db-shm
+*.db-wal

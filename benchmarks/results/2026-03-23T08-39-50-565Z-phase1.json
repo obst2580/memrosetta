@@ -1,0 +1,77 @@
+{
+  "name": "MemRosetta Phase 1 Benchmark",
+  "phase": "phase1",
+  "timestamp": "2026-03-23T08:39:50.565Z",
+  "dataset": "LoCoMo",
+  "engineVersion": "0.1.0",
+  "retrieval": {
+    "precisionAtK": {
+      "5": 0
+    },
+    "recallAtK": {
+      "5": 0
+    },
+    "ndcgAtK": {
+      "10": 0
+    },
+    "mrr": 0
+  },
+  "latency": [
+    {
+      "operation": "store",
+      "p50Ms": 233.57975000000002,
+      "p95Ms": 233.57975000000002,
+      "p99Ms": 233.57975000000002,
+      "meanMs": 233.57975000000002,
+      "minMs": 233.57975000000002,
+      "maxMs": 233.57975000000002,
+      "sampleCount": 1
+    },
+    {
+      "operation": "search",
+      "p50Ms": 0.6548540000000003,
+      "p95Ms": 0.9872599999998783,
+      "p99Ms": 1.1622044500000415,
+      "meanMs": 0.6568269103726062,
+      "minMs": 0.1714590000001408,
+      "maxMs": 3.7307499999999436,
+      "sampleCount": 1986
+    }
+  ],
+  "qa": {
+    "totalQuestions": 1986,
+    "correctAnswers": 0,
+    "accuracy": 0,
+    "byCategory": {
+      "multi-hop": {
+        "total": 321,
+        "correct": 0,
+        "accuracy": 0
+      },
+      "temporal": {
+        "total": 96,
+        "correct": 0,
+        "accuracy": 0
+      },
+      "single-hop": {
+        "total": 282,
+        "correct": 0,
+        "accuracy": 0
+      },
+      "open-domain": {
+        "total": 841,
+        "correct": 0,
+        "accuracy": 0
+      },
+      "adversarial": {
+        "total": 446,
+        "correct": 0,
+        "accuracy": 0
+      }
+    }
+  },
+  "metadata": {
+    "memoryCount": 5882,
+    "queryCount": 1986
+  }
+}

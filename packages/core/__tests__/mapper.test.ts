@@ -1,0 +1,145 @@
+import { describe, it, expect } from 'vitest';
+import { rowToMemory, serializeEmbedding } from '../src/mapper.js';
+import type { MemoryRow } from '../src/mapper.js';
+
+function makeRow(overrides: Partial<MemoryRow> = {}): MemoryRow {
+  return {
+    id: 1,
+    memory_id: 'mem-abc123',
+    user_id: 'user-1',
+    namespace: 'project-x',
+    memory_type: 'fact',
+    content: 'TypeScript is typed JavaScript',
+    raw_text: 'I think TypeScript is typed JavaScript',
+    document_date: '2025-01-15T10:00:00.000Z',
+    learned_at: '2025-01-15T10:05:00.000Z',
+    source_id: 'conv-001',
+    confidence: 0.9,
+    salience: 0.8,
+    is_latest: 1,
+    embedding: null,
+    keywords: 'typescript javascript typing',
+    ...overrides,
+  };
+}
+
+describe('rowToMemory', () => {
+  it('converts all fields correctly', () => {
+    const row = makeRow();
+    const memory = rowToMemory(row);
+
+    expect(memory.memoryId).toBe('mem-abc123');
+    expect(memory.userId).toBe('user-1');
+    expect(memory.namespace).toBe('project-x');
+    expect(memory.memoryType).toBe('fact');
+    expect(memory.content).toBe('TypeScript is typed JavaScript');
+    expect(memory.rawText).toBe('I think TypeScript is typed JavaScript');
+    expect(memory.documentDate).toBe('2025-01-15T10:00:00.000Z');
+    expect(memory.learnedAt).toBe('2025-01-15T10:05:00.000Z');
+    expect(memory.sourceId).toBe('conv-001');
+    expect(memory.confidence).toBe(0.9);
+    expect(memory.salience).toBe(0.8);
+    expect(memory.isLatest).toBe(true);
+    expect(memory.keywords).toEqual(['typescript', 'javascript', 'typing']);
+  });
+
+  it('converts is_latest=1 to true', () => {
+    const row = makeRow({ is_latest: 1 });
+    expect(rowToMemory(row).isLatest).toBe(true);
+  });
+
+  it('converts is_latest=0 to false', () => {
+    const row = makeRow({ is_latest: 0 });
+    expect(rowToMemory(row).isLatest).toBe(false);
+  });
+
+  it('converts keywords string to array', () => {
+    const row = makeRow({ keywords: 'alpha beta gamma' });
+    expect(rowToMemory(row).keywords).toEqual(['alpha', 'beta', 'gamma']);
+  });
+
+  it('converts null keywords to empty array', () => {
+    const row = makeRow({ keywords: null });
+    expect(rowToMemory(row).keywords).toEqual([]);
+  });
+
+  it('omits namespace when null', () => {
+    const row = makeRow({ namespace: null });
+    const memory = rowToMemory(row);
+    expect(memory).not.toHaveProperty('namespace');
+  });
+
+  it('omits rawText when null', () => {
+    const row = makeRow({ raw_text: null });
+    const memory = rowToMemory(row);
+    expect(memory).not.toHaveProperty('rawText');
+  });
+
+  it('omits documentDate when null', () => {
+    const row = makeRow({ document_date: null });
+    const memory = rowToMemory(row);
+    expect(memory).not.toHaveProperty('documentDate');
+  });
+
+  it('omits sourceId when null', () => {
+    const row = makeRow({ source_id: null });
+    const memory = rowToMemory(row);
+    expect(memory).not.toHaveProperty('sourceId');
+  });
+
+  it('omits embedding when null', () => {
+    const row = makeRow({ embedding: null });
+    const memory = rowToMemory(row);
+    expect(memory).not.toHaveProperty('embedding');
+  });
+
+  it('deserializes embedding from Buffer', () => {
+    const original = [0.1, 0.2, 0.3, 0.4];
+    const buf = serializeEmbedding(original);
+    const row = makeRow({ embedding: buf });
+    const memory = rowToMemory(row);
+
+    expect(memory.embedding).toBeDefined();
+    expect(memory.embedding!.length).toBe(4);
+    expect(memory.embedding![0]).toBeCloseTo(0.1, 5);
+    expect(memory.embedding![1]).toBeCloseTo(0.2, 5);
+    expect(memory.embedding![2]).toBeCloseTo(0.3, 5);
+    expect(memory.embedding![3]).toBeCloseTo(0.4, 5);
+  });
+});
+
+describe('serializeEmbedding', () => {
+  it('roundtrips correctly with number array', () => {
+    const original = [1.0, 2.5, -3.7, 0.0, 999.999];
+    const buf = serializeEmbedding(original);
+    expect(buf).toBeInstanceOf(Buffer);
+
+    const float32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+    const result = Array.from(float32);
+
+    expect(result.length).toBe(original.length);
+    result.forEach((val, i) => {
+      // Float32 has less precision than Float64, so use a wider tolerance
+      expect(val).toBeCloseTo(original[i], 2);
+    });
+  });
+
+  it('roundtrips correctly with Float32Array', () => {
+    const original = new Float32Array([0.1, 0.2, 0.3]);
+    const buf = serializeEmbedding(original);
+    expect(buf).toBeInstanceOf(Buffer);
+
+    const float32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+    const result = Array.from(float32);
+
+    expect(result.length).toBe(original.length);
+    result.forEach((val, i) => {
+      expect(val).toBeCloseTo(original[i], 5);
+    });
+  });
+
+  it('handles empty array', () => {
+    const buf = serializeEmbedding([]);
+    expect(buf.byteLength).toBe(0);
+  });
+});

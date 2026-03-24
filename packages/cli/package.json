@@ -1,0 +1,28 @@
+{
+  "name": "@memrosetta/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "memrosetta": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --external better-sqlite3 --external @memrosetta/core --external @memrosetta/embeddings --external @memrosetta/types --external @huggingface/transformers --external sqlite-vec --external onnxruntime-node",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@memrosetta/core": "workspace:*",
+    "@memrosetta/embeddings": "workspace:*",
+    "@memrosetta/types": "workspace:*",
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

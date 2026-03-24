@@ -84,8 +84,61 @@ MemRosetta Core (LLM 의존 없음)
 | 저장 (기본) | SQLite + sqlite-vss |
 | 저장 (옵션) | PostgreSQL + pgvector |
 | 전문 검색 | SQLite FTS5 |
-| 벡터 | all-MiniLM-L6-v2 (로컬, CPU) |
+| 벡터 임베딩 | bge-small-en-v1.5 (33M, MIT) |
+| 모순 감지 | nli-deberta-v3-xsmall (71M, Apache 2.0) |
 | API | REST (Hono) |
+
+## HuggingFace 모델 (Core 내장, 전부 MIT/Apache)
+
+Core에 내장하는 모델은 상업적 사용 가능한 라이선스만 사용.
+사실 추출(Triplet Extraction)은 Core에 넣지 않음 (클라이언트 책임).
+
+### 벡터 임베딩 (검색용)
+
+| 모델 | 크기 | 차원 | 성능 | 라이선스 | 용도 |
+|------|------|------|------|----------|------|
+| bge-small-en-v1.5 | 33M | 384 | MTEB 62.17 | MIT | 영어 기본 |
+| multilingual-e5-small | 100M | 384 | 94개 언어 | MIT | 다국어 |
+| ko-sroberta-multitask | 110M | 768 | KorSTS 85.6 | Apache 2.0 | 한국어 |
+
+기본값: bge-small-en-v1.5. 설정으로 교체 가능.
+
+### 모순 감지 (NLI)
+
+| 모델 | 크기 | 성능 | 라이선스 |
+|------|------|------|----------|
+| nli-deberta-v3-xsmall | 71M | SNLI 91.6% | Apache 2.0 |
+
+store() 시 유사 메모리와 모순 여부를 로컬에서 판단. LLM API 호출 불필요.
+
+```
+store() 호출 시 내부 흐름:
+  1. 임베딩 생성 (bge-small, 33M)
+  2. 유사 메모리 검색 (FTS + 벡터)
+  3. 모순 체크 (nli-deberta, 71M) ← LLM 없이 로컬
+  4. 모순 발견 시 → contradicts 관계 자동 설정
+  5. 저장
+```
+
+### 사실 추출 (Core 미포함, 클라이언트 책임)
+
+상업적 사용 가능한 사실 추출 모델이 아직 없음 (rebel-large 등은 CC-BY-NC-SA).
+따라서 Core에는 넣지 않고, 참고 구현만 제공:
+
+```
+examples/
+├── extract-with-claude.ts    # Claude API로 사실 추출
+├── extract-with-gpt.ts       # OpenAI API로 사실 추출
+└── extract-prompt-template.md # 추출 프롬프트 템플릿
+```
+
+### 벤치마크 데이터셋
+
+| 데이터셋 | 평가 대상 | 라이선스 |
+|---------|----------|----------|
+| MemoryAgentBench | 4가지 메모리 역량 (충돌 해결 포함) | MIT |
+| LongMemEval | 5가지 장기 메모리 능력 | MIT |
+| MemoryBench (THUIR) | 28+ 하위 벤치마크 통합 | - |
 
 ## DB 스키마 (MVP)
 

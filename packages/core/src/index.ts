@@ -1,0 +1,13 @@
+export { ensureSchema } from './schema.js';
+export type { SchemaOptions } from './schema.js';
+export { generateMemoryId, nowIso, keywordsToString, stringToKeywords } from './utils.js';
+export { rowToMemory, serializeEmbedding } from './mapper.js';
+export type { MemoryRow } from './mapper.js';
+export { createPreparedStatements, storeMemory, storeBatchInTransaction, storeMemoryAsync, storeBatchAsync } from './store.js';
+export type { PreparedStatements } from './store.js';
+export { createRelationStatements, createRelation } from './relations.js';
+export type { RelationStatements } from './relations.js';
+export { buildFtsQuery, buildSearchSql, normalizeScores, ftsSearch, vectorSearch, bruteForceVectorSearch, rrfMerge, searchMemories } from './search.js';
+export type { SearchSqlResult, VectorSearchResult } from './search.js';
+export { SqliteMemoryEngine, createEngine } from './engine.js';
+export type { SqliteEngineOptions } from './engine.js';

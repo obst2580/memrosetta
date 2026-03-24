@@ -1,0 +1,31 @@
+{
+  "name": "memrosetta",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "bench": "pnpm --filter benchmarks run bench",
+    "bench:phase1": "pnpm --filter benchmarks run bench:phase1",
+    "bench:mock": "pnpm --filter benchmarks run bench:mock",
+    "bench:sqlite": "pnpm --filter benchmarks run bench:sqlite",
+    "bench:hybrid": "pnpm --filter benchmarks run bench:hybrid",
+    "bench:fact": "pnpm --filter benchmarks run bench -- --converter fact",
+    "dev": "pnpm --filter @memrosetta/api run dev",
+    "start": "pnpm --filter @memrosetta/api run start",
+    "memrosetta": "pnpm --filter @memrosetta/cli run start --"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild",
+      "onnxruntime-node",
+      "protobufjs",
+      "sharp"
+    ]
+  }
+}
