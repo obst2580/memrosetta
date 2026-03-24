@@ -1,9 +1,11 @@
 {
   "name": "@memrosetta/claude-code",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "type": "module",
   "bin": {
-    "memrosetta": "./dist/index.js"
+    "memrosetta": "./dist/index.js",
+    "memrosetta-on-stop": "./dist/hooks/on-stop.js",
+    "memrosetta-on-prompt": "./dist/hooks/on-prompt.js"
   },
   "main": "./dist/index.js",
   "exports": {
@@ -22,6 +24,9 @@
   "dependencies": {
     "@memrosetta/core": "workspace:*",
     "@memrosetta/embeddings": "workspace:*"
+  },
+  "optionalDependencies": {
+    "@memrosetta/llm": "workspace:*"
   },
   "devDependencies": {
     "@memrosetta/types": "workspace:*",

@@ -12,6 +12,9 @@ export interface MemRosettaConfig {
   readonly maxRecallResults: number;
   readonly minQueryLength: number;
   readonly maxContextChars: number;
+  readonly llmProvider?: 'openai' | 'anthropic';
+  readonly llmApiKey?: string;
+  readonly llmModel?: string;
 }
 
 const DEFAULT_CONFIG: MemRosettaConfig = {

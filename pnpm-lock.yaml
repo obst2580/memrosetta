@@ -32,6 +32,10 @@ importers:
       vitest:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.37)
+    optionalDependencies:
+      '@memrosetta/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
 
   adapters/mcp:
     dependencies:

@@ -3,8 +3,8 @@
  * MemRosetta Stop Hook
  *
  * Claude Code Stop hook that saves session memories.
- * Parses the session JSONL transcript, extracts turns, and stores
- * each meaningful message as an atomic memory via the in-process engine.
+ * Uses LLM-based fact extraction if configured, otherwise falls back
+ * to rule-based extraction.
  *
  * Graceful degradation: if anything fails, does not break the hook chain.
  */
@@ -12,9 +12,11 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import type { MemoryInput } from '@memrosetta/types';
 import { getEngine, closeEngine } from '../engine-manager.js';
 import { parseTranscript } from '../transcript-parser.js';
 import { extractMemories, resolveUserId } from '../memory-extractor.js';
+import { getConfig } from '../config.js';
 
 interface HookInput {
   readonly transcript_path?: string;
@@ -40,6 +42,64 @@ function findTranscriptPath(hookInput: HookInput): string | null {
   }
 
   return null;
+}
+
+/**
+ * Try LLM-based fact extraction. Returns null if LLM is not configured
+ * or extraction fails (caller should fall back to rule-based).
+ */
+async function tryLLMExtraction(
+  turns: readonly { readonly role: string; readonly content: string }[],
+  userId: string,
+  sessionShort: string,
+): Promise<readonly MemoryInput[] | null> {
+  const config = getConfig();
+
+  // Check for LLM config: explicit config or env vars
+  const provider = config.llmProvider
+    || (process.env.OPENAI_API_KEY ? 'openai' : null)
+    || (process.env.ANTHROPIC_API_KEY ? 'anthropic' : null);
+
+  if (!provider) return null;
+
+  const apiKey = config.llmApiKey
+    || process.env.OPENAI_API_KEY
+    || process.env.ANTHROPIC_API_KEY;
+
+  if (!apiKey) return null;
+
+  try {
+    const { FactExtractor, OpenAIProvider, AnthropicProvider } = await import('@memrosetta/llm');
+
+    const llm = provider === 'openai'
+      ? new OpenAIProvider({ apiKey, model: config.llmModel || 'gpt-4o-mini' })
+      : new AnthropicProvider({ apiKey, model: config.llmModel || 'claude-haiku-4-5-20251001' });
+
+    const extractor = new FactExtractor(llm);
+
+    const llmTurns = turns.map(t => ({
+      speaker: t.role === 'user' ? 'User' : 'Assistant',
+      text: t.content,
+    }));
+
+    const facts = await extractor.extractFromTurns(llmTurns, {
+      dateTime: new Date().toISOString(),
+    });
+
+    if (facts.length === 0) return null;
+
+    const now = new Date().toISOString();
+    return extractor.toMemoryInputs(facts, {
+      userId,
+      namespace: `session-${sessionShort}`,
+      documentDate: now,
+      sourceId: `cc-${sessionShort}-llm`,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[memrosetta] LLM extraction failed, falling back to rules: ${msg}\n`);
+    return null;
+  }
 }
 
 async function main(): Promise<void> {
@@ -77,9 +137,16 @@ async function main(): Promise<void> {
   // Resolve userId from cwd
   const cwd = hookInput.cwd || data.cwd || process.cwd();
   const userId = resolveUserId(cwd);
+  const sessionShort = data.sessionId ? data.sessionId.slice(0, 8) : 'unknown';
 
-  // Extract memories from turns
-  const memories = extractMemories(data, userId);
+  // Try LLM extraction first, fall back to rule-based
+  let memories = await tryLLMExtraction(data.turns, userId, sessionShort);
+  const method = memories ? 'llm' : 'rules';
+
+  if (!memories) {
+    memories = extractMemories(data, userId);
+  }
+
   if (memories.length === 0) {
     process.stderr.write('[memrosetta] No memories to store\n');
     return;
@@ -89,9 +156,7 @@ async function main(): Promise<void> {
   const engine = await getEngine();
 
   // Clear previous memories from this session to avoid duplicates
-  // (session may end multiple times / hook may re-run)
-  const sessionShort = data.sessionId ? data.sessionId.slice(0, 8) : null;
-  if (sessionShort) {
+  if (sessionShort !== 'unknown') {
     await engine.clearNamespace(userId, `session-${sessionShort}`);
   }
 
@@ -99,7 +164,7 @@ async function main(): Promise<void> {
   await closeEngine();
 
   process.stderr.write(
-    `[memrosetta] Stored ${stored.length}/${memories.length} memories for ${userId}\n`,
+    `[memrosetta] Stored ${stored.length} memories for ${userId} (${method})\n`,
   );
 }
 
