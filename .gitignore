@@ -18,6 +18,9 @@ benchmarks/results/*
 .idea/
 .vscode/
 
+# MCP config (contains local paths)
+.mcp.json
+
 # MemRosetta local data
 .memrosetta/
 
