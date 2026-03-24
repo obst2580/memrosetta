@@ -80,9 +80,32 @@ npx @memrosetta/claude-code status   # Show what's configured
 npx @memrosetta/claude-code reset    # Remove all integrations
 ```
 
-### Cursor / Other MCP-compatible tools
+### Any MCP-Compatible Tool
 
-Add to your `.mcp.json`:
+MemRosetta works with **any tool that supports MCP** (Model Context Protocol). All tools share the same local database, so memories stored from one tool are searchable from another.
+
+```
+Claude Code ──┐
+Claude Desktop ├──→ ~/.memrosetta/memories.db ←──┤ Cursor
+Windsurf ──────┘    (one shared SQLite file)      ├── Cline
+                                                  └── Continue
+```
+
+#### Supported Tools
+
+| Tool | MCP Support | Setup |
+|------|:-----------:|-------|
+| **Claude Code** | Yes | `npx @memrosetta/claude-code init` (one command) |
+| **Claude Desktop** | Yes | Add MCP server in Settings > Developer |
+| **Cursor** | Yes | Add to `.cursor/mcp.json` |
+| **Windsurf** | Yes | Add to MCP config |
+| **Cline** (VS Code) | Yes | Add to MCP settings |
+| **Continue** (VS Code) | Yes | Add to MCP config |
+| ChatGPT / Copilot | No | Use CLI or REST API instead |
+
+#### Setup for Cursor / Claude Desktop / Others
+
+Add to your MCP config (`.mcp.json`, `.cursor/mcp.json`, or tool-specific settings):
 
 ```json
 {
@@ -102,6 +125,18 @@ Available MCP tools:
 - `memrosetta_relate` -- link related memories
 - `memrosetta_invalidate` -- mark outdated facts
 - `memrosetta_count` -- count stored memories
+
+#### Cross-Tool Memory Sharing
+
+Since all tools read from the same `~/.memrosetta/memories.db`:
+
+```
+Morning:  Claude Code session about auth system → memories saved
+Afternoon: Open Cursor for frontend work → search "auth" → finds morning's decisions
+Evening:  Claude Desktop for planning → has full context from both sessions
+```
+
+No sync, no cloud, no config. It just works because it's one local file.
 
 ### CLI
 

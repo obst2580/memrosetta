@@ -3,6 +3,7 @@ import { Problem } from './components/Problem'
 import { HowItWorks } from './components/HowItWorks'
 import { NotAnotherRag } from './components/NotAnotherRag'
 import { Architecture } from './components/Architecture'
+import { Compatibility } from './components/Compatibility'
 import { Comparison } from './components/Comparison'
 import { QuickStart } from './components/QuickStart'
 import { Footer } from './components/Footer'
@@ -15,6 +16,7 @@ function App() {
       <HowItWorks />
       <NotAnotherRag />
       <Architecture />
+      <Compatibility />
       <Comparison />
       <QuickStart />
       <Footer />
