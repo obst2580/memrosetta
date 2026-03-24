@@ -175,6 +175,37 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     clearTransaction(userId);
   }
 
+  async clearNamespace(userId: string, namespace: string): Promise<void> {
+    this.ensureInitialized();
+    const db = this.db!;
+
+    const clearTransaction = db.transaction((uid: string, ns: string) => {
+      db.prepare(`
+        DELETE FROM memory_relations WHERE src_memory_id IN (
+          SELECT memory_id FROM memories WHERE user_id = ? AND namespace = ?
+        ) OR dst_memory_id IN (
+          SELECT memory_id FROM memories WHERE user_id = ? AND namespace = ?
+        )
+      `).run(uid, ns, uid, ns);
+
+      if (this.vectorEnabled) {
+        try {
+          db.prepare(`
+            DELETE FROM vec_memories WHERE rowid IN (
+              SELECT id FROM memories WHERE user_id = ? AND namespace = ?
+            )
+          `).run(uid, ns);
+        } catch {
+          // vec_memories may not exist
+        }
+      }
+
+      db.prepare('DELETE FROM memories WHERE user_id = ? AND namespace = ?').run(uid, ns);
+    });
+
+    clearTransaction(userId, namespace);
+  }
+
   private ensureInitialized(): void {
     if (!this.db || !this.stmts || !this.relStmts) {
       throw new Error('Engine not initialized. Call initialize() first.');

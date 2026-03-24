@@ -21,4 +21,5 @@ export interface IMemoryEngine {
 
   count(userId: string): Promise<number>;
   clear(userId: string): Promise<void>;
+  clearNamespace(userId: string, namespace: string): Promise<void>;
 }

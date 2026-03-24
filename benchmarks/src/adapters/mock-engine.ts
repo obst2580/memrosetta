@@ -106,4 +106,12 @@ export class MockEngine implements IMemoryEngine {
       }
     }
   }
+
+  async clearNamespace(userId: string, namespace: string): Promise<void> {
+    for (const [id, memory] of this.memories) {
+      if (memory.userId === userId && memory.namespace === namespace) {
+        this.memories.delete(id);
+      }
+    }
+  }
 }

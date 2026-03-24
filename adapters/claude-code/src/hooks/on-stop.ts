@@ -85,8 +85,16 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Get engine and store
+  // Get engine
   const engine = await getEngine();
+
+  // Clear previous memories from this session to avoid duplicates
+  // (session may end multiple times / hook may re-run)
+  const sessionShort = data.sessionId ? data.sessionId.slice(0, 8) : null;
+  if (sessionShort) {
+    await engine.clearNamespace(userId, `session-${sessionShort}`);
+  }
+
   const stored = await engine.storeBatch(memories);
   await closeEngine();
 
