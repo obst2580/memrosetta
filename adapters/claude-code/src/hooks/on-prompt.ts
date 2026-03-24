@@ -2,20 +2,41 @@
 /**
  * MemRosetta UserPromptSubmit Hook
  *
- * Searches MemRosetta for memories relevant to the user's prompt
- * and injects them as context that Claude can reference.
+ * Two responsibilities:
+ * 1. Search MemRosetta for memories relevant to the user's prompt (recall)
+ * 2. Monitor transcript size and auto-save when approaching context limit (persist)
  *
  * Graceful degradation: outputs "OK" if anything fails or takes too long.
  */
 
+import { existsSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { getEngineWithTimeout, closeEngine } from '../engine-manager.js';
-import { resolveUserId } from '../memory-extractor.js';
+import { parseTranscript } from '../transcript-parser.js';
+import { extractMemories, resolveUserId } from '../memory-extractor.js';
 import { getConfig } from '../config.js';
 import type { SearchResult } from '@memrosetta/types';
+
+// Approximate context limits by model (tokens)
+const MODEL_CONTEXT_LIMITS: Record<string, number> = {
+  'claude-opus-4-6': 1_000_000,
+  'claude-sonnet-4-6': 200_000,
+  'claude-haiku-4-5': 200_000,
+  default: 200_000,
+};
+
+// Save when transcript reaches this fraction of estimated context
+const SAVE_THRESHOLD = 0.6;
+
+// Rough bytes-to-tokens ratio for JSONL transcripts
+const BYTES_PER_TOKEN = 4;
 
 interface HookInput {
   readonly prompt?: string;
   readonly cwd?: string;
+  readonly session_id?: string;
+  readonly transcript_path?: string;
 }
 
 function stripSystemReminders(text: string): string {
@@ -75,6 +96,83 @@ function formatMemories(
   return lines.join('\n');
 }
 
+/**
+ * Check if the transcript has grown large enough to trigger a save.
+ * Uses file size as a proxy for token count.
+ */
+function shouldAutoSave(hookInput: HookInput): { save: boolean; transcriptPath: string | null } {
+  const transcriptPath = findTranscriptPath(hookInput);
+  if (!transcriptPath) return { save: false, transcriptPath: null };
+
+  try {
+    const stats = statSync(transcriptPath);
+    const estimatedTokens = stats.size / BYTES_PER_TOKEN;
+    const contextLimit = MODEL_CONTEXT_LIMITS.default;
+    const threshold = contextLimit * SAVE_THRESHOLD;
+
+    return {
+      save: estimatedTokens >= threshold,
+      transcriptPath,
+    };
+  } catch {
+    return { save: false, transcriptPath: null };
+  }
+}
+
+function findTranscriptPath(hookInput: HookInput): string | null {
+  if (hookInput.transcript_path && existsSync(hookInput.transcript_path)) {
+    return hookInput.transcript_path;
+  }
+
+  const sessionId = hookInput.session_id || '';
+  const cwd = hookInput.cwd || '';
+
+  if (sessionId && cwd) {
+    const safeCwd = cwd.replace(/^\//, '').replace(/\//g, '-');
+    const projectDir = join(homedir(), '.claude', 'projects', safeCwd);
+    const candidate = join(projectDir, `${sessionId}.jsonl`);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Auto-save current session memories when context is getting large.
+ * This preserves knowledge before Claude's auto-compact might lose it.
+ */
+async function autoSave(
+  transcriptPath: string,
+  hookInput: HookInput,
+): Promise<void> {
+  const engine = await getEngineWithTimeout(5000);
+  if (!engine) return;
+
+  try {
+    const data = parseTranscript(transcriptPath);
+    if (data.turns.length === 0) return;
+
+    const cwd = hookInput.cwd || data.cwd || process.cwd();
+    const userId = resolveUserId(cwd);
+    const memories = extractMemories(data, userId);
+    if (memories.length === 0) return;
+
+    const sessionShort = data.sessionId ? data.sessionId.slice(0, 8) : null;
+    if (sessionShort) {
+      await engine.clearNamespace(userId, `session-${sessionShort}`);
+    }
+
+    const stored = await engine.storeBatch(memories);
+    process.stderr.write(
+      `[memrosetta] Auto-saved ${stored.length} memories (context approaching limit)\n`,
+    );
+  } catch {
+    // Auto-save failure is non-fatal
+  }
+}
+
 async function main(): Promise<void> {
   // Read stdin
   const chunks: Buffer[] = [];
@@ -94,9 +192,13 @@ async function main(): Promise<void> {
 
   const config = getConfig();
   const cwd = hookInput.cwd || process.cwd();
-
-  // Resolve userId from project
   const userId = resolveUserId(cwd);
+
+  // Check if we should auto-save (context approaching limit)
+  const { save, transcriptPath } = shouldAutoSave(hookInput);
+  if (save && transcriptPath) {
+    await autoSave(transcriptPath, hookInput);
+  }
 
   // Extract search query from prompt
   const query = extractQuery(hookInput.prompt || '', config.minQueryLength);
