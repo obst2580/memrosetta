@@ -12,19 +12,19 @@ export function Hero() {
 
       <div className="relative mx-auto max-w-4xl text-center">
         {/* Badge */}
-        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/50 px-4 py-1.5 text-sm text-zinc-400">
+        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-4 py-1.5 text-sm text-zinc-500">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
           Open source -- MIT License
         </div>
 
         {/* Title */}
-        <h1 className="mb-6 text-5xl font-extrabold tracking-tight text-zinc-100 md:text-7xl">
+        <h1 className="mb-6 text-5xl font-extrabold tracking-tight text-zinc-900 md:text-7xl">
           Mem
-          <span className="text-amber-400">Rosetta</span>
+          <span className="text-amber-500">Rosetta</span>
         </h1>
 
         {/* Tagline */}
-        <p className="mb-4 text-xl font-medium text-zinc-300 md:text-2xl">
+        <p className="mb-4 text-xl font-medium text-zinc-700 md:text-2xl">
           Your AI keeps forgetting. MemRosetta fixes that.
         </p>
 
@@ -35,13 +35,18 @@ export function Hero() {
         </p>
 
         {/* CTA */}
-        <div className="mb-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+        <div className="mb-4 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <InlineCode copyable>npm install @memrosetta/cli</InlineCode>
+          <span className="text-sm text-zinc-400">or</span>
           <InlineCode copyable>npx @memrosetta/claude-code init</InlineCode>
+        </div>
+
+        <div className="mb-8">
           <a
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm font-medium text-zinc-300 transition-all hover:border-zinc-600 hover:bg-zinc-800"
+            className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-all hover:border-zinc-300 hover:bg-zinc-50"
           >
             <GitHubIcon />
             GitHub
@@ -68,7 +73,7 @@ function Stat({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="font-mono text-lg font-semibold text-amber-400">
+      <span className="font-mono text-lg font-semibold text-amber-500">
         {value}
       </span>
       <span>{label}</span>

@@ -61,7 +61,7 @@ const FEATURES = [
 
 export function Comparison() {
   return (
-    <Section id="comparison" className="border-t border-zinc-900">
+    <Section id="comparison" className="border-t border-zinc-100">
       <SectionTitle subtitle="How MemRosetta compares to existing AI memory solutions.">
         Why MemRosetta?
       </SectionTitle>
@@ -69,32 +69,32 @@ export function Comparison() {
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-zinc-800">
-              <th className="pb-3 pr-4 font-medium text-zinc-500" />
-              <th className="pb-3 pr-4 font-mono text-xs font-medium text-zinc-500">
+            <tr className="border-b border-zinc-200">
+              <th className="pb-3 pr-4 font-medium text-zinc-400" />
+              <th className="pb-3 pr-4 font-mono text-xs font-medium text-zinc-400">
                 Mem0
               </th>
-              <th className="pb-3 pr-4 font-mono text-xs font-medium text-zinc-500">
+              <th className="pb-3 pr-4 font-mono text-xs font-medium text-zinc-400">
                 Zep
               </th>
-              <th className="pb-3 pr-4 font-mono text-xs font-medium text-zinc-500">
+              <th className="pb-3 pr-4 font-mono text-xs font-medium text-zinc-400">
                 Letta
               </th>
-              <th className="pb-3 font-mono text-xs font-medium text-amber-400">
+              <th className="pb-3 font-mono text-xs font-medium text-amber-600">
                 MemRosetta
               </th>
             </tr>
           </thead>
           <tbody>
             {FEATURES.map((row, i) => (
-              <tr key={i} className="border-b border-zinc-800/50">
-                <td className="py-3 pr-4 font-medium text-zinc-300">
+              <tr key={i} className="border-b border-zinc-100">
+                <td className="py-3 pr-4 font-medium text-zinc-700">
                   {row.feature}
                 </td>
-                <td className="py-3 pr-4 text-zinc-600">{row.mem0}</td>
-                <td className="py-3 pr-4 text-zinc-600">{row.zep}</td>
-                <td className="py-3 pr-4 text-zinc-600">{row.letta}</td>
-                <td className="py-3 font-medium text-amber-400">
+                <td className="py-3 pr-4 text-zinc-400">{row.mem0}</td>
+                <td className="py-3 pr-4 text-zinc-400">{row.zep}</td>
+                <td className="py-3 pr-4 text-zinc-400">{row.letta}</td>
+                <td className="py-3 font-medium text-amber-600">
                   {row.memrosetta}
                 </td>
               </tr>

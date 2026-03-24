@@ -13,7 +13,8 @@ const TAB_CONFIG: readonly { readonly id: Tab; readonly label: string }[] = [
 const CODE_SNIPPETS: Record<Tab, { code: string; language: string }> = {
   'claude-code': {
     language: 'bash',
-    code: `npx @memrosetta/claude-code init
+    code: `# One command sets up everything
+npx @memrosetta/claude-code init
 
 # That's it. Restart Claude Code.
 # Claude will automatically:
@@ -48,7 +49,8 @@ npx @memrosetta/claude-code reset`,
   },
   cli: {
     language: 'bash',
-    code: `npm install -g @memrosetta/cli
+    code: `# Install globally
+npm install -g @memrosetta/cli
 
 # Store memories
 memrosetta store --user alice \\
@@ -75,21 +77,21 @@ export function QuickStart() {
   const snippet = CODE_SNIPPETS[activeTab]
 
   return (
-    <Section id="quick-start" className="border-t border-zinc-900">
+    <Section id="quick-start" className="border-t border-zinc-100">
       <SectionTitle subtitle="Get started in under a minute.">
         Quick Start
       </SectionTitle>
 
       {/* Tabs */}
-      <div className="mb-6 flex gap-1 rounded-lg border border-zinc-800 bg-zinc-900/50 p-1">
+      <div className="mb-6 flex gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1">
         {TAB_CONFIG.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 rounded-md px-4 py-2 font-mono text-sm transition-all ${
               activeTab === tab.id
-                ? 'bg-zinc-800 text-amber-400'
-                : 'text-zinc-500 hover:text-zinc-300'
+                ? 'bg-white text-amber-600 shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-600'
             }`}
           >
             {tab.label}
@@ -112,9 +114,9 @@ export function QuickStart() {
               href={`https://www.npmjs.com/package/${pkg.name}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-3 text-left transition-colors hover:border-zinc-700"
+              className="rounded-lg border border-zinc-200 bg-white p-3 text-left transition-colors hover:border-amber-300 hover:shadow-sm"
             >
-              <p className="font-mono text-xs text-amber-400">{pkg.name}</p>
+              <p className="font-mono text-xs text-amber-600">{pkg.name}</p>
               <p className="mt-1 text-xs text-zinc-500">{pkg.description}</p>
             </a>
           ))}

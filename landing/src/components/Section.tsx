@@ -25,11 +25,11 @@ interface SectionTitleProps {
 export function SectionTitle({ children, subtitle }: SectionTitleProps) {
   return (
     <div className="mb-12 text-center">
-      <h2 className="mb-3 text-3xl font-bold tracking-tight text-zinc-100 md:text-4xl">
+      <h2 className="mb-3 text-3xl font-bold tracking-tight text-zinc-900 md:text-4xl">
         {children}
       </h2>
       {subtitle && (
-        <p className="mx-auto max-w-2xl text-lg text-zinc-400">{subtitle}</p>
+        <p className="mx-auto max-w-2xl text-lg text-zinc-500">{subtitle}</p>
       )}
     </div>
   )
