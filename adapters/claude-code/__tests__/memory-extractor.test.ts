@@ -169,8 +169,8 @@ describe('extractMemories', () => {
     expect(memories[0].content).toContain('sufficiently long');
   });
 
-  it('truncates turns longer than 500 characters', () => {
-    const longContent = 'A'.repeat(600);
+  it('extracts first meaningful sentence from long turns', () => {
+    const longContent = 'This is the first important sentence about the project.\nSecond line with more details.\n' + 'A'.repeat(600);
     const data = makeTranscript([
       { role: 'user', content: longContent },
     ]);
@@ -178,8 +178,8 @@ describe('extractMemories', () => {
     const memories = extractMemories(data, 'test-user');
 
     expect(memories).toHaveLength(1);
-    expect(memories[0].content.length).toBe(500);
-    expect(memories[0].content.endsWith('...')).toBe(true);
+    expect(memories[0].content.length).toBeLessThanOrEqual(200);
+    expect(memories[0].content).toContain('first important sentence');
   });
 
   it('assigns correct memory types', () => {

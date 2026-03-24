@@ -89,6 +89,70 @@ export function resolveUserId(cwd: string): string {
   return dirname;
 }
 
+/**
+ * Extract the first meaningful sentence or line from text.
+ * Skips code blocks, markdown headers, and formatting.
+ */
+function extractFirstSentence(text: string, maxLen: number = 200): string {
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Skip empty, code blocks, markdown formatting, tables
+    if (!trimmed) continue;
+    if (trimmed.startsWith('```')) continue;
+    if (trimmed.startsWith('|')) continue;
+    if (trimmed.startsWith('#')) {
+      // Use header content as summary
+      const headerText = trimmed.replace(/^#+\s*/, '');
+      if (headerText.length > 10) {
+        return headerText.length > maxLen ? headerText.slice(0, maxLen - 3) + '...' : headerText;
+      }
+      continue;
+    }
+    if (trimmed.startsWith('- [') || trimmed.startsWith('> ')) continue;
+    if (trimmed.length < 10) continue;
+
+    return trimmed.length > maxLen ? trimmed.slice(0, maxLen - 3) + '...' : trimmed;
+  }
+  // Fallback: first 200 chars of entire text
+  const clean = text.replace(/\s+/g, ' ').trim();
+  return clean.length > maxLen ? clean.slice(0, maxLen - 3) + '...' : clean;
+}
+
+/**
+ * Determine if a turn contains meaningful content worth storing.
+ * Filters out boilerplate, tool calls, and trivial responses.
+ */
+function isWorthStoring(turn: ConversationTurn): boolean {
+  const content = turn.content;
+
+  // Too short
+  if (content.length < 30) return false;
+
+  // User: skip simple confirmations and commands
+  if (turn.role === 'user') {
+    const lower = content.toLowerCase().trim();
+    if (lower.length < 15) return false;
+    // Skip slash commands, yes/no, short confirmations
+    if (lower.startsWith('/')) return false;
+    if (/^(y|n|yes|no|ok|ㅇㅇ|ㅋㅋ|ㄱㄱ)$/i.test(lower)) return false;
+    return true;
+  }
+
+  // Assistant: skip very long tool-heavy responses (mostly code)
+  // Keep responses that have meaningful text content
+  const codeBlockCount = (content.match(/```/g) || []).length / 2;
+  const textLines = content.split('\n').filter(l => {
+    const t = l.trim();
+    return t && !t.startsWith('```') && !t.startsWith('|') && !t.startsWith('- [');
+  });
+
+  // If mostly code blocks, skip
+  if (codeBlockCount > 3 && textLines.length < 5) return false;
+
+  return true;
+}
+
 export function extractMemories(
   data: TranscriptData,
   userId: string,
@@ -98,18 +162,19 @@ export function extractMemories(
     ? data.sessionId.slice(0, 8)
     : 'unknown';
   const now = new Date().toISOString();
+  const seen = new Set<string>();
 
   for (let i = 0; i < data.turns.length; i++) {
     const turn = data.turns[i];
 
-    // Skip very short turns
-    if (turn.content.length < 20) continue;
+    if (!isWorthStoring(turn)) continue;
 
-    // Truncate to reasonable size for atomic memories
-    const content =
-      turn.content.length > 500
-        ? turn.content.slice(0, 497) + '...'
-        : turn.content;
+    // Extract only the first meaningful sentence/conclusion
+    const content = extractFirstSentence(turn.content);
+
+    // Deduplicate identical content
+    if (seen.has(content)) continue;
+    seen.add(content);
 
     memories.push({
       userId,
