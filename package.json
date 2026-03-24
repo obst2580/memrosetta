@@ -14,7 +14,9 @@
     "bench:fact": "pnpm --filter benchmarks run bench -- --converter fact",
     "dev": "pnpm --filter @memrosetta/api run dev",
     "start": "pnpm --filter @memrosetta/api run start",
-    "memrosetta": "pnpm --filter @memrosetta/cli run start --"
+    "memrosetta": "pnpm --filter @memrosetta/cli run start --",
+    "mcp": "pnpm --filter @memrosetta/mcp run start",
+    "obsidian": "pnpm --filter @memrosetta/obsidian run start --"
   },
   "engines": {
     "node": ">=20.0.0"

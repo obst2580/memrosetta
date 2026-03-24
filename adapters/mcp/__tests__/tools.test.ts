@@ -1,0 +1,397 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { IMemoryEngine, Memory, SearchResponse, MemoryRelation } from '@memrosetta/types';
+import { TOOL_NAMES, TOOL_DEFINITIONS, handleToolCall } from '../src/tools.js';
+
+// ---------------------------------------------------------------------------
+// Mock engine factory
+// ---------------------------------------------------------------------------
+
+function createMockMemory(overrides: Partial<Memory> = {}): Memory {
+  return {
+    memoryId: 'mem-test-001',
+    userId: 'user-1',
+    content: 'TypeScript is a typed superset of JavaScript',
+    memoryType: 'fact',
+    learnedAt: '2025-01-01T00:00:00.000Z',
+    isLatest: true,
+    tier: 'warm',
+    activationScore: 0.8,
+    accessCount: 2,
+    confidence: 0.9,
+    salience: 0.7,
+    keywords: ['typescript', 'javascript'],
+    ...overrides,
+  };
+}
+
+function createMockEngine(): IMemoryEngine {
+  const mockMemory = createMockMemory();
+
+  return {
+    initialize: vi.fn(),
+    close: vi.fn(),
+    store: vi.fn().mockResolvedValue(mockMemory),
+    storeBatch: vi.fn().mockResolvedValue([mockMemory]),
+    getById: vi.fn().mockResolvedValue(mockMemory),
+    search: vi.fn().mockResolvedValue({
+      results: [
+        { memory: mockMemory, score: 0.95, matchType: 'hybrid' as const },
+      ],
+      totalCount: 1,
+      queryTimeMs: 5,
+    } satisfies SearchResponse),
+    relate: vi.fn().mockResolvedValue({
+      srcMemoryId: 'mem-1',
+      dstMemoryId: 'mem-2',
+      relationType: 'updates',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      reason: 'test',
+    } satisfies MemoryRelation),
+    getRelations: vi.fn().mockResolvedValue([]),
+    count: vi.fn().mockResolvedValue(42),
+    clear: vi.fn(),
+    clearNamespace: vi.fn(),
+    invalidate: vi.fn(),
+    workingMemory: vi.fn().mockResolvedValue([mockMemory]),
+    compress: vi.fn().mockResolvedValue({ compressed: 0, removed: 0 }),
+    maintain: vi.fn().mockResolvedValue({
+      activationUpdated: 0,
+      tiersUpdated: 0,
+      compressed: 0,
+      removed: 0,
+    }),
+    setTier: vi.fn(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('MCP tools', () => {
+  let engine: IMemoryEngine;
+
+  beforeEach(() => {
+    engine = createMockEngine();
+  });
+
+  // -----------------------------------------------------------------------
+  // TOOL_NAMES / TOOL_DEFINITIONS
+  // -----------------------------------------------------------------------
+
+  describe('TOOL_NAMES', () => {
+    it('exports all expected tool names', () => {
+      expect(TOOL_NAMES).toContain('memrosetta_store');
+      expect(TOOL_NAMES).toContain('memrosetta_search');
+      expect(TOOL_NAMES).toContain('memrosetta_relate');
+      expect(TOOL_NAMES).toContain('memrosetta_working_memory');
+      expect(TOOL_NAMES).toContain('memrosetta_count');
+      expect(TOOL_NAMES).toContain('memrosetta_invalidate');
+      expect(TOOL_NAMES).toHaveLength(6);
+    });
+  });
+
+  describe('TOOL_DEFINITIONS', () => {
+    it('has 6 tool definitions', () => {
+      expect(TOOL_DEFINITIONS).toHaveLength(6);
+    });
+
+    it('each definition has name, description, and inputSchema', () => {
+      for (const tool of TOOL_DEFINITIONS) {
+        expect(tool.name).toBeTruthy();
+        expect(tool.description).toBeTruthy();
+        expect(tool.inputSchema).toBeDefined();
+        expect(tool.inputSchema.type).toBe('object');
+        expect(tool.inputSchema.required).toBeDefined();
+      }
+    });
+
+    it('store tool requires userId, content, memoryType', () => {
+      const storeTool = TOOL_DEFINITIONS.find((t) => t.name === 'memrosetta_store');
+      expect(storeTool).toBeDefined();
+      expect(storeTool!.inputSchema.required).toEqual([
+        'userId',
+        'content',
+        'memoryType',
+      ]);
+    });
+
+    it('search tool requires userId and query', () => {
+      const searchTool = TOOL_DEFINITIONS.find(
+        (t) => t.name === 'memrosetta_search',
+      );
+      expect(searchTool!.inputSchema.required).toEqual(['userId', 'query']);
+    });
+
+    it('relate tool requires srcMemoryId, dstMemoryId, relationType', () => {
+      const relateTool = TOOL_DEFINITIONS.find(
+        (t) => t.name === 'memrosetta_relate',
+      );
+      expect(relateTool!.inputSchema.required).toEqual([
+        'srcMemoryId',
+        'dstMemoryId',
+        'relationType',
+      ]);
+    });
+
+    it('working_memory tool requires userId', () => {
+      const wmTool = TOOL_DEFINITIONS.find(
+        (t) => t.name === 'memrosetta_working_memory',
+      );
+      expect(wmTool!.inputSchema.required).toEqual(['userId']);
+    });
+
+    it('count tool requires userId', () => {
+      const countTool = TOOL_DEFINITIONS.find(
+        (t) => t.name === 'memrosetta_count',
+      );
+      expect(countTool!.inputSchema.required).toEqual(['userId']);
+    });
+
+    it('invalidate tool requires memoryId', () => {
+      const invalidTool = TOOL_DEFINITIONS.find(
+        (t) => t.name === 'memrosetta_invalidate',
+      );
+      expect(invalidTool!.inputSchema.required).toEqual(['memoryId']);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // handleToolCall
+  // -----------------------------------------------------------------------
+
+  describe('handleToolCall', () => {
+    describe('memrosetta_store', () => {
+      it('calls engine.store with correct parameters', async () => {
+        const result = await handleToolCall(engine, 'memrosetta_store', {
+          userId: 'user-1',
+          content: 'Test memory',
+          memoryType: 'fact',
+          keywords: ['test'],
+          namespace: 'testing',
+          confidence: 0.9,
+        });
+
+        expect(engine.store).toHaveBeenCalledWith({
+          userId: 'user-1',
+          content: 'Test memory',
+          memoryType: 'fact',
+          keywords: ['test'],
+          namespace: 'testing',
+          confidence: 0.9,
+        });
+        expect(result.isError).toBeUndefined();
+        expect(result.content[0].type).toBe('text');
+
+        const parsed = JSON.parse(result.content[0].text);
+        expect(parsed.memoryId).toBe('mem-test-001');
+      });
+
+      it('handles optional parameters as undefined', async () => {
+        await handleToolCall(engine, 'memrosetta_store', {
+          userId: 'user-1',
+          content: 'Minimal memory',
+          memoryType: 'decision',
+        });
+
+        expect(engine.store).toHaveBeenCalledWith({
+          userId: 'user-1',
+          content: 'Minimal memory',
+          memoryType: 'decision',
+          keywords: undefined,
+          namespace: undefined,
+          confidence: undefined,
+        });
+      });
+    });
+
+    describe('memrosetta_search', () => {
+      it('calls engine.search with correct parameters', async () => {
+        const result = await handleToolCall(engine, 'memrosetta_search', {
+          userId: 'user-1',
+          query: 'typescript',
+          limit: 10,
+        });
+
+        expect(engine.search).toHaveBeenCalledWith({
+          userId: 'user-1',
+          query: 'typescript',
+          limit: 10,
+          filters: { onlyLatest: true },
+        });
+        expect(result.content[0].text).toContain('0.95');
+        expect(result.content[0].text).toContain('TypeScript');
+      });
+
+      it('defaults limit to 5', async () => {
+        await handleToolCall(engine, 'memrosetta_search', {
+          userId: 'user-1',
+          query: 'test',
+        });
+
+        expect(engine.search).toHaveBeenCalledWith(
+          expect.objectContaining({ limit: 5 }),
+        );
+      });
+
+      it('returns "No memories found." when results are empty', async () => {
+        (engine.search as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+          results: [],
+          totalCount: 0,
+          queryTimeMs: 1,
+        });
+
+        const result = await handleToolCall(engine, 'memrosetta_search', {
+          userId: 'user-1',
+          query: 'nonexistent',
+        });
+
+        expect(result.content[0].text).toBe('No memories found.');
+      });
+    });
+
+    describe('memrosetta_relate', () => {
+      it('calls engine.relate with correct parameters', async () => {
+        const result = await handleToolCall(engine, 'memrosetta_relate', {
+          srcMemoryId: 'mem-1',
+          dstMemoryId: 'mem-2',
+          relationType: 'updates',
+          reason: 'corrected information',
+        });
+
+        expect(engine.relate).toHaveBeenCalledWith(
+          'mem-1',
+          'mem-2',
+          'updates',
+          'corrected information',
+        );
+        expect(result.isError).toBeUndefined();
+
+        const parsed = JSON.parse(result.content[0].text);
+        expect(parsed.relationType).toBe('updates');
+      });
+
+      it('handles optional reason', async () => {
+        await handleToolCall(engine, 'memrosetta_relate', {
+          srcMemoryId: 'mem-1',
+          dstMemoryId: 'mem-2',
+          relationType: 'extends',
+        });
+
+        expect(engine.relate).toHaveBeenCalledWith(
+          'mem-1',
+          'mem-2',
+          'extends',
+          undefined,
+        );
+      });
+    });
+
+    describe('memrosetta_working_memory', () => {
+      it('calls engine.workingMemory and formats output', async () => {
+        const result = await handleToolCall(
+          engine,
+          'memrosetta_working_memory',
+          {
+            userId: 'user-1',
+            maxTokens: 2000,
+          },
+        );
+
+        expect(engine.workingMemory).toHaveBeenCalledWith('user-1', 2000);
+        expect(result.content[0].text).toContain('warm/0.80');
+        expect(result.content[0].text).toContain('TypeScript');
+      });
+
+      it('returns "No working memory." when empty', async () => {
+        (engine.workingMemory as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+          [],
+        );
+
+        const result = await handleToolCall(
+          engine,
+          'memrosetta_working_memory',
+          {
+            userId: 'user-1',
+          },
+        );
+
+        expect(result.content[0].text).toBe('No working memory.');
+      });
+    });
+
+    describe('memrosetta_count', () => {
+      it('returns formatted count string', async () => {
+        const result = await handleToolCall(engine, 'memrosetta_count', {
+          userId: 'user-1',
+        });
+
+        expect(engine.count).toHaveBeenCalledWith('user-1');
+        expect(result.content[0].text).toBe('42 memories stored for user-1');
+      });
+    });
+
+    describe('memrosetta_invalidate', () => {
+      it('calls engine.invalidate and returns confirmation', async () => {
+        const result = await handleToolCall(engine, 'memrosetta_invalidate', {
+          memoryId: 'mem-test-001',
+          reason: 'outdated',
+        });
+
+        expect(engine.invalidate).toHaveBeenCalledWith(
+          'mem-test-001',
+          'outdated',
+        );
+        expect(result.content[0].text).toBe(
+          'Memory mem-test-001 invalidated.',
+        );
+      });
+
+      it('handles optional reason', async () => {
+        await handleToolCall(engine, 'memrosetta_invalidate', {
+          memoryId: 'mem-test-001',
+        });
+
+        expect(engine.invalidate).toHaveBeenCalledWith(
+          'mem-test-001',
+          undefined,
+        );
+      });
+    });
+
+    describe('error handling', () => {
+      it('returns isError=true for unknown tool', async () => {
+        const result = await handleToolCall(engine, 'nonexistent_tool', {});
+
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('Unknown tool');
+      });
+
+      it('propagates engine errors', async () => {
+        (engine.store as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+          new Error('DB connection lost'),
+        );
+
+        await expect(
+          handleToolCall(engine, 'memrosetta_store', {
+            userId: 'user-1',
+            content: 'test',
+            memoryType: 'fact',
+          }),
+        ).rejects.toThrow('DB connection lost');
+      });
+
+      it('propagates non-Error thrown values', async () => {
+        (engine.count as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+          'string error',
+        );
+
+        await expect(
+          handleToolCall(engine, 'memrosetta_count', {
+            userId: 'user-1',
+          }),
+        ).rejects.toBe('string error');
+      });
+    });
+  });
+});
