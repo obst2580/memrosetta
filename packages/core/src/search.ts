@@ -4,7 +4,7 @@ import { rowToMemory, type MemoryRow } from './mapper.js';
 
 // Characters that have special meaning in FTS5 query syntax, plus common
 // punctuation that should be stripped for clean token matching.
-const FTS5_SPECIAL_CHARS = /["\*\(\):^{}\[\]?!.,;']/g;
+const FTS5_SPECIAL_CHARS = /["\*\(\):^{}\[\]?!.,;'\\]/g;
 
 // Common English stop words that add noise to FTS queries.
 const STOP_WORDS = new Set([
@@ -143,8 +143,12 @@ export function normalizeScores(bm25Scores: readonly number[]): readonly number[
     return [1.0];
   }
 
-  const min = Math.min(...bm25Scores);
-  const max = Math.max(...bm25Scores);
+  let min = Infinity;
+  let max = -Infinity;
+  for (const score of bm25Scores) {
+    if (score < min) min = score;
+    if (score > max) max = score;
+  }
   const range = max - min;
 
   if (range === 0) {
@@ -415,7 +419,10 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   let dot = 0;
   let normA = 0;
   let normB = 0;
-  const len = Math.min(a.length, b.length);
+  if (a.length !== b.length) {
+    throw new Error(`Embedding dimension mismatch: ${a.length} vs ${b.length}`);
+  }
+  const len = a.length;
   for (let i = 0; i < len; i++) {
     dot += a[i] * b[i];
     normA += a[i] * a[i];

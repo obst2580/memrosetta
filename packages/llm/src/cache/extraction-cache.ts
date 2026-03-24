@@ -19,7 +19,7 @@ export class ExtractionCache {
 
   constructor(cacheDir: string, promptVersion: string) {
     this.cacheDir = cacheDir;
-    this.promptVersion = promptVersion;
+    this.promptVersion = promptVersion.replace(/[^a-zA-Z0-9._-]/g, '_');
   }
 
   private get filePath(): string {

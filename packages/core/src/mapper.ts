@@ -45,5 +45,5 @@ function deserializeEmbedding(buf: Buffer): readonly number[] {
 
 export function serializeEmbedding(embedding: readonly number[] | Float32Array): Buffer {
   const float32 = embedding instanceof Float32Array ? embedding : new Float32Array(embedding);
-  return Buffer.from(float32.buffer);
+  return Buffer.from(float32.buffer, float32.byteOffset, float32.byteLength);
 }

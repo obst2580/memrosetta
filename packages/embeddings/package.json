@@ -10,6 +10,7 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
     "test": "vitest run",

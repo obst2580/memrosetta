@@ -10,6 +10,7 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",

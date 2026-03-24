@@ -27,7 +27,11 @@ async function main(): Promise<void> {
   const app = createApp(engine);
 
   process.stdout.write(`MemRosetta API running on http://localhost:${PORT}\n`);
-  serve({ fetch: app.fetch, port: PORT });
+  serve({
+    fetch: app.fetch,
+    port: PORT,
+    hostname: process.env.HOST ?? '127.0.0.1',
+  });
 }
 
 main().catch((err: unknown) => {

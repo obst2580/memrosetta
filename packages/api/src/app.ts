@@ -15,7 +15,10 @@ export function createApp(engine: IMemoryEngine): Hono {
   const app = new Hono();
 
   // Middleware
-  app.use('*', cors());
+  const allowedOrigins = process.env.CORS_ORIGINS?.split(',').filter(Boolean) ?? [];
+  app.use('*', cors({
+    origin: allowedOrigins.length > 0 ? allowedOrigins : ['http://localhost:3100', 'http://127.0.0.1:3100'],
+  }));
   app.onError(errorHandler);
 
   // Store engine in context via closure
