@@ -21,6 +21,9 @@ const COMMANDS = new Set([
   'clear',
   'relate',
   'invalidate',
+  'working-memory',
+  'maintain',
+  'compress',
   'status',
   'init',
 ]);

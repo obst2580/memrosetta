@@ -3,10 +3,13 @@ import type {
   IMemoryEngine,
   Memory,
   MemoryInput,
+  MemoryTier,
   SearchQuery,
   SearchResponse,
   MemoryRelation,
   RelationType,
+  CompressResult,
+  MaintenanceResult,
 } from '@memrosetta/types';
 import type { Embedder, ContradictionDetector } from '@memrosetta/embeddings';
 import { ensureSchema } from './schema.js';
@@ -26,6 +29,9 @@ import {
   type RelationStatements,
 } from './relations.js';
 import { rowToMemory, type MemoryRow } from './mapper.js';
+import { generateMemoryId, nowIso, keywordsToString } from './utils.js';
+import { computeActivation } from './activation.js';
+import { determineTier, estimateTokens } from './tiers.js';
 
 export interface SqliteEngineOptions {
   readonly dbPath: string; // ':memory:' for in-memory, or file path
@@ -230,6 +236,193 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     });
 
     clearTransaction(userId, namespace);
+  }
+
+  async workingMemory(userId: string, maxTokens: number = 3000): Promise<readonly Memory[]> {
+    this.ensureInitialized();
+    const db = this.db!;
+
+    // Get memories ordered by tier priority then activation score
+    const rows = db.prepare(`
+      SELECT * FROM memories
+      WHERE user_id = ? AND is_latest = 1 AND invalidated_at IS NULL
+      ORDER BY
+        CASE tier WHEN 'hot' THEN 0 WHEN 'warm' THEN 1 ELSE 2 END,
+        activation_score DESC
+    `).all(userId) as MemoryRow[];
+
+    const result: Memory[] = [];
+    let totalTokens = 0;
+
+    for (const row of rows) {
+      const memory = rowToMemory(row);
+      const estimated = estimateTokens(memory.content);
+
+      if (totalTokens + estimated > maxTokens) break;
+
+      result.push(memory);
+      totalTokens += estimated;
+    }
+
+    return result;
+  }
+
+  async compress(userId: string): Promise<CompressResult> {
+    this.ensureInitialized();
+    const db = this.db!;
+
+    // Find cold memories with very low activation
+    const coldMemories = db.prepare(`
+      SELECT * FROM memories
+      WHERE user_id = ? AND tier = 'cold' AND activation_score < 0.1 AND is_latest = 1
+      ORDER BY namespace, learned_at
+    `).all(userId) as MemoryRow[];
+
+    if (coldMemories.length === 0) return { compressed: 0, removed: 0 };
+
+    // Group by namespace
+    const groups = new Map<string, MemoryRow[]>();
+    for (const row of coldMemories) {
+      const ns = row.namespace ?? '__default__';
+      const existing = groups.get(ns);
+      if (existing) {
+        existing.push(row);
+      } else {
+        groups.set(ns, [row]);
+      }
+    }
+
+    let compressed = 0;
+    let removed = 0;
+
+    const transaction = db.transaction(() => {
+      for (const [namespace, rows] of groups) {
+        if (rows.length < 2) continue; // Don't compress single memories
+
+        // Create summary: concatenate content with separators
+        const summaryContent = rows
+          .map(r => r.content)
+          .join(' | ');
+
+        // Truncate if too long
+        const content = summaryContent.length > 500
+          ? summaryContent.slice(0, 497) + '...'
+          : summaryContent;
+
+        // Store compressed memory
+        const memoryId = generateMemoryId();
+        const learnedAt = nowIso();
+
+        this.stmts!.insertMemory.run(
+          memoryId,
+          userId,
+          namespace === '__default__' ? null : namespace,
+          'fact', // compressed summaries are facts
+          content,
+          null, // raw_text
+          null, // document_date
+          learnedAt,
+          null, // source_id
+          0.5, // confidence
+          0.5, // salience
+          1, // is_latest
+          null, // embedding
+          null, // keywords
+          null, // event_date_start
+          null, // event_date_end
+          null, // invalidated_at
+          'cold', // tier
+          0.5, // activation_score
+          0, // access_count
+          null, // last_accessed_at
+          rows[0].memory_id, // compressed_from
+        );
+        compressed++;
+
+        // Mark originals as not latest
+        for (const row of rows) {
+          db.prepare('UPDATE memories SET is_latest = 0 WHERE memory_id = ?')
+            .run(row.memory_id);
+          removed++;
+        }
+      }
+    });
+
+    transaction();
+    return { compressed, removed };
+  }
+
+  async maintain(userId: string): Promise<MaintenanceResult> {
+    this.ensureInitialized();
+    const db = this.db!;
+
+    // 1. Recompute activation scores for all active memories
+    const memories = db.prepare(
+      'SELECT * FROM memories WHERE user_id = ? AND is_latest = 1',
+    ).all(userId) as MemoryRow[];
+
+    let activationUpdated = 0;
+
+    const updateActivation = db.prepare(
+      'UPDATE memories SET activation_score = ? WHERE memory_id = ?',
+    );
+
+    const activationTransaction = db.transaction(() => {
+      for (const mem of memories) {
+        const timestamps = [mem.learned_at, mem.last_accessed_at].filter(
+          (t): t is string => t != null,
+        );
+        const score = computeActivation(timestamps, mem.salience);
+        updateActivation.run(score, mem.memory_id);
+        activationUpdated++;
+      }
+    });
+
+    activationTransaction();
+
+    // 2. Update tiers based on age and activation
+    // Re-read memories with updated activation scores
+    const updatedMemories = db.prepare(
+      'SELECT * FROM memories WHERE user_id = ? AND is_latest = 1',
+    ).all(userId) as MemoryRow[];
+
+    let tiersUpdated = 0;
+    const updateTier = db.prepare(
+      'UPDATE memories SET tier = ? WHERE memory_id = ?',
+    );
+
+    const tierTransaction = db.transaction(() => {
+      for (const mem of updatedMemories) {
+        const newTier = determineTier({
+          learnedAt: mem.learned_at,
+          activationScore: mem.activation_score ?? 1.0,
+          tier: mem.tier ?? 'warm',
+        });
+
+        if (newTier !== (mem.tier ?? 'warm')) {
+          updateTier.run(newTier, mem.memory_id);
+          tiersUpdated++;
+        }
+      }
+    });
+
+    tierTransaction();
+
+    // 3. Compress cold low-activation memories
+    const compressResult = await this.compress(userId);
+
+    return {
+      activationUpdated,
+      tiersUpdated,
+      compressed: compressResult.compressed,
+      removed: compressResult.removed,
+    };
+  }
+
+  async setTier(memoryId: string, tier: MemoryTier): Promise<void> {
+    this.ensureInitialized();
+    this.db!.prepare('UPDATE memories SET tier = ? WHERE memory_id = ?')
+      .run(tier, memoryId);
   }
 
   /**

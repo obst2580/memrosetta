@@ -1,4 +1,4 @@
-import type { Memory, MemoryType } from '@memrosetta/types';
+import type { Memory, MemoryType, MemoryTier } from '@memrosetta/types';
 import { stringToKeywords } from './utils.js';
 
 export interface MemoryRow {
@@ -20,6 +20,11 @@ export interface MemoryRow {
   readonly event_date_start: string | null;
   readonly event_date_end: string | null;
   readonly invalidated_at: string | null;
+  readonly tier: string | null;
+  readonly activation_score: number | null;
+  readonly access_count: number | null;
+  readonly last_accessed_at: string | null;
+  readonly compressed_from: string | null;
 }
 
 export function rowToMemory(row: MemoryRow): Memory {
@@ -41,6 +46,11 @@ export function rowToMemory(row: MemoryRow): Memory {
     ...(row.event_date_start != null ? { eventDateStart: row.event_date_start } : {}),
     ...(row.event_date_end != null ? { eventDateEnd: row.event_date_end } : {}),
     ...(row.invalidated_at != null ? { invalidatedAt: row.invalidated_at } : {}),
+    tier: (row.tier as MemoryTier) ?? 'warm',
+    activationScore: row.activation_score ?? 1.0,
+    accessCount: row.access_count ?? 0,
+    ...(row.last_accessed_at != null ? { lastAccessedAt: row.last_accessed_at } : {}),
+    ...(row.compressed_from != null ? { compressedFrom: row.compressed_from } : {}),
   };
 }
 

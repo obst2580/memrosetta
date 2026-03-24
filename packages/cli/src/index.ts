@@ -9,16 +9,19 @@ const HELP_TEXT = `memrosetta - AI long-term memory engine CLI
 Usage: memrosetta <command> [options]
 
 Commands:
-  store       Store a memory
-  search      Search memories
-  ingest      Ingest conversation from JSONL transcript
-  get         Get memory by ID
-  count       Count memories for a user
-  clear       Clear all memories for a user
-  relate      Create a relation between memories
-  invalidate  Mark a memory as invalidated
-  status      Show database status
-  init        Initialize database
+  store            Store a memory
+  search           Search memories
+  ingest           Ingest conversation from JSONL transcript
+  get              Get memory by ID
+  count            Count memories for a user
+  clear            Clear all memories for a user
+  relate           Create a relation between memories
+  invalidate       Mark a memory as invalidated
+  working-memory   Show working memory for a user
+  maintain         Run maintenance (recompute scores, update tiers, compress)
+  compress         Run compression only
+  status           Show database status
+  init             Initialize database
 
 Global Options:
   --db <path>         Database path (default: ~/.memrosetta/memories.db)
@@ -32,6 +35,9 @@ Examples:
   memrosetta store --user obst --content "Prefers TypeScript" --type preference
   memrosetta search --user obst --query "language preference" --format text
   memrosetta ingest --user obst --file session.jsonl
+  memrosetta working-memory --user obst --max-tokens 3000 --format text
+  memrosetta maintain --user obst
+  memrosetta compress --user obst
   memrosetta count --user obst
   memrosetta status
 `;
@@ -99,6 +105,21 @@ async function main(): Promise<void> {
       }
       case 'invalidate': {
         const mod = await import('./commands/invalidate.js');
+        await mod.run(commandOptions);
+        break;
+      }
+      case 'working-memory': {
+        const mod = await import('./commands/working-memory.js');
+        await mod.run(commandOptions);
+        break;
+      }
+      case 'maintain': {
+        const mod = await import('./commands/maintain.js');
+        await mod.run(commandOptions);
+        break;
+      }
+      case 'compress': {
+        const mod = await import('./commands/compress.js');
         await mod.run(commandOptions);
         break;
       }

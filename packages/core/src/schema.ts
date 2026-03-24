@@ -20,7 +20,12 @@ CREATE TABLE memories (
   keywords        TEXT,
   event_date_start TEXT,
   event_date_end   TEXT,
-  invalidated_at   TEXT
+  invalidated_at   TEXT,
+  tier             TEXT DEFAULT 'warm' CHECK(tier IN ('hot', 'warm', 'cold')),
+  activation_score REAL DEFAULT 1.0,
+  access_count     INTEGER DEFAULT 0,
+  last_accessed_at TEXT,
+  compressed_from  TEXT
 );
 
 CREATE INDEX idx_memories_user_id ON memories(user_id);
@@ -31,6 +36,8 @@ CREATE INDEX idx_memories_source_id ON memories(source_id);
 CREATE INDEX idx_memories_learned_at ON memories(learned_at);
 CREATE INDEX idx_memories_event_date ON memories(event_date_start, event_date_end);
 CREATE INDEX idx_memories_invalidated ON memories(invalidated_at);
+CREATE INDEX idx_memories_tier ON memories(tier);
+CREATE INDEX idx_memories_activation ON memories(activation_score);
 
 -- relations table
 CREATE TABLE memory_relations (
@@ -86,6 +93,17 @@ CREATE INDEX idx_memories_event_date ON memories(event_date_start, event_date_en
 CREATE INDEX idx_memories_invalidated ON memories(invalidated_at);
 `;
 
+const SCHEMA_V4 = `
+ALTER TABLE memories ADD COLUMN tier TEXT DEFAULT 'warm' CHECK(tier IN ('hot', 'warm', 'cold'));
+ALTER TABLE memories ADD COLUMN activation_score REAL DEFAULT 1.0;
+ALTER TABLE memories ADD COLUMN access_count INTEGER DEFAULT 0;
+ALTER TABLE memories ADD COLUMN last_accessed_at TEXT;
+ALTER TABLE memories ADD COLUMN compressed_from TEXT;
+
+CREATE INDEX idx_memories_tier ON memories(tier);
+CREATE INDEX idx_memories_activation ON memories(activation_score);
+`;
+
 export function ensureSchema(db: Database.Database, options?: SchemaOptions): void {
   const hasVersionTable = db.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
@@ -100,8 +118,8 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
       db.exec(SCHEMA_V2);
       version = 2;
     }
-    // Fresh databases already include v3 columns in SCHEMA_V1
-    version = 3;
+    // Fresh databases already include v3 + v4 columns in SCHEMA_V1
+    version = 4;
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(version);
     return;
   }
@@ -126,5 +144,14 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
       db.exec(SCHEMA_V3);
     }
     db.prepare('UPDATE schema_version SET version = ?').run(3);
+  }
+
+  if (currentVersion < 4) {
+    // Only run ALTER TABLE for pre-v4 databases.
+    // Fresh databases already have these columns in SCHEMA_V1.
+    if (currentVersion >= 1) {
+      db.exec(SCHEMA_V4);
+    }
+    db.prepare('UPDATE schema_version SET version = ?').run(4);
   }
 }

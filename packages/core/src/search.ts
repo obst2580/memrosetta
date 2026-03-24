@@ -483,11 +483,57 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 // ---------------------------------------------------------------------------
 
 /**
+ * Apply activation weighting to search results.
+ *
+ * final_score = original_score * activation_weight
+ * activation_weight = 0.5 + 0.5 * activationScore
+ *
+ * Low activation halves the score; high activation keeps it intact.
+ */
+function applyActivationWeighting(
+  results: readonly SearchResult[],
+): readonly SearchResult[] {
+  return results.map(r => {
+    const activationWeight = 0.5 + 0.5 * r.memory.activationScore;
+    return {
+      ...r,
+      score: r.score * activationWeight,
+    };
+  }).sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Update access tracking for memories returned in search results.
+ * Increments access_count and sets last_accessed_at.
+ */
+export function updateAccessTracking(
+  db: Database.Database,
+  memoryIds: readonly string[],
+): void {
+  if (memoryIds.length === 0) return;
+
+  const now = new Date().toISOString();
+  const stmt = db.prepare(
+    'UPDATE memories SET access_count = access_count + 1, last_accessed_at = ? WHERE memory_id = ?',
+  );
+
+  const updateAll = db.transaction((ids: readonly string[]) => {
+    for (const id of ids) {
+      stmt.run(now, id);
+    }
+  });
+
+  updateAll(memoryIds);
+}
+
+/**
  * Execute a search against the memories table.
  *
  * When queryVec is not provided, performs FTS-only search (backward compatible).
  * When queryVec is provided, performs hybrid search combining FTS + vector
  * results via Reciprocal Rank Fusion.
+ *
+ * Results are weighted by activation score and access tracking is updated.
  */
 export function searchMemories(
   db: Database.Database,
@@ -500,11 +546,18 @@ export function searchMemories(
   // Always run FTS search
   const ftsResults = ftsSearch(db, query);
 
+  let finalResults: readonly SearchResult[];
+
   // If no vector, return FTS-only results (backward compatible)
   if (!queryVec) {
+    finalResults = applyActivationWeighting(ftsResults);
+
+    // Update access tracking for returned results
+    updateAccessTracking(db, finalResults.map(r => r.memory.memoryId));
+
     return {
-      results: ftsResults,
-      totalCount: ftsResults.length,
+      results: finalResults,
+      totalCount: finalResults.length,
       queryTimeMs: performance.now() - startTime,
     };
   }
@@ -517,7 +570,7 @@ export function searchMemories(
 
   // If FTS returned nothing but vector returned results, use vector-only
   if (ftsResults.length === 0 && vecResults.length > 0) {
-    const results: readonly SearchResult[] = vecResults
+    const vecOnly: readonly SearchResult[] = vecResults
       .slice(0, query.limit ?? DEFAULT_LIMIT)
       .map(r => ({
         memory: r.memory,
@@ -525,31 +578,25 @@ export function searchMemories(
         matchType: 'vector' as const,
       }));
 
-    return {
-      results,
-      totalCount: results.length,
-      queryTimeMs: performance.now() - startTime,
-    };
+    finalResults = applyActivationWeighting(vecOnly);
+  } else if (vecResults.length === 0) {
+    // If vector returned nothing, return FTS-only
+    finalResults = applyActivationWeighting(ftsResults);
+  } else {
+    // RRF merge
+    const ftsRanked = ftsResults.map((r, i) => ({ memory: r.memory, rank: i }));
+    const vecRanked = vecResults.map((r, i) => ({ memory: r.memory, rank: i }));
+
+    const merged = rrfMerge(ftsRanked, vecRanked, 60, query.limit ?? DEFAULT_LIMIT);
+    finalResults = applyActivationWeighting(merged);
   }
 
-  // If vector returned nothing, return FTS-only
-  if (vecResults.length === 0) {
-    return {
-      results: ftsResults,
-      totalCount: ftsResults.length,
-      queryTimeMs: performance.now() - startTime,
-    };
-  }
-
-  // RRF merge
-  const ftsRanked = ftsResults.map((r, i) => ({ memory: r.memory, rank: i }));
-  const vecRanked = vecResults.map((r, i) => ({ memory: r.memory, rank: i }));
-
-  const merged = rrfMerge(ftsRanked, vecRanked, 60, query.limit ?? DEFAULT_LIMIT);
+  // Update access tracking for returned results
+  updateAccessTracking(db, finalResults.map(r => r.memory.memoryId));
 
   return {
-    results: merged,
-    totalCount: merged.length,
+    results: finalResults,
+    totalCount: finalResults.length,
     queryTimeMs: performance.now() - startTime,
   };
 }

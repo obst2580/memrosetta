@@ -1,5 +1,6 @@
 export type {
   MemoryType,
+  MemoryTier,
   MemoryInput,
   Memory,
 } from './memory.js';
@@ -19,6 +20,9 @@ export type {
 
 export type {
   IMemoryEngine,
+  MaintenanceResult,
+  CompressResult,
+  TierConfig,
 } from './engine.js';
 
 export type {

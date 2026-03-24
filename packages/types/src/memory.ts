@@ -1,5 +1,7 @@
 export type MemoryType = 'fact' | 'preference' | 'decision' | 'event';
 
+export type MemoryTier = 'hot' | 'warm' | 'cold';
+
 export interface MemoryInput {
   readonly userId: string;
   readonly namespace?: string;
@@ -24,4 +26,14 @@ export interface Memory extends MemoryInput {
   readonly learnedAt: string;
   readonly isLatest: boolean;
   readonly embedding?: readonly number[];
+  /** Memory tier: hot (working memory), warm (recent), cold (archived). Engine-managed. */
+  readonly tier: MemoryTier;
+  /** ACT-R activation score (0-1). Engine-managed. */
+  readonly activationScore: number;
+  /** Number of times this memory was accessed in search. Engine-managed. */
+  readonly accessCount: number;
+  /** ISO 8601 - when this memory was last accessed via search. Engine-managed. */
+  readonly lastAccessedAt?: string;
+  /** memory_id of the original memory, if this is a compressed summary. Engine-managed. */
+  readonly compressedFrom?: string;
 }

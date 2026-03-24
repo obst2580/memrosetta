@@ -14,8 +14,8 @@ export interface PreparedStatements {
 export function createPreparedStatements(db: Database.Database): PreparedStatements {
   return {
     insertMemory: db.prepare(`
-      INSERT INTO memories (memory_id, user_id, namespace, memory_type, content, raw_text, document_date, learned_at, source_id, confidence, salience, is_latest, embedding, keywords, event_date_start, event_date_end, invalidated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO memories (memory_id, user_id, namespace, memory_type, content, raw_text, document_date, learned_at, source_id, confidence, salience, is_latest, embedding, keywords, event_date_start, event_date_end, invalidated_at, tier, activation_score, access_count, last_accessed_at, compressed_from)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `),
     getById: db.prepare('SELECT * FROM memories WHERE id = ?'),
     getByMemoryId: db.prepare('SELECT * FROM memories WHERE memory_id = ?'),
@@ -54,6 +54,11 @@ export function storeMemory(
     input.eventDateStart ?? null,
     input.eventDateEnd ?? null,
     input.invalidatedAt ?? null,
+    'warm', // tier
+    1.0, // activation_score
+    0, // access_count
+    null, // last_accessed_at
+    null, // compressed_from
   );
 
   // Read back the stored row to get the canonical representation
@@ -102,6 +107,11 @@ export async function storeMemoryAsync(
     input.eventDateStart ?? null,
     input.eventDateEnd ?? null,
     input.invalidatedAt ?? null,
+    'warm', // tier
+    1.0, // activation_score
+    0, // access_count
+    null, // last_accessed_at
+    null, // compressed_from
   );
 
   // Insert into vec_memories if embedding was computed
@@ -185,6 +195,11 @@ export async function storeBatchAsync(
         input.eventDateStart ?? null,
         input.eventDateEnd ?? null,
         input.invalidatedAt ?? null,
+        'warm', // tier
+        1.0, // activation_score
+        0, // access_count
+        null, // last_accessed_at
+        null, // compressed_from
       );
 
       if (info.lastInsertRowid) {

@@ -2,10 +2,13 @@ import type {
   IMemoryEngine,
   Memory,
   MemoryInput,
+  MemoryTier,
   MemoryRelation,
   RelationType,
   SearchQuery,
   SearchResponse,
+  CompressResult,
+  MaintenanceResult,
 } from '@memrosetta/types';
 import { randomUUID } from 'node:crypto';
 
@@ -32,6 +35,9 @@ export class MockEngine implements IMemoryEngine {
       memoryId: randomUUID(),
       learnedAt: new Date().toISOString(),
       isLatest: true,
+      tier: 'warm',
+      activationScore: 1.0,
+      accessCount: 0,
     };
     this.memories.set(memory.memoryId, memory);
     return memory;
@@ -128,6 +134,44 @@ export class MockEngine implements IMemoryEngine {
         ...memory,
         invalidatedAt: new Date().toISOString(),
       });
+    }
+  }
+
+  async workingMemory(userId: string, maxTokens: number = 3000): Promise<readonly Memory[]> {
+    const tierOrder: Record<string, number> = { hot: 0, warm: 1, cold: 2 };
+    const userMemories = [...this.memories.values()]
+      .filter((m) => m.userId === userId && m.isLatest && !m.invalidatedAt)
+      .sort((a, b) => {
+        const tierDiff = (tierOrder[a.tier] ?? 1) - (tierOrder[b.tier] ?? 1);
+        if (tierDiff !== 0) return tierDiff;
+        return b.activationScore - a.activationScore;
+      });
+
+    const result: Memory[] = [];
+    let totalTokens = 0;
+
+    for (const memory of userMemories) {
+      const estimated = Math.ceil(memory.content.length / 4);
+      if (totalTokens + estimated > maxTokens) break;
+      result.push(memory);
+      totalTokens += estimated;
+    }
+
+    return result;
+  }
+
+  async compress(_userId: string): Promise<CompressResult> {
+    return { compressed: 0, removed: 0 };
+  }
+
+  async maintain(_userId: string): Promise<MaintenanceResult> {
+    return { activationUpdated: 0, tiersUpdated: 0, compressed: 0, removed: 0 };
+  }
+
+  async setTier(memoryId: string, tier: MemoryTier): Promise<void> {
+    const memory = this.memories.get(memoryId);
+    if (memory) {
+      this.memories.set(memoryId, { ...memory, tier });
     }
   }
 }
