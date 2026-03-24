@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "memrosetta": {
+      "command": "node",
+      "args": ["/Users/obst/personal_project/memrosetta/adapters/mcp/dist/index.js"],
+      "env": {
+        "MEMROSETTA_DB": "/Users/obst/.memrosetta/memories.db",
+        "MEMROSETTA_EMBEDDINGS": "false"
+      }
+    }
+  }
+}
