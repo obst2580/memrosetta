@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteMemoryEngine } from '../src/engine.js';
-import type { MemoryInput } from '@memrosetta/types';
-import type { Embedder } from '@memrosetta/embeddings';
+import type { MemoryInput, MemoryRelation } from '@memrosetta/types';
+import type { Embedder, ContradictionDetector, ContradictionResult } from '@memrosetta/embeddings';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -679,5 +679,273 @@ describe('SqliteMemoryEngine without embedder (backward compatible)', () => {
     for (const memory of results) {
       expect(memory.embedding).toBeUndefined();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mock ContradictionDetector for engine integration tests
+// ---------------------------------------------------------------------------
+
+class MockContradictionDetector implements ContradictionDetector {
+  private _initialized = false;
+  readonly detectCalls: { textA: string; textB: string }[] = [];
+
+  /**
+   * Configurable response map. If a key matching `${textA}|||${textB}` exists,
+   * return that result. Otherwise, return neutral.
+   */
+  readonly responseMap = new Map<string, ContradictionResult>();
+
+  async initialize(): Promise<void> {
+    this._initialized = true;
+  }
+
+  async close(): Promise<void> {
+    this._initialized = false;
+  }
+
+  async detect(textA: string, textB: string): Promise<ContradictionResult> {
+    if (!this._initialized) {
+      throw new Error('ContradictionDetector not initialized. Call initialize() first.');
+    }
+    this.detectCalls.push({ textA, textB });
+    const key = `${textA}|||${textB}`;
+    return this.responseMap.get(key) ?? { label: 'neutral', score: 0.8 };
+  }
+
+  async detectBatch(
+    pairs: readonly { readonly textA: string; readonly textB: string }[],
+  ): Promise<readonly ContradictionResult[]> {
+    const results: ContradictionResult[] = [];
+    for (const pair of pairs) {
+      results.push(await this.detect(pair.textA, pair.textB));
+    }
+    return results;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SqliteMemoryEngine with ContradictionDetector
+// ---------------------------------------------------------------------------
+describe('SqliteMemoryEngine with contradiction detection', () => {
+  let engine: SqliteMemoryEngine;
+  let mockDetector: MockContradictionDetector;
+  const embedder = new MockEmbedder();
+
+  beforeEach(async () => {
+    mockDetector = new MockContradictionDetector();
+    await mockDetector.initialize();
+
+    engine = new SqliteMemoryEngine({
+      dbPath: ':memory:',
+      embedder,
+      contradictionDetector: mockDetector,
+      contradictionThreshold: 0.7,
+    });
+    await engine.initialize();
+  });
+
+  afterEach(async () => {
+    await engine.close();
+    await mockDetector.close();
+  });
+
+  it('auto-creates contradicts relation when contradiction detected', async () => {
+    // Store first memory
+    const m1 = await engine.store(
+      makeInput({
+        content: 'The project deadline is Friday',
+        keywords: ['project', 'deadline'],
+      }),
+    );
+
+    // Configure detector to report contradiction between m1 and the new memory
+    mockDetector.responseMap.set(
+      `The project deadline is Friday|||The project deadline is Monday`,
+      { label: 'contradiction', score: 0.95 },
+    );
+
+    // Store second memory that contradicts the first
+    const m2 = await engine.store(
+      makeInput({
+        content: 'The project deadline is Monday',
+        keywords: ['project', 'deadline'],
+      }),
+    );
+
+    // Verify the contradicts relation was auto-created
+    const relations = await engine.getRelations(m2.memoryId);
+    expect(relations.length).toBeGreaterThan(0);
+
+    const contradicts = relations.find(
+      (r) => r.relationType === 'contradicts',
+    );
+    expect(contradicts).toBeDefined();
+    expect(contradicts!.srcMemoryId).toBe(m2.memoryId);
+    expect(contradicts!.dstMemoryId).toBe(m1.memoryId);
+    expect(contradicts!.reason).toContain('NLI confidence');
+  });
+
+  it('does not create relation when no contradiction detected', async () => {
+    // Store first memory
+    await engine.store(
+      makeInput({
+        content: 'TypeScript is a typed superset of JavaScript',
+        keywords: ['typescript', 'javascript'],
+      }),
+    );
+
+    // Default mock returns neutral, so no contradiction
+    const m2 = await engine.store(
+      makeInput({
+        content: 'Python is a popular programming language',
+        keywords: ['python', 'programming'],
+      }),
+    );
+
+    const relations = await engine.getRelations(m2.memoryId);
+    const contradicts = relations.filter(
+      (r) => r.relationType === 'contradicts',
+    );
+    expect(contradicts).toHaveLength(0);
+  });
+
+  it('does not create relation when score is below threshold', async () => {
+    const m1 = await engine.store(
+      makeInput({
+        content: 'The meeting is at 3pm',
+        keywords: ['meeting', 'time'],
+      }),
+    );
+
+    // Set contradiction but below threshold (0.7)
+    mockDetector.responseMap.set(
+      `The meeting is at 3pm|||The meeting is at 5pm`,
+      { label: 'contradiction', score: 0.5 },
+    );
+
+    const m2 = await engine.store(
+      makeInput({
+        content: 'The meeting is at 5pm',
+        keywords: ['meeting', 'time'],
+      }),
+    );
+
+    const relations = await engine.getRelations(m2.memoryId);
+    const contradicts = relations.filter(
+      (r) => r.relationType === 'contradicts',
+    );
+    expect(contradicts).toHaveLength(0);
+  });
+
+  it('stores memory even if contradiction detector throws', async () => {
+    // Store first memory
+    await engine.store(
+      makeInput({
+        content: 'Some fact about programming languages',
+        keywords: ['programming'],
+      }),
+    );
+
+    // Make detector throw on next call
+    const failingDetector = new MockContradictionDetector();
+    await failingDetector.initialize();
+    const originalDetect = failingDetector.detect.bind(failingDetector);
+    failingDetector.detect = async () => {
+      throw new Error('NLI model crashed');
+    };
+
+    // Create new engine with failing detector
+    const failEngine = new SqliteMemoryEngine({
+      dbPath: ':memory:',
+      embedder,
+      contradictionDetector: failingDetector,
+    });
+    await failEngine.initialize();
+
+    // Store memory in the fresh engine (first memory, no similar to compare)
+    const stored = await failEngine.store(
+      makeInput({
+        content: 'Another fact about coding',
+        keywords: ['coding'],
+      }),
+    );
+
+    // Memory should still be stored successfully
+    expect(stored.memoryId).toMatch(/^mem-/);
+    expect(stored.content).toBe('Another fact about coding');
+
+    await failEngine.close();
+    await failingDetector.close();
+  });
+
+  it('skips contradiction check when no detector is provided', async () => {
+    // Engine without detector
+    const plainEngine = new SqliteMemoryEngine({
+      dbPath: ':memory:',
+      embedder,
+    });
+    await plainEngine.initialize();
+
+    const m1 = await plainEngine.store(
+      makeInput({ content: 'First fact', keywords: ['fact'] }),
+    );
+    const m2 = await plainEngine.store(
+      makeInput({ content: 'Second fact', keywords: ['fact'] }),
+    );
+
+    // Should store without error
+    expect(m1.memoryId).toMatch(/^mem-/);
+    expect(m2.memoryId).toMatch(/^mem-/);
+
+    await plainEngine.close();
+  });
+
+  it('skips self when checking contradictions', async () => {
+    // Store a memory - the detector should never be called with the same memory
+    // as both textA and textB
+    await engine.store(
+      makeInput({
+        content: 'A unique fact',
+        keywords: ['unique'],
+      }),
+    );
+
+    // Check that no detect call has the same content for both textA and textB
+    for (const call of mockDetector.detectCalls) {
+      expect(call.textA).not.toBe(call.textB);
+    }
+  });
+
+  it('only checks memories for the same user', async () => {
+    // Store memory for user-1
+    await engine.store(
+      makeInput({
+        userId: 'user-1',
+        content: 'The project deadline is Friday',
+        keywords: ['project', 'deadline'],
+      }),
+    );
+
+    // Store memory for user-2 with contradicting content
+    mockDetector.responseMap.set(
+      `The project deadline is Friday|||The project deadline is Monday`,
+      { label: 'contradiction', score: 0.95 },
+    );
+
+    const m2 = await engine.store(
+      makeInput({
+        userId: 'user-2',
+        content: 'The project deadline is Monday',
+        keywords: ['project', 'deadline'],
+      }),
+    );
+
+    // No contradiction should be found since memories belong to different users
+    const relations = await engine.getRelations(m2.memoryId);
+    const contradicts = relations.filter(
+      (r) => r.relationType === 'contradicts',
+    );
+    expect(contradicts).toHaveLength(0);
   });
 });

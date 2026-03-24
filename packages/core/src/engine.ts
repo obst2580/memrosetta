@@ -8,7 +8,7 @@ import type {
   MemoryRelation,
   RelationType,
 } from '@memrosetta/types';
-import type { Embedder } from '@memrosetta/embeddings';
+import type { Embedder, ContradictionDetector } from '@memrosetta/embeddings';
 import { ensureSchema } from './schema.js';
 import {
   createPreparedStatements,
@@ -22,6 +22,7 @@ import { searchMemories } from './search.js';
 import {
   createRelationStatements,
   createRelation,
+  getRelationsByMemory,
   type RelationStatements,
 } from './relations.js';
 import { rowToMemory, type MemoryRow } from './mapper.js';
@@ -29,6 +30,8 @@ import { rowToMemory, type MemoryRow } from './mapper.js';
 export interface SqliteEngineOptions {
   readonly dbPath: string; // ':memory:' for in-memory, or file path
   readonly embedder?: Embedder;  // Optional: enables vector search
+  readonly contradictionDetector?: ContradictionDetector;  // Optional: enables NLI-based contradiction detection
+  readonly contradictionThreshold?: number;  // Default: 0.7. Min NLI score to auto-create contradicts relation.
 }
 
 export class SqliteMemoryEngine implements IMemoryEngine {
@@ -82,10 +85,20 @@ export class SqliteMemoryEngine implements IMemoryEngine {
 
   async store(input: MemoryInput): Promise<Memory> {
     this.ensureInitialized();
+
+    let memory: Memory;
     if (this.options.embedder) {
-      return storeMemoryAsync(this.db!, this.stmts!, input, this.options.embedder);
+      memory = await storeMemoryAsync(this.db!, this.stmts!, input, this.options.embedder);
+    } else {
+      memory = storeMemory(this.db!, this.stmts!, input);
     }
-    return storeMemory(this.db!, this.stmts!, input);
+
+    // Check for contradictions if detector is available
+    if (this.options.contradictionDetector && this.options.embedder) {
+      await this.checkContradictions(memory);
+    }
+
+    return memory;
   }
 
   async storeBatch(
@@ -130,6 +143,11 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       relationType,
       reason,
     );
+  }
+
+  async getRelations(memoryId: string): Promise<readonly MemoryRelation[]> {
+    this.ensureInitialized();
+    return getRelationsByMemory(this.relStmts!, memoryId);
   }
 
   async count(userId: string): Promise<number> {
@@ -204,6 +222,69 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     });
 
     clearTransaction(userId, namespace);
+  }
+
+  /**
+   * Check the newly stored memory against existing similar memories
+   * for contradictions using the NLI model.
+   *
+   * If a contradiction is found above the configured threshold,
+   * a 'contradicts' relation is automatically created.
+   *
+   * Graceful degradation: any error during NLI check is silently
+   * swallowed so that memory storage is never blocked.
+   */
+  private async checkContradictions(newMemory: Memory): Promise<void> {
+    const detector = this.options.contradictionDetector;
+    if (!detector || !this.options.embedder) return;
+
+    const threshold = this.options.contradictionThreshold ?? 0.7;
+
+    try {
+      // Compute query vector from the new memory's content
+      const queryVec = await this.options.embedder.embed(newMemory.content);
+
+      // Search for similar existing memories (top 5, same user, only latest)
+      const similar = searchMemories(
+        this.db!,
+        {
+          userId: newMemory.userId,
+          query: newMemory.content,
+          limit: 5,
+          filters: { onlyLatest: true },
+        },
+        queryVec,
+        this.vectorEnabled,
+      );
+
+      for (const result of similar.results) {
+        // Skip self
+        if (result.memory.memoryId === newMemory.memoryId) continue;
+
+        try {
+          const nliResult = await detector.detect(
+            result.memory.content,
+            newMemory.content,
+          );
+
+          if (
+            nliResult.label === 'contradiction' &&
+            nliResult.score >= threshold
+          ) {
+            await this.relate(
+              newMemory.memoryId,
+              result.memory.memoryId,
+              'contradicts',
+              `NLI confidence: ${nliResult.score.toFixed(3)}`,
+            );
+          }
+        } catch {
+          // NLI check failed for this pair, continue with next
+        }
+      }
+    } catch {
+      // Entire contradiction check failed, memory is still stored
+    }
   }
 
   private ensureInitialized(): void {

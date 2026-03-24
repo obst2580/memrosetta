@@ -5,7 +5,7 @@ export { rowToMemory, serializeEmbedding } from './mapper.js';
 export type { MemoryRow } from './mapper.js';
 export { createPreparedStatements, storeMemory, storeBatchInTransaction, storeMemoryAsync, storeBatchAsync } from './store.js';
 export type { PreparedStatements } from './store.js';
-export { createRelationStatements, createRelation } from './relations.js';
+export { createRelationStatements, createRelation, getRelationsByMemory } from './relations.js';
 export type { RelationStatements } from './relations.js';
 export { buildFtsQuery, buildSearchSql, normalizeScores, ftsSearch, vectorSearch, bruteForceVectorSearch, rrfMerge, searchMemories } from './search.js';
 export type { SearchSqlResult, VectorSearchResult } from './search.js';

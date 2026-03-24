@@ -19,6 +19,8 @@ export interface IMemoryEngine {
     reason?: string,
   ): Promise<MemoryRelation>;
 
+  getRelations(memoryId: string): Promise<readonly MemoryRelation[]>;
+
   count(userId: string): Promise<number>;
   clear(userId: string): Promise<void>;
   clearNamespace(userId: string, namespace: string): Promise<void>;

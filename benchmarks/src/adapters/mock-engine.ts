@@ -94,6 +94,12 @@ export class MockEngine implements IMemoryEngine {
     return relation;
   }
 
+  async getRelations(memoryId: string): Promise<readonly MemoryRelation[]> {
+    return this.relations.filter(
+      (r) => r.srcMemoryId === memoryId || r.dstMemoryId === memoryId,
+    );
+  }
+
   async count(userId: string): Promise<number> {
     return [...this.memories.values()].filter((m) => m.userId === userId)
       .length;

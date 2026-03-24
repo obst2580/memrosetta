@@ -6,6 +6,7 @@ export interface RelationStatements {
   readonly insertRelation: Database.Statement;
   readonly updateIsLatest: Database.Statement;
   readonly checkMemoryExists: Database.Statement;
+  readonly getRelationsByMemory: Database.Statement;
 }
 
 export function createRelationStatements(db: Database.Database): RelationStatements {
@@ -19,6 +20,9 @@ export function createRelationStatements(db: Database.Database): RelationStateme
     ),
     checkMemoryExists: db.prepare(
       'SELECT memory_id FROM memories WHERE memory_id = ?'
+    ),
+    getRelationsByMemory: db.prepare(
+      'SELECT * FROM memory_relations WHERE src_memory_id = ? OR dst_memory_id = ?'
     ),
   };
 }
@@ -63,4 +67,26 @@ export function createRelation(
     createdAt,
     reason,
   };
+}
+
+interface RelationRow {
+  readonly src_memory_id: string;
+  readonly dst_memory_id: string;
+  readonly relation_type: string;
+  readonly created_at: string;
+  readonly reason: string | null;
+}
+
+export function getRelationsByMemory(
+  stmts: RelationStatements,
+  memoryId: string,
+): readonly MemoryRelation[] {
+  const rows = stmts.getRelationsByMemory.all(memoryId, memoryId) as readonly RelationRow[];
+  return rows.map((row) => ({
+    srcMemoryId: row.src_memory_id,
+    dstMemoryId: row.dst_memory_id,
+    relationType: row.relation_type as RelationType,
+    createdAt: row.created_at,
+    reason: row.reason ?? undefined,
+  }));
 }
