@@ -218,7 +218,7 @@ export async function runPhase1(
     phase: 'phase1',
     timestamp: new Date().toISOString(),
     dataset: 'LoCoMo',
-    engineVersion: '0.1.0',
+    engineVersion: '0.2.2',
     retrieval: {
       precisionAtK: { 5: avgP5 },
       recallAtK: { 5: avgR5 },

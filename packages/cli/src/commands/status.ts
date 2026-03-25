@@ -1,7 +1,14 @@
 import { existsSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { getDefaultDbPath } from '../engine.js';
 import { output, type OutputFormat } from '../output.js';
 import { getConfig } from '../hooks/config.js';
+
+function getVersion(): string {
+  const require = createRequire(import.meta.url);
+  const pkg = require('../../package.json') as { version: string };
+  return pkg.version;
+}
 import {
   isClaudeCodeConfigured,
   isGenericMCPConfigured,
@@ -93,7 +100,7 @@ export async function run(options: StatusOptions): Promise<void> {
 
   output(
     {
-      version: '0.1.0',
+      version: getVersion(),
       database: {
         path: dbPath,
         exists,

@@ -20,6 +20,7 @@ describe('Health route', () => {
     const res = await app.request('/api/health');
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data).toEqual({ status: 'ok', version: '0.1.0' });
+    expect(data.status).toBe('ok');
+    expect(data.version).toBeDefined();
   });
 });

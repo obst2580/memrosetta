@@ -2,7 +2,11 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { createRequire } from 'node:module';
 import { SqliteMemoryEngine } from '@memrosetta/core';
+
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json') as { version: string };
 import { HuggingFaceEmbedder } from '@memrosetta/embeddings';
 import { registerTools } from './tools.js';
 import { mkdirSync } from 'node:fs';
@@ -35,7 +39,7 @@ async function main(): Promise<void> {
 
   // Create MCP server
   const server = new Server(
-    { name: 'memrosetta', version: '0.1.0' },
+    { name: 'memrosetta', version: pkg.version },
     { capabilities: { tools: {} } },
   );
 

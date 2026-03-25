@@ -57,7 +57,10 @@ async function main(): Promise<void> {
   const { command, global: opts, rest } = parseGlobalArgs(rawArgs);
 
   if (opts.version) {
-    process.stdout.write('0.1.0\n');
+    const { createRequire } = await import('node:module');
+    const require = createRequire(import.meta.url);
+    const pkg = require('../package.json') as { version: string };
+    process.stdout.write(`${pkg.version}\n`);
     return;
   }
 
