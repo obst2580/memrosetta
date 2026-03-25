@@ -18,48 +18,49 @@ export function Hero({ lang }: HeroProps) {
         className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-50"
         style={{ backgroundImage: 'url(/hero-bg.png)' }}
       />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/40 via-white/60 to-white" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/50 via-white/70 to-white" />
 
       <div className="relative mx-auto max-w-3xl">
         {/* Badge */}
-        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-500">
+        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white/80 px-3 py-1 text-xs font-medium text-zinc-600 backdrop-blur-sm">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
           {t.badge}
         </div>
 
         {/* Title */}
-        <h1 className="mb-4 text-5xl font-extrabold tracking-tight text-zinc-900 md:text-7xl">
+        <h1 className="mb-4 text-5xl font-extrabold tracking-tight text-zinc-900 drop-shadow-sm md:text-7xl">
           Mem
           <span className="bg-gradient-to-r from-amber-500 to-amber-700 bg-clip-text text-transparent">Rosetta</span>
         </h1>
 
         {/* Subtitle */}
-        <p className="mb-8 max-w-xl text-lg text-zinc-500 md:text-xl">
+        <p className="mb-8 max-w-xl text-lg font-medium text-zinc-700 md:text-xl">
           {t.subtitle}
         </p>
 
         {/* Install command */}
-        <div className="mb-8">
+        <div className="mb-6">
           <InlineCode copyable>{t.install}</InlineCode>
         </div>
 
-        {/* GitHub link */}
+        {/* GitHub link - prominent button style */}
         <div className="mb-12">
           <a
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-zinc-800"
+            className="inline-flex items-center gap-2.5 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition-all hover:border-zinc-400 hover:bg-zinc-50 hover:shadow-md"
           >
             <GitHubIcon />
-            <span>GitHub</span>
-            <span className="text-zinc-300">/</span>
-            <span className="font-mono text-xs">obst2580/memrosetta</span>
+            <span>View on GitHub</span>
+            <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs text-zinc-500">
+              obst2580/memrosetta
+            </span>
           </a>
         </div>
 
         {/* Stats */}
-        <div className="flex flex-wrap gap-8 border-t border-zinc-100 pt-8 text-sm">
+        <div className="flex flex-wrap gap-8 rounded-lg border border-zinc-200 bg-white/80 px-6 py-4 backdrop-blur-sm">
           <StatItem
             value={t.stats.mrr.value}
             label={t.stats.mrr.label}
@@ -87,10 +88,10 @@ function StatItem({
 }) {
   return (
     <div className="flex items-baseline gap-2">
-      <span className="font-mono text-lg font-semibold text-zinc-900">
+      <span className="font-mono text-lg font-bold text-zinc-900">
         {value}
       </span>
-      <span className="text-zinc-400">{label}</span>
+      <span className="text-sm font-medium text-zinc-500">{label}</span>
     </div>
   )
 }
@@ -98,7 +99,7 @@ function StatItem({
 function GitHubIcon() {
   return (
     <svg
-      className="h-4 w-4"
+      className="h-5 w-5"
       fill="currentColor"
       viewBox="0 0 24 24"
       aria-hidden="true"
