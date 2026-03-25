@@ -15,7 +15,7 @@ export function Hero({ lang }: HeroProps) {
     <section className="relative overflow-hidden px-6 pt-28 pb-16 md:px-8 md:pt-36 md:pb-24">
       {/* Background illustration */}
       <div
-        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.08]"
+        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.15]"
         style={{ backgroundImage: 'url(/hero-bg.png)' }}
       />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white via-white/90 to-white" />
