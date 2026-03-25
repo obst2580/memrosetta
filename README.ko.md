@@ -515,10 +515,10 @@ await engine.close();
 | 방법 | Precision@5 | MRR | 지연시간 (p50) | LLM 필요 |
 |------|:-----------:|:---:|:-------------:|:--------:|
 | FTS5 only | 0.0080 | 0.0286 | 0.4ms | No |
-| Hybrid (FTS + Vector + RRF) | 0.0030 | 0.0109 | 4.1ms | No |
+| Hybrid (FTS + Vector) | 0.0030 | 0.0111 | 4.2ms | No |
 | **Hybrid + Fact Extraction** | **0.0311** | **0.0572** | **4.0ms** | **Yes (외부)** |
 
-FTS5-only는 키워드 쿼리에서 가장 높은 MRR. Hybrid는 의미 매칭을 추가하되 지연이 증가. 사실 추출(외부 LLM 전처리)은 **single-hop 정확도 23.8%** — 모든 방법 중 최고.
+LoCoMo 대화 턴 데이터에서 FTS5 키워드 매칭이 정밀도가 가장 높음. Hybrid는 쿼리가 저장된 메모리와 다른 표현을 쓸 때 유용. 사실 추출(원자적 메모리 전처리)이 **single-hop 23.8%**로 최고 정확도.
 
 사실 추출은 외부 LLM(OpenAI, Anthropic 등)을 사용하여 대화 트랜스크립트를 원자적 사실로 전처리합니다. 코어 검색 엔진은 LLM 없이 동작합니다.
 

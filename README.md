@@ -543,10 +543,10 @@ Evaluated on [LoCoMo](https://github.com/snap-research/locomo) (1,986 QA pairs, 
 | Method | Precision@5 | MRR | Latency (p50) | LLM Required |
 |--------|:-----------:|:---:|:-------------:|:------------:|
 | FTS5 only | 0.0080 | 0.0286 | 0.4ms | No |
-| Hybrid (FTS + Vector + RRF) | 0.0030 | 0.0109 | 4.1ms | No |
+| Hybrid (FTS + Vector) | 0.0030 | 0.0111 | 4.2ms | No |
 | **Hybrid + Fact Extraction** | **0.0311** | **0.0572** | **4.0ms** | **Yes (external)** |
 
-FTS5-only delivers the best MRR for keyword queries. Hybrid adds semantic matching at the cost of latency. Fact extraction (pre-processing with external LLM) delivers **single-hop accuracy of 23.8%** — the highest across all methods.
+On LoCoMo's conversation-turn data, FTS5 keyword matching outperforms hybrid for precision. Hybrid adds value when queries are semantically fuzzy or use different wording than stored memories. Fact extraction (atomic memory pre-processing) delivers the highest accuracy with **single-hop 23.8%**.
 
 Fact extraction uses an external LLM (e.g., OpenAI, Anthropic) to pre-process conversation transcripts into atomic facts before storage. The core search engine operates without any LLM.
 
