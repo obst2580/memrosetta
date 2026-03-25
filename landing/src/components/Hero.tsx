@@ -15,10 +15,10 @@ export function Hero({ lang }: HeroProps) {
     <section className="relative overflow-hidden px-6 pt-28 pb-16 md:px-8 md:pt-36 md:pb-24">
       {/* Background illustration */}
       <div
-        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-30"
+        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-50"
         style={{ backgroundImage: 'url(/hero-bg.png)' }}
       />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/70 via-white/80 to-white" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/40 via-white/60 to-white" />
 
       <div className="relative mx-auto max-w-3xl">
         {/* Badge */}
