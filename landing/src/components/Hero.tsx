@@ -12,8 +12,15 @@ export function Hero({ lang }: HeroProps) {
   const t = content[lang].hero
 
   return (
-    <section className="px-6 pt-28 pb-16 md:px-8 md:pt-36 md:pb-24">
-      <div className="mx-auto max-w-3xl">
+    <section className="relative overflow-hidden px-6 pt-28 pb-16 md:px-8 md:pt-36 md:pb-24">
+      {/* Background illustration */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-[0.08]"
+        style={{ backgroundImage: 'url(/hero-bg.png)' }}
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white via-white/90 to-white" />
+
+      <div className="relative mx-auto max-w-3xl">
         {/* Badge */}
         <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-500">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
