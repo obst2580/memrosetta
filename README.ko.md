@@ -280,7 +280,7 @@ activation = sigmoid( ln( sum( t_j ^ -0.5 ) ) + salience )
 수동으로 유지보수 실행:
 
 ```bash
-memrosetta maintain --user alice
+memrosetta maintain
 ```
 
 ## 주요 기능

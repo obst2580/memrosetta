@@ -278,7 +278,7 @@ Cold memories with very low activation (< 0.1) are eligible for compression:
 Run maintenance manually:
 
 ```bash
-memrosetta maintain --user alice
+memrosetta maintain
 ```
 
 ## Features

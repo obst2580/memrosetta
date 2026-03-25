@@ -95,23 +95,23 @@ memrosetta reset --claude-code`,
           code: `# Install globally
 npm install -g @memrosetta/cli
 
-# Store memories
-memrosetta store --user alice \\
+# Store memories (userId defaults to system username)
+memrosetta store \\
   --content "Prefers TypeScript over JavaScript" \\
   --type preference
 
 # Search
-memrosetta search --user alice \\
+memrosetta search \\
   --query "tech stack choices" \\
   --format text
 # [0.95] Decided to use Tailwind CSS (decision)
 # [0.88] Prefers TypeScript over JavaScript (preference)
 
 # Working memory (top-priority context)
-memrosetta working-memory --user alice
+memrosetta working-memory
 
 # Run maintenance (recompute activation scores)
-memrosetta maintain --user alice`,
+memrosetta maintain`,
         },
       },
       packages: {
@@ -490,23 +490,23 @@ memrosetta reset --claude-code`,
           code: `# 전역 설치
 npm install -g @memrosetta/cli
 
-# 기억 저장
-memrosetta store --user alice \\
+# 기억 저장 (userId는 시스템 사용자명으로 자동 설정)
+memrosetta store \\
   --content "TypeScript를 JavaScript보다 선호" \\
   --type preference
 
 # 검색
-memrosetta search --user alice \\
+memrosetta search \\
   --query "기술 스택 선택" \\
   --format text
 # [0.95] Tailwind CSS 사용 결정 (decision)
 # [0.88] TypeScript를 JavaScript보다 선호 (preference)
 
 # 작업 기억 (최우선 컨텍스트)
-memrosetta working-memory --user alice
+memrosetta working-memory
 
 # 유지보수 (활성화 점수 재계산)
-memrosetta maintain --user alice`,
+memrosetta maintain`,
         },
       },
       packages: {
