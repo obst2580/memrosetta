@@ -171,11 +171,13 @@ When you need information not in the current context, search past memories.
 No need to specify userId -- it defaults to the system username.
 
 ### Store (mcp__memory-service__memrosetta_store)
-You MUST store the following immediately when encountered:
-- **Decisions**: Any technical choice ("We decided to use X", "Going with approach B")
-- **Facts**: Key project facts ("API runs on port 8080", "Database is PostgreSQL")
-- **Preferences**: User preferences ("I prefer functional style", "Always use TypeScript")
-- **Events**: Completed milestones ("Auth system deployed", "Migration completed")
+
+**After EVERY response, run this checklist (zero extra cost):**
+1. Did I encounter a DECISION? (tech choice, approach selection) -> store as "decision"
+2. Did I learn a new FACT? (config, architecture, project info) -> store as "fact"
+3. Did the user state a PREFERENCE? (style, tool choice, pattern) -> store as "preference"
+4. Did we COMPLETE something? (deploy, migration, fix) -> store as "event"
+5. None of the above? -> skip, do not store.
 
 Always include 2-3 keywords. Example:
   content: "Decided to use OAuth2 with PKCE for auth"
@@ -187,9 +189,9 @@ Do NOT store:
 - File operations ("Created file X", "Modified Y")
 - Debugging steps and attempts
 - Simple confirmations or acknowledgments
-- Implementation details (HOW you did it)
+- Implementation details (HOW you did it -- only WHAT)
 
-Focus on WHAT was decided, learned, or achieved -- not HOW.
+This checklist ensures nothing important is lost, including the last response before session ends.
 No need to specify userId -- it defaults to the system username.
 `;
 
