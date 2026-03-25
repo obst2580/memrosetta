@@ -1,5 +1,6 @@
 node_modules/
 dist/
+*.tsbuildinfo
 benchmarks/data/*
 benchmarks/results/*
 *.db

@@ -299,7 +299,7 @@ memrosetta maintain
 
 **비파괴적** -- 아무것도 삭제하지 않습니다. 이전 버전은 관계와 `isLatest` 플래그로 보존됩니다.
 
-**588개 이상의 테스트.**
+**610개 이상의 테스트.**
 
 ## MCP 도구
 
@@ -512,13 +512,18 @@ await engine.close();
 
 [LoCoMo](https://github.com/snap-research/locomo) 데이터셋으로 평가 (1,986개 QA, 5,882개 기억):
 
-| 방법 | Precision@5 | MRR | 지연시간 (p50) |
-|------|:-----------:|:---:|:-------------:|
-| FTS5 only | 0.0006 | 0.0026 | 0.2ms |
-| Hybrid (FTS + Vector + RRF) | 0.0013 | 0.0037 | 3.4ms |
-| **Hybrid + Fact Extraction** | **0.0074** | **0.0157** | 3.3ms |
+| 방법 | Precision@5 | MRR | 지연시간 (p50) | LLM 필요 |
+|------|:-----------:|:---:|:-------------:|:--------:|
+| FTS5 only | 0.0006 | 0.0026 | 0.4ms | No |
+| Hybrid (FTS + Vector + RRF) | 0.0013 | 0.0037 | 3.1ms | No |
+| **Hybrid + Fact Extraction** | **0.0074** | **0.0157** | **3.3ms** | **Yes (외부)** |
 
 원자적 기억 + 사실 추출로 hybrid-only 대비 **MRR +324%** 향상. 청크 기반 RAG가 아닌 원자적 기억 설계의 효과를 검증합니다.
+
+사실 추출은 외부 LLM(OpenAI, Anthropic 등)을 사용하여 대화 트랜스크립트를 원자적 사실로 전처리합니다. 코어 검색 엔진은 LLM 없이 동작합니다.
+
+> 벤치마크 결과는 SQLite 버전, 임베딩 모델 양자화, 하드웨어에 따라 약간 다를 수
+> 있습니다. `pnpm bench:*`를 실행하여 직접 재현할 수 있습니다.
 
 ```bash
 pnpm bench:sqlite                    # FTS only
@@ -546,9 +551,15 @@ pnpm bench:hybrid --converter fact --llm-provider openai  # LLM 추출 포함
 git clone https://github.com/obst2580/memrosetta.git
 cd memrosetta
 pnpm install
-pnpm test              # 588개 이상의 테스트
+pnpm build             # 모든 패키지 빌드 (첫 테스트 전 필수)
+pnpm test              # 610개 이상의 테스트
 pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 ```
+
+> 클린 클론에서 `pnpm test`는 자동으로 `pnpm build`를 먼저 실행하여 워크스페이스
+> 패키지(`@memrosetta/types`, `@memrosetta/core` 등)가 테스트에서 `dist/` 내보내기를
+> 참조하기 전에 컴파일되도록 합니다. 빌드 없이 테스트만 재실행하려면
+> `pnpm test:only`를 사용하세요.
 
 ## 로드맵
 

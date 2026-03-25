@@ -12,7 +12,8 @@
   },
   "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
-    "build": "tsc",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "build": "rm -f tsconfig.tsbuildinfo && tsc",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

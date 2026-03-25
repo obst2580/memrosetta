@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "pnpm -r run build",
-    "test": "pnpm -r run test",
+    "build": "pnpm --filter @memrosetta/types run build && pnpm --filter @memrosetta/embeddings run build && pnpm --filter @memrosetta/core run build && pnpm -r run build",
+    "test": "pnpm run build && pnpm -r run test",
+    "test:only": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck",
     "bench": "pnpm --filter benchmarks run bench",
     "bench:phase1": "pnpm --filter benchmarks run bench:phase1",

@@ -297,7 +297,7 @@ memrosetta maintain
 
 **Non-destructive** -- Nothing is ever deleted. Old versions are preserved via relations and `isLatest` flags.
 
-**588+ tests.**
+**610+ tests.**
 
 ## MCP Tools
 
@@ -510,13 +510,19 @@ await engine.close();
 
 Evaluated on [LoCoMo](https://github.com/snap-research/locomo) (1,986 QA pairs, 5,882 memories):
 
-| Method | Precision@5 | MRR | Latency (p50) |
-|--------|:-----------:|:---:|:-------------:|
-| FTS5 only | 0.0006 | 0.0026 | 0.2ms |
-| Hybrid (FTS + Vector + RRF) | 0.0013 | 0.0037 | 3.4ms |
-| **Hybrid + Fact Extraction** | **0.0074** | **0.0157** | 3.3ms |
+| Method | Precision@5 | MRR | Latency (p50) | LLM Required |
+|--------|:-----------:|:---:|:-------------:|:------------:|
+| FTS5 only | 0.0006 | 0.0026 | 0.4ms | No |
+| Hybrid (FTS + Vector + RRF) | 0.0013 | 0.0037 | 3.1ms | No |
+| **Hybrid + Fact Extraction** | **0.0074** | **0.0157** | **3.3ms** | **Yes (external)** |
 
 Atomic memory with fact extraction delivers **+324% MRR** over hybrid-only, validating the atomic memory design over chunk-based RAG.
+
+Fact extraction uses an external LLM (e.g., OpenAI, Anthropic) to pre-process conversation transcripts into atomic facts before storage. The core search engine operates without any LLM.
+
+> Benchmark results may vary slightly across environments due to differences in
+> SQLite versions, embedding model quantization, and hardware. Run `pnpm bench:*`
+> to reproduce on your machine.
 
 ```bash
 pnpm bench:sqlite                    # FTS only
@@ -544,9 +550,15 @@ pnpm bench:hybrid --converter fact --llm-provider openai  # With LLM extraction
 git clone https://github.com/obst2580/memrosetta.git
 cd memrosetta
 pnpm install
-pnpm test              # 588+ tests
+pnpm build             # Build all packages (required before first test)
+pnpm test              # 610+ tests
 pnpm bench:mock        # Quick benchmark (no LLM needed)
 ```
+
+> On a clean clone, `pnpm test` automatically runs `pnpm build` first so that
+> workspace packages (`@memrosetta/types`, `@memrosetta/core`, etc.) are compiled
+> before tests reference their `dist/` exports. If you only want to re-run tests
+> without rebuilding, use `pnpm test:only`.
 
 ## Roadmap
 
