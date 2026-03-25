@@ -1,170 +1,196 @@
-# MemRosetta
-
-**Your AI keeps forgetting. MemRosetta fixes that.**
-
-Every time you start a new AI session, context is lost. You re-explain the same things, re-make the same decisions, re-discover the same solutions. MemRosetta gives your AI tools persistent, searchable long-term memory that survives across sessions.
-
-> Memory + Rosetta: Just as the Rosetta Stone unlocked ancient writing, MemRosetta unlocks AI memory.
-
-## The Problem
-
-```
-Session 1: "Our API uses Spring Boot with PostgreSQL, deployed on Azure..."
-Session 2: "What tech stack are we using?"  <- AI has no idea
-
-Session 1: "Let's go with approach B for the auth system"
-Session 2: "What did we decide about auth?"  <- Lost forever
-
-Session 1: (3 hours of debugging) "The fix was changing the batch size to 4"
-Session 2: (same bug) starts from scratch
-```
-
-## Quick Start
-
-### Claude Code (recommended)
-
-One package, one command:
+<p align="center">
+  <h1 align="center">MemRosetta</h1>
+  <p align="center">Persistent memory for AI tools. One SQLite file. Zero cloud.</p>
+</p>
 
 ```bash
 npm install -g @memrosetta/cli
 memrosetta init --claude-code
+# Done. Your AI remembers everything now.
 ```
 
-```
-MemRosetta initialized successfully.
+---
 
-  What was set up:
-  ----------------------------------------
-  Config:     ~/.memrosetta/config.json
-  Database:   ~/.memrosetta/memories.db
-  Stop Hook:  ~/.claude/settings.json (auto-save on session end)
-  CLAUDE.md:  ~/.claude/CLAUDE.md (memory instructions for Claude)
-  MCP Server: ~/.mcp.json (search past memories)
-
-  Restart Claude Code to activate.
-```
-
-That's it. Restart Claude Code and your AI remembers everything.
-
-### How It Works with Claude Code
+## The Problem
 
 ```
-During session (Claude Code = LLM)
-  |
-  |  Claude encounters important fact/decision/preference
-  |  -> stores it via MCP (mcp__memory-service__memrosetta_store)
-  |
-  |  Claude needs info not in current context
-  |  -> searches past memories via MCP (mcp__memory-service__memrosetta_search)
-  |
-  v  Session ends
-  |
-  +-- [Stop Hook] backup extraction from transcript
-  |   -> LLM-based (if API key available) or rule-based (fallback)
-  |
-  v
- ~/.memrosetta/memories.db (shared across all sessions)
+Session 1: "Our API uses Spring Boot on Azure. Auth is OAuth2 with PKCE."
+Session 2: "What's our tech stack?" -- AI has no idea
+
+Session 1: "Let's go with approach B for the auth refactor."
+Session 2: "What did we decide?" -- gone
+
+Session 1: (3 hours debugging) "The fix: set batch size to 4."
+Session 2: (same bug) starts from scratch
 ```
 
-Three layers of memory, in priority order:
+Every AI tool forgets everything between sessions. You re-explain, re-decide, re-debug. MemRosetta is a local memory engine that gives any AI tool persistent, searchable long-term memory -- stored in a single SQLite file on your machine.
 
-| Layer | When | How | Quality |
-|-------|------|-----|---------|
-| **Claude stores directly** | During session | MCP store (Claude is the LLM) | Best -- full context understanding |
-| **Stop Hook + LLM** | Session end | Transcript -> LLM extraction | Good (needs API key) |
-| **Stop Hook + rules** | Session end | Transcript -> pattern matching | Basic (no API key needed) |
-
-To check status or remove:
-
-```bash
-memrosetta status                    # Show what's configured
-memrosetta reset --claude-code       # Remove Claude Code integrations
-memrosetta reset --all               # Remove everything
-```
-
-### Any MCP-Compatible Tool
-
-MemRosetta works with **any tool that supports MCP** (Model Context Protocol). All tools share the same local database, so memories stored from one tool are searchable from another.
-
-```
-Claude Code ──┐
-Claude Desktop ├──→ ~/.memrosetta/memories.db ←──┤ Cursor
-Windsurf ──────┘    (one shared SQLite file)      ├── Cline
-                                                  └── Continue
-```
-
-#### Supported Tools
-
-| Tool | MCP Support | Setup |
-|------|:-----------:|-------|
-| **Claude Code** | Yes | `npx @memrosetta/claude-code init` (one command) |
-| **Claude Desktop** | Yes | Add MCP server in Settings > Developer |
-| **Cursor** | Yes | Add to `.cursor/mcp.json` |
-| **Windsurf** | Yes | Add to MCP config |
-| **Cline** (VS Code) | Yes | Add to MCP settings |
-| **Continue** (VS Code) | Yes | Add to MCP config |
-| ChatGPT / Copilot | No | Use CLI or REST API instead |
-
-#### Setup for Cursor / Claude Desktop / Others
+## Quick Start
 
 ```bash
 npm install -g @memrosetta/cli
-
-# Cursor
-memrosetta init --cursor
-
-# Or any MCP tool (writes ~/.mcp.json)
-memrosetta init --mcp
 ```
-
-Or manually add to your MCP config:
-
-```json
-{
-  "mcpServers": {
-    "memory-service": {
-      "command": "npx",
-      "args": ["-y", "@memrosetta/mcp"]
-    }
-  }
-}
-```
-
-Available MCP tools:
-- `memrosetta_search` -- search past memories with hybrid search
-- `memrosetta_store` -- save an atomic memory
-- `memrosetta_working_memory` -- get highest-priority context
-- `memrosetta_relate` -- link related memories
-- `memrosetta_invalidate` -- mark outdated facts
-- `memrosetta_count` -- count stored memories
-
-#### Cross-Tool Memory Sharing
-
-Since all tools read from the same `~/.memrosetta/memories.db`:
-
-```
-Morning:  Claude Code session about auth system → memories saved
-Afternoon: Open Cursor for frontend work → search "auth" → finds morning's decisions
-Evening:  Claude Desktop for planning → has full context from both sessions
-```
-
-No sync, no cloud, no config. It just works because it's one local file.
-
-### CLI (standalone)
 
 ```bash
-# Already installed if you did any init above
+# Base setup: database + MCP server
 memrosetta init
 
-memrosetta store --user alice --content "Prefers TypeScript over JavaScript" --type preference
-memrosetta store --user alice --content "Decided to use Tailwind CSS" --type decision
+# Claude Code: + hooks + CLAUDE.md instructions
+memrosetta init --claude-code
 
-memrosetta search --user alice --query "tech stack choices" --format text
-# [0.95] Decided to use Tailwind CSS (decision, 2026-03-24)
-# [0.88] Prefers TypeScript over JavaScript (preference, 2026-03-24)
+# Cursor: + MCP config
+memrosetta init --cursor
 ```
 
-### As a Library
+That's it. Restart your tool and it has memory.
+
+## Works With
+
+All tools share the same local database. Memories stored from one tool are instantly available in another.
+
+```
+Claude Code ----+
+Claude Desktop --+--> ~/.memrosetta/memories.db <--+-- Cursor
+Windsurf -------+     (one local SQLite file)      +-- Cline
+                                                   +-- Continue
+```
+
+| Tool | MCP | Setup |
+|------|:---:|-------|
+| Claude Code | Yes | `memrosetta init --claude-code` |
+| Claude Desktop | Yes | `memrosetta init --mcp` |
+| Cursor | Yes | `memrosetta init --cursor` |
+| Windsurf | Yes | `memrosetta init --mcp` |
+| Cline | Yes | `memrosetta init --mcp` |
+| Continue | Yes | `memrosetta init --mcp` |
+| ChatGPT / Copilot | -- | No MCP support. Use CLI or REST API. |
+
+### Cross-Tool Memory Sharing
+
+```
+Morning   Claude Code: debug auth system         --> memories saved
+Afternoon Cursor: build login UI                  --> searches "auth" --> finds morning's decisions
+Evening   Claude Desktop: write architecture doc  --> has full context from both sessions
+```
+
+No sync. No cloud. No config. One local file.
+
+## How It Works
+
+MemRosetta stores **atomic memories** -- one fact per record, not text chunks -- in a local SQLite database. Retrieval uses hybrid search that combines keyword matching, semantic similarity, and activation-based ranking.
+
+```
+Query: "What CSS framework did we choose?"
+  |
+  +-- FTS5 (BM25)     keyword match: "CSS", "framework"
+  +-- Vector (KNN)     semantic match: similar meaning
+  +-- RRF Merge        combined ranking
+  |
+  +-- Activation       boost frequently accessed memories
+  +-- Time decay       recent memories rank higher
+```
+
+### Memory Lifecycle
+
+```
+Store                      Search                     Maintain
+-----                      ------                     --------
+Classify (fact/pref/       Hybrid search              Activation scoring
+  decision/event)            (FTS + vector + RRF)       (ACT-R model)
+Store atomically           Activation weighting       Tier compression
+Detect contradictions      Relation expansion           Hot  -> always loaded
+  (NLI model, local)      Time filtering               Warm -> last 30 days
+Link relations                                         Cold -> compressed
+```
+
+### Not Another RAG
+
+| | RAG (chunk-based) | MemRosetta (atomic) |
+|---|---|---|
+| **Unit** | ~400 token text chunks | One fact = one record |
+| **Updates** | Re-index entire document | `updates` relation, old version kept |
+| **Contradictions** | Both returned, AI guesses | Auto-detected by NLI model |
+| **Time** | None | 4 timestamps per memory |
+| **Forgetting** | Everything weighted equally | ACT-R: used more = ranked higher |
+
+## Features
+
+**Search** -- Hybrid retrieval combining FTS5 (BM25), vector similarity (bge-small-en-v1.5), and Reciprocal Rank Fusion.
+
+**Contradiction Detection** -- Local NLI model (nli-deberta-v3-xsmall, 71MB) automatically detects when new facts contradict existing ones.
+
+**Adaptive Forgetting** -- ACT-R activation scoring. Frequently accessed memories rank higher. Unused memories fade but are never deleted.
+
+**Memory Tiers** -- Hot (working memory, ~3K tokens), Warm (last 30 days), Cold (compressed long-term).
+
+**Relations** -- `updates`, `extends`, `derives`, `contradicts`, `supports`. Memories form a graph, not a flat list.
+
+**Time Model** -- Four timestamps: `learnedAt`, `documentDate`, `eventDateStart/End`, `invalidatedAt`.
+
+**Non-destructive** -- Nothing is ever deleted. Old versions are preserved via relations and `isLatest` flags.
+
+**588+ tests.**
+
+## MCP Tools
+
+When connected via MCP, your AI tool gets these capabilities:
+
+| Tool | Description |
+|------|-------------|
+| `memrosetta_store` | Save an atomic memory |
+| `memrosetta_search` | Hybrid search across past memories |
+| `memrosetta_working_memory` | Get highest-priority context (~3K tokens) |
+| `memrosetta_relate` | Link related memories |
+| `memrosetta_invalidate` | Mark a memory as outdated |
+| `memrosetta_count` | Count stored memories |
+
+## CLI Reference
+
+<details>
+<summary>Full CLI commands</summary>
+
+```
+memrosetta init [options]                Initialize database and integrations
+  --claude-code                            + Claude Code hooks + CLAUDE.md
+  --cursor                                 + Cursor MCP config
+  --mcp                                    + MCP server config only
+
+memrosetta store                         Store a memory
+  --user <id>                              User identifier
+  --content <text>                         Memory content
+  --type <fact|preference|decision|event>  Memory type
+  --keywords <k1,k2>                       Search keywords
+  --namespace <ns>                         Category
+  --confidence <0-1>                       Confidence score
+
+memrosetta search                        Search memories
+  --user <id>                              User identifier
+  --query <text>                           Search query
+  --limit <n>                              Max results (default: 5)
+  --format <json|text>                     Output format
+
+memrosetta get <memoryId>                Get memory by ID
+memrosetta count --user <id>             Count memories
+memrosetta relate                        Create relation between memories
+  --src <id> --dst <id>
+  --type <updates|extends|derives|contradicts|supports>
+memrosetta invalidate <memoryId>         Mark memory as outdated
+memrosetta working-memory --user <id>    Get working memory context
+memrosetta maintain --user <id>          Run maintenance (scores + compression)
+memrosetta compress --user <id>          Compress cold memories
+memrosetta ingest --user <id> --file <path>  Ingest JSONL transcript
+memrosetta status                        Show status
+memrosetta clear --user <id> --confirm   Clear all user memories
+memrosetta reset --claude-code           Remove Claude Code integrations
+memrosetta reset --all                   Remove everything
+
+Global flags: --db <path>  --format json|text  --no-embeddings
+```
+
+</details>
+
+## As a Library
 
 ```typescript
 import { SqliteMemoryEngine } from '@memrosetta/core';
@@ -173,10 +199,7 @@ import { HuggingFaceEmbedder } from '@memrosetta/embeddings';
 const embedder = new HuggingFaceEmbedder();
 await embedder.initialize();
 
-const engine = new SqliteMemoryEngine({
-  dbPath: './memories.db',
-  embedder,
-});
+const engine = new SqliteMemoryEngine({ dbPath: './memories.db', embedder });
 await engine.initialize();
 
 // Store
@@ -194,13 +217,10 @@ const results = await engine.search({
   limit: 5,
 });
 
-// Relate memories
-await engine.relate(memoryA.memoryId, memoryB.memoryId, 'updates', 'Changed preference');
+// Relate
+await engine.relate(memA.memoryId, memB.memoryId, 'updates', 'Changed preference');
 
-// Contradiction detection (automatic on store if NLI model loaded)
-// Stores "prefers light mode" -> auto-creates contradicts relation with "prefers dark mode"
-
-// Working memory (highest priority memories, fits in ~3K tokens)
+// Working memory (~3K tokens of highest-priority context)
 const context = await engine.workingMemory('alice', 3000);
 
 // Maintenance (recompute activation scores, compress old memories)
@@ -209,184 +229,49 @@ await engine.maintain('alice');
 await engine.close();
 ```
 
-## How It Works
-
-MemRosetta stores **atomic memories** (one fact = one memory) in a local SQLite database and retrieves them using hybrid search (keywords + semantic similarity). No server, no cloud, no API keys required for core functionality.
-
-```
-Query: "What CSS framework did we choose?"
-  |
-  +-- FTS5 BM25 --> keyword match: "CSS", "framework", "choose"
-  +-- Vector KNN --> semantic match: similar meaning
-  +-- RRF Merge --> combined ranking (best of both)
-      |
-      +-- Activation Weight --> boost frequently used memories
-```
-
-### Not Another RAG
-
-Traditional RAG chops documents into text chunks and searches by similarity. MemRosetta is fundamentally different:
-
-| | RAG (chunk-based) | MemRosetta (atomic) |
-|---|---|---|
-| **Storage unit** | ~400 token text chunks | One fact = one memory |
-| **Updates** | Re-index entire document | `updates` relation, old version preserved |
-| **Contradictions** | Both versions returned, AI guesses | Auto-detected by NLI model |
-| **Time awareness** | When was this said? No idea | 4 timestamps: learned, documented, event, invalidated |
-| **Forgetting** | Everything equal weight | ACT-R: frequently used memories rank higher |
-
-### Memory Lifecycle
-
-```
-Information arrives
-  |
-  +-- Classify: fact / preference / decision / event
-  +-- Store as atomic memory with keywords + timestamps
-  +-- Check contradictions (NLI model, local)
-  |     -> auto-creates 'contradicts' relation if found
-  |
-  v
-Search & Retrieval
-  |
-  +-- Hybrid search (FTS5 + vector + RRF)
-  +-- Activation weighting (frequently accessed = higher rank)
-  |
-  v
-Memory Tiers
-  Hot  (working memory) -- always loaded, ~3K tokens
-    |  high activation
-  Warm (recent memory)  -- last 30 days
-    |  activation decays (ACT-R: sigmoid(ln(sum(t^-0.5)) + salience))
-  Cold (long-term)      -- compressed, low activation
-```
-
-### Relations
-
-Memories are not isolated. They form a graph:
-
-```
-"Hourly rate is $50"  --[contradicts]--> "Hourly rate is $40"
-"Uses React 18"       --[updates]------> "Uses React 19"
-"Chose PostgreSQL"    --[derives]------> "Need pgvector extension"
-"Prefers dark mode"   --[supports]-----> "Uses Dracula theme"
-```
-
-Relation types: `updates`, `extends`, `derives`, `contradicts`, `supports`
-
-### Time Model
-
-Four timestamps per memory, each serving a different purpose:
-
-| Timestamp | Question it answers | Example |
-|-----------|-------------------|---------|
-| `learnedAt` | When was this stored? | 2026-03-24T12:00:00Z |
-| `documentDate` | When did the conversation happen? | 2026-03-24 |
-| `eventDateStart/End` | When did the actual event occur? | Meeting on 2026-03-20 |
-| `invalidatedAt` | When did this become outdated? | Deprecated on 2026-04-01 |
-
 ## Packages
 
 | Package | Description |
 |---------|-------------|
-| `@memrosetta/core` | Memory engine (SQLite + FTS5 + vector + NLI) |
-| `@memrosetta/embeddings` | Local embeddings (bge-small-en-v1.5, 33M) + NLI contradiction (71M) |
-| `@memrosetta/llm` | LLM fact extraction (OpenAI/Anthropic) -- optional |
+| `@memrosetta/core` | Memory engine: SQLite + FTS5 + vector + NLI |
+| `@memrosetta/embeddings` | Local embeddings (bge-small-en-v1.5) + NLI (nli-deberta-v3-xsmall) |
 | `@memrosetta/cli` | Command-line interface |
 | `@memrosetta/mcp` | MCP server for AI tool integration |
 | `@memrosetta/api` | REST API (Hono) |
 | `@memrosetta/claude-code` | Claude Code integration (hooks + init) |
+| `@memrosetta/llm` | LLM-based fact extraction (OpenAI/Anthropic) -- optional |
 | `@memrosetta/obsidian` | Obsidian vault sync |
-
-## CLI Reference
-
-```
-memrosetta init                              Initialize database
-memrosetta store                             Store a memory
-  --user <id>                                  User identifier (required)
-  --content <text>                             Memory content (required)
-  --type <fact|preference|decision|event>      Memory type (required)
-  --keywords <k1,k2,...>                       Search keywords
-  --namespace <ns>                             Category/namespace
-  --confidence <0-1>                           Confidence score
-  --event-start <ISO date>                     Event start date
-  --event-end <ISO date>                       Event end date
-
-memrosetta search                            Search memories
-  --user <id>                                  User identifier (required)
-  --query <text>                               Search query (required)
-  --limit <n>                                  Max results (default: 5)
-  --format <json|text>                         Output format
-  --namespace <ns>                             Filter by namespace
-
-memrosetta ingest                            Ingest JSONL transcript
-  --user <id>                                  User identifier (required)
-  --file <path>                                JSONL file path (or stdin)
-
-memrosetta get <memoryId>                    Get memory by ID
-memrosetta count --user <id>                 Count memories
-memrosetta clear --user <id> --confirm       Clear all user memories
-memrosetta relate                            Create relation
-  --src <memoryId>                             Source memory
-  --dst <memoryId>                             Destination memory
-  --type <updates|extends|derives|contradicts|supports>
-  --reason <text>                              Optional reason
-
-memrosetta invalidate <memoryId>             Mark memory as outdated
-memrosetta working-memory --user <id>        Show working memory
-memrosetta maintain --user <id>              Run maintenance (scores + compression)
-memrosetta compress --user <id>              Compress cold memories
-memrosetta status                            Show database status
-
-Global: --db <path>  --format json|text  --no-embeddings
-```
-
-## REST API
-
-```bash
-npx @memrosetta/api  # Starts on localhost:3100
-```
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/memories` | Store a memory |
-| `POST` | `/api/memories/batch` | Batch store (up to 1000) |
-| `GET` | `/api/memories/:id` | Get by ID |
-| `POST` | `/api/search` | Hybrid search |
-| `POST` | `/api/relations` | Create relation |
-| `GET` | `/api/memories/count/:userId` | Count |
-| `DELETE` | `/api/memories/user/:userId` | Clear user memories |
-| `GET` | `/api/health` | Health check |
 
 ## Benchmarks
 
-Evaluated on [LoCoMo](https://github.com/snap-research/locomo) (1,986 QA, 5,882 memories):
+Evaluated on [LoCoMo](https://github.com/snap-research/locomo) (1,986 QA pairs, 5,882 memories):
 
-| Method | Precision@5 | MRR | Search p50 |
-|--------|:-----------:|:---:|:----------:|
+| Method | Precision@5 | MRR | Latency (p50) |
+|--------|:-----------:|:---:|:-------------:|
 | FTS5 only | 0.0006 | 0.0026 | 0.2ms |
 | Hybrid (FTS + Vector + RRF) | 0.0013 | 0.0037 | 3.4ms |
-| Hybrid + Fact Extraction | **0.0074** | **0.0157** | 3.3ms |
+| **Hybrid + Fact Extraction** | **0.0074** | **0.0157** | 3.3ms |
 
-Atomic memory + fact extraction = **+324% MRR improvement** over hybrid-only, validating the atomic memory design over traditional chunk-based RAG.
+Atomic memory with fact extraction delivers **+324% MRR** over hybrid-only, validating the atomic memory design over chunk-based RAG.
 
 ```bash
-pnpm bench:sqlite                    # FTS-only
+pnpm bench:sqlite                    # FTS only
 pnpm bench:hybrid                    # Hybrid search
 pnpm bench:hybrid --converter fact --llm-provider openai  # With LLM extraction
 ```
 
-## Why MemRosetta?
+## Comparison
 
 | | Mem0 | Zep | Letta | **MemRosetta** |
 |---|---|---|---|---|
-| Local-first | Cloud | Cloud | Cloud + Local | **Local (SQLite)** |
-| LLM dependency | Required | Required | Required | **None (core)** |
+| Runs locally | Cloud | Cloud | Cloud + Local | **SQLite, no server** |
+| LLM required | Yes | Yes | Yes | **No** |
 | Contradiction detection | No | No | No | **Yes (NLI, local)** |
 | Forgetting model | No | No | No | **Yes (ACT-R)** |
-| Time model | No | No | No | **Yes (4 timestamps)** |
-| Relational versioning | No | No | No | **Yes (5 relation types)** |
-| Open protocol | API only | API only | API only | **CLI + MCP + API** |
-| Install | Complex | Complex | Complex | **One command** |
+| Time model | No | No | No | **4 timestamps** |
+| Relational versioning | No | No | No | **5 relation types** |
+| Protocol | REST API | REST API | REST API | **MCP + CLI + REST** |
+| Setup | Complex | Complex | Complex | **One command** |
 
 ## Development
 
@@ -394,25 +279,24 @@ pnpm bench:hybrid --converter fact --llm-provider openai  # With LLM extraction
 git clone https://github.com/obst2580/memrosetta.git
 cd memrosetta
 pnpm install
-pnpm test              # 588 tests
-pnpm bench:mock        # Quick benchmark
+pnpm test              # 588+ tests
+pnpm bench:mock        # Quick benchmark (no LLM needed)
 ```
 
 ## Roadmap
 
 - [x] Atomic memory CRUD + SQLite + FTS5
 - [x] Vector search + hybrid retrieval (RRF)
-- [x] NLI contradiction detection (local, no LLM)
-- [x] Time model (event dates, invalidation)
+- [x] NLI contradiction detection
+- [x] Time model (4 timestamps, invalidation)
 - [x] Hierarchical compression (Hot/Warm/Cold)
-- [x] Adaptive forgetting (ACT-R activation scores)
+- [x] Adaptive forgetting (ACT-R)
 - [x] Working memory endpoint
 - [x] CLI + REST API + MCP server
-- [x] Claude Code integration (hooks + MCP + CLAUDE.md)
+- [x] Claude Code integration
 - [x] Obsidian sync
-- [x] Benchmark system (LoCoMo)
-- [x] npm publish (@memrosetta/* v0.1.x)
-- [ ] Embedding model selection (multilingual, Korean)
+- [x] LoCoMo benchmarks
+- [ ] Multilingual embeddings (Korean, Japanese, etc.)
 - [ ] PostgreSQL adapter (team/server use)
 - [ ] Profile builder (stable + dynamic user profiles)
 
