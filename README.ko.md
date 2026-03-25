@@ -415,48 +415,26 @@ POST /api/memories/mem-abc123/invalidate
 
 ## CLI 레퍼런스
 
-<details>
-<summary>전체 CLI 명령어</summary>
+14개 명령어로 기억을 완전히 관리합니다. [CLI 전체 문서](docs/CLI.ko.md) | [CLI English docs](docs/CLI.md)
 
-```
-memrosetta init [options]                데이터베이스 및 연동 초기화
-  --claude-code                            + Claude Code hooks + CLAUDE.md
-  --cursor                                 + Cursor MCP 설정
-  --mcp                                    + MCP 서버 설정만
+| 명령어 | 설명 |
+|--------|------|
+| `init` | 데이터베이스 + 연동 초기화 |
+| `store` | 원자적 기억 저장 |
+| `search` | 하이브리드 기억 검색 |
+| `get` | ID로 기억 조회 |
+| `count` | 사용자 기억 수 조회 |
+| `clear` | 사용자 기억 전체 삭제 |
+| `relate` | 기억 간 관계 생성 |
+| `invalidate` | 기억 무효화 표시 |
+| `ingest` | JSONL 트랜스크립트에서 대화 수집 |
+| `working-memory` | 사용자 작업 기억 조회 |
+| `maintain` | 유지보수 실행 (점수 + 계층 + 압축) |
+| `compress` | 압축만 실행 |
+| `status` | 데이터베이스 및 연동 상태 확인 |
+| `reset` | 연동 설정 제거 |
 
-memrosetta store                         기억 저장
-  --user <id>                              사용자 식별자
-  --content <text>                         기억 내용
-  --type <fact|preference|decision|event>  기억 유형
-  --keywords <k1,k2>                       검색 키워드
-  --namespace <ns>                         카테고리
-  --confidence <0-1>                       신뢰도 점수
-
-memrosetta search                        기억 검색
-  --user <id>                              사용자 식별자
-  --query <text>                           검색 쿼리
-  --limit <n>                              최대 결과 수 (기본: 5)
-  --format <json|text>                     출력 형식
-
-memrosetta get <memoryId>                ID로 기억 조회
-memrosetta count --user <id>             기억 수 조회
-memrosetta relate                        기억 간 관계 생성
-  --src <id> --dst <id>
-  --type <updates|extends|derives|contradicts|supports>
-memrosetta invalidate <memoryId>         기억 무효화 표시
-memrosetta working-memory --user <id>    작업 기억 컨텍스트 조회
-memrosetta maintain --user <id>          유지보수 실행 (점수 + 압축)
-memrosetta compress --user <id>          Cold 기억 압축
-memrosetta ingest --user <id> --file <path>  JSONL 트랜스크립트 수집
-memrosetta status                        상태 확인
-memrosetta clear --user <id> --confirm   사용자 기억 전체 삭제
-memrosetta reset --claude-code           Claude Code 연동 제거
-memrosetta reset --all                   모든 설정 제거
-
-글로벌 플래그: --db <path>  --format json|text  --no-embeddings
-```
-
-</details>
+글로벌 플래그: `--db <path>` `--format json|text` `--no-embeddings`
 
 ## 라이브러리로 사용
 

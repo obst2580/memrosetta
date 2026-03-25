@@ -413,48 +413,26 @@ POST /api/memories/mem-abc123/invalidate
 
 ## CLI Reference
 
-<details>
-<summary>Full CLI commands</summary>
+14 commands for full memory management. [Full CLI documentation](docs/CLI.md) | [CLI 한국어 문서](docs/CLI.ko.md)
 
-```
-memrosetta init [options]                Initialize database and integrations
-  --claude-code                            + Claude Code hooks + CLAUDE.md
-  --cursor                                 + Cursor MCP config
-  --mcp                                    + MCP server config only
+| Command | Description |
+|---------|-------------|
+| `init` | Initialize database + integrations |
+| `store` | Store an atomic memory |
+| `search` | Hybrid search across memories |
+| `get` | Get memory by ID |
+| `count` | Count memories for a user |
+| `clear` | Clear all memories for a user |
+| `relate` | Create a relation between memories |
+| `invalidate` | Mark a memory as invalidated |
+| `ingest` | Ingest conversation from JSONL transcript |
+| `working-memory` | Show working memory for a user |
+| `maintain` | Run maintenance (scores + tiers + compression) |
+| `compress` | Run compression only |
+| `status` | Show database and integration status |
+| `reset` | Remove integrations |
 
-memrosetta store                         Store a memory
-  --user <id>                              User identifier
-  --content <text>                         Memory content
-  --type <fact|preference|decision|event>  Memory type
-  --keywords <k1,k2>                       Search keywords
-  --namespace <ns>                         Category
-  --confidence <0-1>                       Confidence score
-
-memrosetta search                        Search memories
-  --user <id>                              User identifier
-  --query <text>                           Search query
-  --limit <n>                              Max results (default: 5)
-  --format <json|text>                     Output format
-
-memrosetta get <memoryId>                Get memory by ID
-memrosetta count --user <id>             Count memories
-memrosetta relate                        Create relation between memories
-  --src <id> --dst <id>
-  --type <updates|extends|derives|contradicts|supports>
-memrosetta invalidate <memoryId>         Mark memory as outdated
-memrosetta working-memory --user <id>    Get working memory context
-memrosetta maintain --user <id>          Run maintenance (scores + compression)
-memrosetta compress --user <id>          Compress cold memories
-memrosetta ingest --user <id> --file <path>  Ingest JSONL transcript
-memrosetta status                        Show status
-memrosetta clear --user <id> --confirm   Clear all user memories
-memrosetta reset --claude-code           Remove Claude Code integrations
-memrosetta reset --all                   Remove everything
-
-Global flags: --db <path>  --format json|text  --no-embeddings
-```
-
-</details>
+Global flags: `--db <path>` `--format json|text` `--no-embeddings`
 
 ## As a Library
 
