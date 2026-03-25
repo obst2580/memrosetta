@@ -17,6 +17,7 @@ import { getEngine, closeEngine } from './engine-manager.js';
 import { parseTranscript } from './transcript-parser.js';
 import { extractMemories, resolveUserId } from './memory-extractor.js';
 import { getConfig } from './config.js';
+import { isValidTranscriptPath, sanitizeSessionId } from './path-validation.js';
 
 interface HookInput {
   readonly transcript_path?: string;
@@ -25,18 +26,22 @@ interface HookInput {
 }
 
 function findTranscriptPath(hookInput: HookInput): string | null {
-  if (hookInput.transcript_path && existsSync(hookInput.transcript_path)) {
-    return hookInput.transcript_path;
+  if (hookInput.transcript_path) {
+    if (isValidTranscriptPath(hookInput.transcript_path) && existsSync(hookInput.transcript_path)) {
+      return hookInput.transcript_path;
+    }
+    return null;
   }
 
-  const sessionId = hookInput.session_id || '';
+  const rawSessionId = hookInput.session_id || '';
+  const sessionId = sanitizeSessionId(rawSessionId);
   const cwd = hookInput.cwd || '';
 
   if (sessionId && cwd) {
     const safeCwd = cwd.replace(/^\//, '').replace(/\//g, '-');
     const projectDir = join(homedir(), '.claude', 'projects', safeCwd);
     const candidate = join(projectDir, `${sessionId}.jsonl`);
-    if (existsSync(candidate)) {
+    if (isValidTranscriptPath(candidate) && existsSync(candidate)) {
       return candidate;
     }
   }

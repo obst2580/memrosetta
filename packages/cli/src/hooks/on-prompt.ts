@@ -14,17 +14,15 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { getEngineWithTimeout, closeEngine } from './engine-manager.js';
 import { parseTranscript } from './transcript-parser.js';
+import { stripSystemReminders } from './transcript-parser.js';
 import { extractMemories, resolveUserId } from './memory-extractor.js';
 import { getConfig } from './config.js';
+import { isValidTranscriptPath, sanitizeSessionId } from './path-validation.js';
 import type { SearchResult } from '@memrosetta/types';
 
-// Approximate context limits by model (tokens)
-const MODEL_CONTEXT_LIMITS: Record<string, number> = {
-  'claude-opus-4-6': 1_000_000,
-  'claude-sonnet-4-6': 200_000,
-  'claude-haiku-4-5': 200_000,
-  default: 200_000,
-};
+// Default context limit for auto-save threshold estimation.
+// Individual model limits not used because hook input doesn't include model info.
+const DEFAULT_CONTEXT_LIMIT = 200_000;
 
 // Save when transcript reaches this fraction of estimated context
 const SAVE_THRESHOLD = 0.6;
@@ -37,20 +35,6 @@ interface HookInput {
   readonly cwd?: string;
   readonly session_id?: string;
   readonly transcript_path?: string;
-}
-
-function stripSystemReminders(text: string): string {
-  let result = text;
-  while (
-    result.includes('<system-reminder>') &&
-    result.includes('</system-reminder>')
-  ) {
-    const start = result.indexOf('<system-reminder>');
-    const end =
-      result.indexOf('</system-reminder>') + '</system-reminder>'.length;
-    result = result.slice(0, start) + result.slice(end);
-  }
-  return result.trim();
 }
 
 function extractQuery(prompt: string, minLength: number): string | null {
@@ -107,7 +91,7 @@ function shouldAutoSave(hookInput: HookInput): {
   try {
     const stats = statSync(transcriptPath);
     const estimatedTokens = stats.size / BYTES_PER_TOKEN;
-    const contextLimit = MODEL_CONTEXT_LIMITS.default;
+    const contextLimit = DEFAULT_CONTEXT_LIMIT;
     const threshold = contextLimit * SAVE_THRESHOLD;
 
     return {
@@ -120,18 +104,22 @@ function shouldAutoSave(hookInput: HookInput): {
 }
 
 function findTranscriptPath(hookInput: HookInput): string | null {
-  if (hookInput.transcript_path && existsSync(hookInput.transcript_path)) {
-    return hookInput.transcript_path;
+  if (hookInput.transcript_path) {
+    if (isValidTranscriptPath(hookInput.transcript_path) && existsSync(hookInput.transcript_path)) {
+      return hookInput.transcript_path;
+    }
+    return null;
   }
 
-  const sessionId = hookInput.session_id || '';
+  const rawSessionId = hookInput.session_id || '';
+  const sessionId = sanitizeSessionId(rawSessionId);
   const cwd = hookInput.cwd || '';
 
   if (sessionId && cwd) {
     const safeCwd = cwd.replace(/^\//, '').replace(/\//g, '-');
     const projectDir = join(homedir(), '.claude', 'projects', safeCwd);
     const candidate = join(projectDir, `${sessionId}.jsonl`);
-    if (existsSync(candidate)) {
+    if (isValidTranscriptPath(candidate) && existsSync(candidate)) {
       return candidate;
     }
   }

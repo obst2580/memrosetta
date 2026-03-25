@@ -1,11 +1,11 @@
 {
   "name": "@memrosetta/claude-code",
-  "version": "0.2.2",
+  "version": "0.3.0",
+  "description": "DEPRECATED: Use @memrosetta/cli instead. See: npm install -g @memrosetta/cli && memrosetta init --claude-code",
+  "deprecated": "Use @memrosetta/cli instead",
   "type": "module",
   "bin": {
-    "memrosetta": "./dist/index.js",
-    "memrosetta-on-stop": "./dist/hooks/on-stop.js",
-    "memrosetta-on-prompt": "./dist/hooks/on-prompt.js"
+    "memrosetta": "./dist/index.js"
   },
   "main": "./dist/index.js",
   "exports": {
@@ -16,23 +16,10 @@
   },
   "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
-    "build": "tsup src/index.ts src/hooks/on-stop.ts src/hooks/on-prompt.ts --format esm --dts",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@memrosetta/core": "workspace:*",
-    "@memrosetta/embeddings": "workspace:*"
-  },
-  "optionalDependencies": {
-    "@memrosetta/llm": "workspace:*"
+    "build": "tsup src/index.ts --format esm"
   },
   "devDependencies": {
-    "@memrosetta/types": "workspace:*",
     "tsup": "^8.0.0",
-    "tsx": "^4.0.0",
-    "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "typescript": "^5.5.0"
   }
 }

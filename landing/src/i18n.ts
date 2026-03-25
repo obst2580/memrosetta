@@ -55,8 +55,9 @@ export const content = {
       code: {
         'claude-code': {
           language: 'bash',
-          code: `# One command sets up everything
-npx @memrosetta/claude-code init
+          code: `# Install CLI and set up everything
+npm install -g @memrosetta/cli
+memrosetta init --claude-code
 
 # That's it. Restart Claude Code.
 # Claude will automatically:
@@ -65,10 +66,10 @@ npx @memrosetta/claude-code init
 #   - Extract facts on session end (via Stop Hook)
 
 # Check status
-npx @memrosetta/claude-code status
+memrosetta status
 
 # Remove integration
-npx @memrosetta/claude-code reset`,
+memrosetta reset --claude-code`,
         },
         cursor: {
           language: 'json',
@@ -295,7 +296,7 @@ memrosetta maintain --user alice`,
         },
         {
           name: '@memrosetta/claude-code',
-          description: 'Claude Code integration: init command sets up MCP server, Stop Hook for transcript extraction, and CLAUDE.md instructions. Reset command cleanly removes everything.',
+          description: 'DEPRECATED: Use @memrosetta/cli instead. Run: npm install -g @memrosetta/cli && memrosetta init --claude-code',
         },
         {
           name: '@memrosetta/cli',
@@ -451,8 +452,9 @@ memrosetta maintain --user alice`,
       code: {
         'claude-code': {
           language: 'bash',
-          code: `# 명령어 하나로 모든 설정 완료
-npx @memrosetta/claude-code init
+          code: `# CLI 설치 후 모든 설정 완료
+npm install -g @memrosetta/cli
+memrosetta init --claude-code
 
 # 끝. Claude Code를 재시작하세요.
 # Claude가 자동으로:
@@ -461,10 +463,10 @@ npx @memrosetta/claude-code init
 #   - 세션 종료 시 사실을 추출합니다 (Stop Hook)
 
 # 상태 확인
-npx @memrosetta/claude-code status
+memrosetta status
 
 # 통합 제거
-npx @memrosetta/claude-code reset`,
+memrosetta reset --claude-code`,
         },
         cursor: {
           language: 'json',
@@ -691,7 +693,7 @@ memrosetta maintain --user alice`,
         },
         {
           name: '@memrosetta/claude-code',
-          description: 'Claude Code 통합: init 명령으로 MCP 서버, 트랜스크립트 추출용 Stop Hook, CLAUDE.md 지침 설정. reset 명령으로 깔끔하게 제거.',
+          description: 'DEPRECATED: @memrosetta/cli를 사용하세요. 실행: npm install -g @memrosetta/cli && memrosetta init --claude-code',
         },
         {
           name: '@memrosetta/cli',

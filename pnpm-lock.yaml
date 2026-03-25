@@ -9,33 +9,13 @@ importers:
   .: {}
 
   adapters/claude-code:
-    dependencies:
-      '@memrosetta/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@memrosetta/embeddings':
-        specifier: workspace:*
-        version: link:../../packages/embeddings
     devDependencies:
-      '@memrosetta/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)
-      tsx:
-        specifier: ^4.0.0
-        version: 4.21.0
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
-      vitest:
-        specifier: ^2.0.0
-        version: 2.1.9(@types/node@20.19.37)
-    optionalDependencies:
-      '@memrosetta/llm':
-        specifier: workspace:*
-        version: link:../../packages/llm
 
   adapters/mcp:
     dependencies:
@@ -51,6 +31,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.27.1(zod@3.25.76)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
     devDependencies:
       tsup:
         specifier: ^8.0.0
@@ -185,6 +168,10 @@ importers:
       vitest:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.37)
+    optionalDependencies:
+      '@memrosetta/llm':
+        specifier: workspace:*
+        version: link:../llm
 
   packages/core:
     dependencies:

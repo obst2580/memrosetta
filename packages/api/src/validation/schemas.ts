@@ -27,8 +27,8 @@ export const searchSchema = z.object({
   filters: z.object({
     memoryTypes: z.array(memoryTypeSchema).optional(),
     dateRange: z.object({
-      start: z.string().optional(),
-      end: z.string().optional(),
+      start: z.string().max(50).optional(),
+      end: z.string().max(50).optional(),
     }).optional(),
     minConfidence: z.number().min(0).max(1).optional(),
     onlyLatest: z.boolean().optional(),
@@ -36,8 +36,8 @@ export const searchSchema = z.object({
 });
 
 export const relateSchema = z.object({
-  srcMemoryId: z.string().min(1),
-  dstMemoryId: z.string().min(1),
+  srcMemoryId: z.string().min(1).max(256),
+  dstMemoryId: z.string().min(1).max(256),
   relationType: z.enum(['updates', 'extends', 'derives', 'contradicts', 'supports']),
-  reason: z.string().optional(),
+  reason: z.string().max(2_000).optional(),
 });

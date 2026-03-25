@@ -4,6 +4,47 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { IMemoryEngine, RelationType } from '@memrosetta/types';
+import { z } from 'zod';
+
+// ---------------------------------------------------------------------------
+// Input validation schemas
+// ---------------------------------------------------------------------------
+
+const storeSchema = z.object({
+  userId: z.string().min(1).max(256),
+  content: z.string().min(1).max(10_000),
+  memoryType: z.enum(['fact', 'preference', 'decision', 'event']),
+  keywords: z.array(z.string().max(100)).max(50).optional(),
+  namespace: z.string().max(256).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+const searchSchema = z.object({
+  userId: z.string().min(1).max(256),
+  query: z.string().min(1).max(1_000),
+  limit: z.number().int().min(1).max(100).optional(),
+});
+
+const relateSchema = z.object({
+  srcMemoryId: z.string().min(1).max(256),
+  dstMemoryId: z.string().min(1).max(256),
+  relationType: z.enum(['updates', 'extends', 'derives', 'contradicts', 'supports']),
+  reason: z.string().max(2_000).optional(),
+});
+
+const workingMemorySchema = z.object({
+  userId: z.string().min(1).max(256),
+  maxTokens: z.number().int().min(100).max(100_000).optional(),
+});
+
+const countSchema = z.object({
+  userId: z.string().min(1).max(256),
+});
+
+const invalidateSchema = z.object({
+  memoryId: z.string().min(1).max(256),
+  reason: z.string().max(2_000).optional(),
+});
 
 /** MCP tool response shape. */
 export interface ToolResponse {
@@ -179,13 +220,14 @@ export async function handleToolCall(
 ): Promise<ToolResponse> {
   switch (name) {
     case 'memrosetta_store': {
+      const validated = storeSchema.parse(args);
       const memory = await engine.store({
-        userId: args.userId as string,
-        content: args.content as string,
-        memoryType: args.memoryType as 'fact' | 'preference' | 'decision' | 'event',
-        keywords: args.keywords as readonly string[] | undefined,
-        namespace: args.namespace as string | undefined,
-        confidence: args.confidence as number | undefined,
+        userId: validated.userId,
+        content: validated.content,
+        memoryType: validated.memoryType,
+        keywords: validated.keywords,
+        namespace: validated.namespace,
+        confidence: validated.confidence,
       });
       return {
         content: [{ type: 'text', text: JSON.stringify(memory) }],
@@ -193,10 +235,11 @@ export async function handleToolCall(
     }
 
     case 'memrosetta_search': {
+      const validated = searchSchema.parse(args);
       const response = await engine.search({
-        userId: args.userId as string,
-        query: args.query as string,
-        limit: (args.limit as number | undefined) ?? 5,
+        userId: validated.userId,
+        query: validated.query,
+        limit: validated.limit ?? 5,
         filters: { onlyLatest: true },
       });
       const text = response.results
@@ -211,11 +254,12 @@ export async function handleToolCall(
     }
 
     case 'memrosetta_relate': {
+      const validated = relateSchema.parse(args);
       const relation = await engine.relate(
-        args.srcMemoryId as string,
-        args.dstMemoryId as string,
-        args.relationType as RelationType,
-        args.reason as string | undefined,
+        validated.srcMemoryId,
+        validated.dstMemoryId,
+        validated.relationType as RelationType,
+        validated.reason,
       );
       return {
         content: [{ type: 'text', text: JSON.stringify(relation) }],
@@ -223,9 +267,10 @@ export async function handleToolCall(
     }
 
     case 'memrosetta_working_memory': {
+      const validated = workingMemorySchema.parse(args);
       const memories = await engine.workingMemory(
-        args.userId as string,
-        args.maxTokens as number | undefined,
+        validated.userId,
+        validated.maxTokens,
       );
       const text = memories
         .map(
@@ -239,27 +284,29 @@ export async function handleToolCall(
     }
 
     case 'memrosetta_count': {
-      const count = await engine.count(args.userId as string);
+      const validated = countSchema.parse(args);
+      const count = await engine.count(validated.userId);
       return {
         content: [
           {
             type: 'text',
-            text: `${count} memories stored for ${args.userId as string}`,
+            text: `${count} memories stored for ${validated.userId}`,
           },
         ],
       };
     }
 
     case 'memrosetta_invalidate': {
+      const validated = invalidateSchema.parse(args);
       await engine.invalidate(
-        args.memoryId as string,
-        args.reason as string | undefined,
+        validated.memoryId,
+        validated.reason,
       );
       return {
         content: [
           {
             type: 'text',
-            text: `Memory ${args.memoryId as string} invalidated.`,
+            text: `Memory ${validated.memoryId} invalidated.`,
           },
         ],
       };

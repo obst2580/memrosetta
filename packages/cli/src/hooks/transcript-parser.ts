@@ -25,7 +25,7 @@ interface ContentBlock {
   readonly text?: string;
 }
 
-function stripSystemReminders(text: string): string {
+export function stripSystemReminders(text: string): string {
   let result = text;
   while (
     result.includes('<system-reminder>') &&

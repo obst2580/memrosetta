@@ -45,9 +45,12 @@ export async function closeEngine(): Promise<void> {
 export async function getEngineWithTimeout(
   timeoutMs: number,
 ): Promise<SqliteMemoryEngine | null> {
+  let timer: ReturnType<typeof setTimeout>;
   const enginePromise = getEngine();
-  const timeoutPromise = new Promise<null>((resolve) =>
-    setTimeout(() => resolve(null), timeoutMs),
-  );
-  return Promise.race([enginePromise, timeoutPromise]);
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), timeoutMs);
+  });
+  const result = await Promise.race([enginePromise, timeoutPromise]);
+  clearTimeout(timer!);
+  return result;
 }
