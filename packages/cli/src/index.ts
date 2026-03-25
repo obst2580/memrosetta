@@ -9,6 +9,9 @@ const HELP_TEXT = `memrosetta - AI long-term memory engine CLI
 Usage: memrosetta <command> [options]
 
 Commands:
+  init             Initialize database and integrations
+  status           Show database and integration status
+  reset            Remove integrations
   store            Store a memory
   search           Search memories
   ingest           Ingest conversation from JSONL transcript
@@ -20,8 +23,17 @@ Commands:
   working-memory   Show working memory for a user
   maintain         Run maintenance (recompute scores, update tiers, compress)
   compress         Run compression only
-  status           Show database status
-  init             Initialize database
+
+Init Options:
+  --claude-code       Set up Claude Code hooks + MCP + CLAUDE.md
+  --cursor            Set up Cursor MCP config (~/.cursor/mcp.json)
+  --mcp               Set up generic MCP server (~/.mcp.json)
+
+Reset Options:
+  --claude-code       Remove Claude Code hooks + MCP + CLAUDE.md section
+  --cursor            Remove Cursor MCP config
+  --mcp               Remove generic MCP config
+  --all               Remove all integrations
 
 Global Options:
   --db <path>         Database path (default: ~/.memrosetta/memories.db)
@@ -31,15 +43,15 @@ Global Options:
   --version, -v       Show version
 
 Examples:
-  memrosetta init
+  memrosetta init                          # Initialize DB only
+  memrosetta init --claude-code            # DB + Claude Code hooks + MCP
+  memrosetta init --cursor                 # DB + Cursor MCP
+  memrosetta init --mcp                    # DB + generic MCP
+  memrosetta status --format text          # Show all status
+  memrosetta reset --claude-code           # Remove Claude Code integration
+  memrosetta reset --all                   # Remove all integrations
   memrosetta store --user obst --content "Prefers TypeScript" --type preference
   memrosetta search --user obst --query "language preference" --format text
-  memrosetta ingest --user obst --file session.jsonl
-  memrosetta working-memory --user obst --max-tokens 3000 --format text
-  memrosetta maintain --user obst
-  memrosetta compress --user obst
-  memrosetta count --user obst
-  memrosetta status
 `;
 
 async function main(): Promise<void> {
@@ -130,6 +142,11 @@ async function main(): Promise<void> {
       }
       case 'init': {
         const mod = await import('./commands/init.js');
+        await mod.run(commandOptions);
+        break;
+      }
+      case 'reset': {
+        const mod = await import('./commands/reset.js');
         await mod.run(commandOptions);
         break;
       }

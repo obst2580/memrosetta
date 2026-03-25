@@ -4,11 +4,13 @@
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "memrosetta": "./dist/index.js"
+    "memrosetta": "./dist/index.js",
+    "memrosetta-on-stop": "./dist/hooks/on-stop.js",
+    "memrosetta-on-prompt": "./dist/hooks/on-prompt.js"
   },
   "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --external better-sqlite3 --external @memrosetta/core --external @memrosetta/embeddings --external @memrosetta/types --external @huggingface/transformers --external sqlite-vec --external onnxruntime-node",
+    "build": "tsup src/index.ts src/hooks/on-stop.ts src/hooks/on-prompt.ts --format esm --external better-sqlite3 --external @memrosetta/core --external @memrosetta/embeddings --external @memrosetta/types --external @memrosetta/llm --external @huggingface/transformers --external sqlite-vec --external onnxruntime-node",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -19,6 +21,9 @@
     "@memrosetta/embeddings": "workspace:*",
     "@memrosetta/types": "workspace:*",
     "better-sqlite3": "^11.0.0"
+  },
+  "optionalDependencies": {
+    "@memrosetta/llm": "workspace:*"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",

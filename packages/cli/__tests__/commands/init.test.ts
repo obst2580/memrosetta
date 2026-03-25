@@ -1,0 +1,166 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+const mockRegisterClaudeCodeHooks = vi.fn().mockReturnValue(true);
+const mockUpdateClaudeMd = vi.fn().mockReturnValue(true);
+const mockRegisterGenericMCP = vi.fn();
+const mockRegisterCursorMCP = vi.fn();
+const mockIsClaudeCodeInstalled = vi.fn().mockReturnValue(true);
+
+vi.mock('../../src/integrations/index.js', () => ({
+  isClaudeCodeInstalled: (...args: unknown[]) => mockIsClaudeCodeInstalled(...args),
+  registerClaudeCodeHooks: (...args: unknown[]) => mockRegisterClaudeCodeHooks(...args),
+  updateClaudeMd: (...args: unknown[]) => mockUpdateClaudeMd(...args),
+  registerGenericMCP: (...args: unknown[]) => mockRegisterGenericMCP(...args),
+  registerCursorMCP: (...args: unknown[]) => mockRegisterCursorMCP(...args),
+  getGenericMCPPath: () => '/mock-home/.mcp.json',
+  getCursorMcpConfigPath: () => '/mock-home/.cursor/mcp.json',
+}));
+
+vi.mock('../../src/engine.js', () => ({
+  getEngine: vi.fn().mockImplementation(async () => ({
+    close: vi.fn(),
+  })),
+  closeEngine: vi.fn(),
+  getDefaultDbPath: vi.fn().mockReturnValue('/tmp/test-init.db'),
+}));
+
+vi.mock('node:fs', async (importOriginal) => {
+  const original = await importOriginal() as Record<string, unknown>;
+  return {
+    ...original,
+    existsSync: vi.fn().mockReturnValue(false),
+  };
+});
+
+import { run } from '../../src/commands/init.js';
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('init command', () => {
+  let stdoutSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    stdoutSpy.mockRestore();
+  });
+
+  it('initializes DB without integration flags (json)', async () => {
+    await run({
+      args: [],
+      format: 'json',
+      noEmbeddings: true,
+    });
+
+    const written = stdoutSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written);
+    expect(parsed.database.path).toBe('/tmp/test-init.db');
+    expect(parsed.database.created).toBe(true);
+    expect(parsed.integrations).toEqual({});
+
+    expect(mockRegisterClaudeCodeHooks).not.toHaveBeenCalled();
+    expect(mockRegisterGenericMCP).not.toHaveBeenCalled();
+    expect(mockRegisterCursorMCP).not.toHaveBeenCalled();
+  });
+
+  it('sets up claude-code integration with --claude-code flag', async () => {
+    await run({
+      args: ['--claude-code'],
+      format: 'json',
+      noEmbeddings: true,
+    });
+
+    expect(mockRegisterClaudeCodeHooks).toHaveBeenCalled();
+    expect(mockRegisterGenericMCP).toHaveBeenCalled();
+    expect(mockUpdateClaudeMd).toHaveBeenCalled();
+
+    const written = stdoutSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written);
+    expect(parsed.integrations.claudeCode).toBeDefined();
+    expect(parsed.integrations.claudeCode.hooks).toBe(true);
+    expect(parsed.integrations.claudeCode.mcp).toBe(true);
+  });
+
+  it('sets up cursor integration with --cursor flag', async () => {
+    await run({
+      args: ['--cursor'],
+      format: 'json',
+      noEmbeddings: true,
+    });
+
+    expect(mockRegisterCursorMCP).toHaveBeenCalled();
+    expect(mockRegisterClaudeCodeHooks).not.toHaveBeenCalled();
+
+    const written = stdoutSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written);
+    expect(parsed.integrations.cursor).toBeDefined();
+    expect(parsed.integrations.cursor.mcp).toBe(true);
+  });
+
+  it('sets up generic MCP with --mcp flag', async () => {
+    await run({
+      args: ['--mcp'],
+      format: 'json',
+      noEmbeddings: true,
+    });
+
+    expect(mockRegisterGenericMCP).toHaveBeenCalled();
+    expect(mockRegisterClaudeCodeHooks).not.toHaveBeenCalled();
+    expect(mockRegisterCursorMCP).not.toHaveBeenCalled();
+
+    const written = stdoutSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written);
+    expect(parsed.integrations.mcp).toBeDefined();
+    expect(parsed.integrations.mcp.registered).toBe(true);
+  });
+
+  it('supports multiple flags simultaneously', async () => {
+    await run({
+      args: ['--claude-code', '--cursor'],
+      format: 'json',
+      noEmbeddings: true,
+    });
+
+    expect(mockRegisterClaudeCodeHooks).toHaveBeenCalled();
+    expect(mockRegisterGenericMCP).toHaveBeenCalled();
+    expect(mockRegisterCursorMCP).toHaveBeenCalled();
+
+    const written = stdoutSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written);
+    expect(parsed.integrations.claudeCode).toBeDefined();
+    expect(parsed.integrations.cursor).toBeDefined();
+  });
+
+  it('outputs text format with --claude-code', async () => {
+    await run({
+      args: ['--claude-code'],
+      format: 'text',
+      noEmbeddings: true,
+    });
+
+    const allOutput = stdoutSpy.mock.calls.map((c) => c[0]).join('');
+    expect(allOutput).toContain('MemRosetta initialized successfully');
+    expect(allOutput).toContain('Stop Hook');
+    expect(allOutput).toContain('MCP Server');
+  });
+
+  it('shows tip when no integration flags used (text)', async () => {
+    await run({
+      args: [],
+      format: 'text',
+      noEmbeddings: true,
+    });
+
+    const allOutput = stdoutSpy.mock.calls.map((c) => c[0]).join('');
+    expect(allOutput).toContain('Tip: Use --claude-code');
+  });
+});

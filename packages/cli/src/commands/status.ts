@@ -1,6 +1,11 @@
 import { existsSync, statSync } from 'node:fs';
 import { getDefaultDbPath } from '../engine.js';
 import { output, type OutputFormat } from '../output.js';
+import {
+  isClaudeCodeConfigured,
+  isGenericMCPConfigured,
+  isCursorConfigured,
+} from '../integrations/index.js';
 
 interface StatusOptions {
   readonly args: readonly string[];
@@ -47,8 +52,15 @@ export async function run(options: StatusOptions): Promise<void> {
     }
   }
 
+  // Integration status
+  const claudeCodeStatus = isClaudeCodeConfigured();
+  const cursorStatus = isCursorConfigured();
+  const mcpStatus = isGenericMCPConfigured();
+
   if (format === 'text') {
-    process.stdout.write(`MemRosetta v0.1.0\n`);
+    process.stdout.write('MemRosetta Status\n');
+    process.stdout.write(`${'='.repeat(40)}\n\n`);
+
     process.stdout.write(
       `Database: ${dbPath} (${exists ? `exists, ${sizeFormatted}` : 'not found'})\n`,
     );
@@ -58,10 +70,21 @@ export async function run(options: StatusOptions): Promise<void> {
         `Users: ${userList.length} (${userList.join(', ')})\n`,
       );
     } else {
-      process.stdout.write(`Users: 0\n`);
+      process.stdout.write('Users: 0\n');
     }
     process.stdout.write(
       `Embeddings: ${embeddingsEnabled ? 'enabled (bge-small-en-v1.5)' : 'disabled'}\n`,
+    );
+
+    process.stdout.write('\nIntegrations:\n');
+    process.stdout.write(
+      `  Claude Code:   ${claudeCodeStatus ? 'configured (hooks + MCP)' : 'not configured'}\n`,
+    );
+    process.stdout.write(
+      `  Cursor:        ${cursorStatus ? 'configured (MCP)' : 'not configured'}\n`,
+    );
+    process.stdout.write(
+      `  MCP (generic): ${mcpStatus ? 'configured' : 'not configured'}\n`,
     );
     return;
   }
@@ -78,6 +101,11 @@ export async function run(options: StatusOptions): Promise<void> {
       memories: memoryCount,
       users: userList,
       embeddings: embeddingsEnabled,
+      integrations: {
+        claudeCode: claudeCodeStatus,
+        cursor: cursorStatus,
+        mcp: mcpStatus,
+      },
     },
     format,
   );

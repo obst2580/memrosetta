@@ -23,10 +23,11 @@ Session 2: (same bug) starts from scratch
 
 ### Claude Code (recommended)
 
-One command sets up everything:
+One package, one command:
 
 ```bash
-npx @memrosetta/claude-code init
+npm install -g @memrosetta/cli
+memrosetta init --claude-code
 ```
 
 ```
@@ -76,8 +77,9 @@ Three layers of memory, in priority order:
 To check status or remove:
 
 ```bash
-npx @memrosetta/claude-code status   # Show what's configured
-npx @memrosetta/claude-code reset    # Remove all integrations
+memrosetta status                    # Show what's configured
+memrosetta reset --claude-code       # Remove Claude Code integrations
+memrosetta reset --all               # Remove everything
 ```
 
 ### Any MCP-Compatible Tool
@@ -105,7 +107,17 @@ Windsurf ──────┘    (one shared SQLite file)      ├── Cline
 
 #### Setup for Cursor / Claude Desktop / Others
 
-Add to your MCP config (`.mcp.json`, `.cursor/mcp.json`, or tool-specific settings):
+```bash
+npm install -g @memrosetta/cli
+
+# Cursor
+memrosetta init --cursor
+
+# Or any MCP tool (writes ~/.mcp.json)
+memrosetta init --mcp
+```
+
+Or manually add to your MCP config:
 
 ```json
 {
@@ -138,10 +150,11 @@ Evening:  Claude Desktop for planning → has full context from both sessions
 
 No sync, no cloud, no config. It just works because it's one local file.
 
-### CLI
+### CLI (standalone)
 
 ```bash
-npm install -g @memrosetta/cli
+# Already installed if you did any init above
+memrosetta init
 
 memrosetta store --user alice --content "Prefers TypeScript over JavaScript" --type preference
 memrosetta store --user alice --content "Decided to use Tailwind CSS" --type decision
