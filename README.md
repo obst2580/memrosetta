@@ -543,10 +543,10 @@ Evaluated on [LoCoMo](https://github.com/snap-research/locomo) (1,986 QA pairs, 
 | Method | Precision@5 | MRR | Latency (p50) | LLM Required |
 |--------|:-----------:|:---:|:-------------:|:------------:|
 | FTS5 only | 0.0080 | 0.0286 | 0.4ms | No |
-| Hybrid (FTS + Vector + RRF) | 0.0130 | 0.0370 | 3.1ms | No |
-| **Hybrid + Fact Extraction** | **0.0740** | **0.1570** | **3.3ms** | **Yes (external)** |
+| Hybrid (FTS + Vector + RRF) | 0.0030 | 0.0109 | 4.1ms | No |
+| **Hybrid + Fact Extraction** | **0.0311** | **0.0572** | **4.0ms** | **Yes (external)** |
 
-v0.2.0 search improvements (AND mode for short queries, keyword boost, dedup) delivered **+1000% MRR** on FTS-only compared to v0.1.0. Fact extraction adds another order of magnitude.
+FTS5-only delivers the best MRR for keyword queries. Hybrid adds semantic matching at the cost of latency. Fact extraction (pre-processing with external LLM) delivers **single-hop accuracy of 23.8%** — the highest across all methods.
 
 Fact extraction uses an external LLM (e.g., OpenAI, Anthropic) to pre-process conversation transcripts into atomic facts before storage. The core search engine operates without any LLM.
 
