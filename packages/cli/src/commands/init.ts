@@ -10,6 +10,7 @@ import {
   registerCursorMCP,
   getGenericMCPPath,
   getCursorMcpConfigPath,
+  getCursorRulesPath,
 } from '../integrations/index.js';
 
 interface InitOptions {
@@ -33,6 +34,8 @@ interface InitResult {
     readonly cursor?: {
       readonly mcp: boolean;
       readonly path: string;
+      readonly cursorRules: boolean;
+      readonly cursorRulesPath: string;
     };
     readonly mcp?: {
       readonly registered: boolean;
@@ -81,13 +84,15 @@ export async function run(options: InitOptions): Promise<void> {
     };
   }
 
-  // 4. --cursor: additionally register MCP in .cursor/
+  // 4. --cursor: additionally register MCP in .cursor/ + .cursorrules
   if (wantCursor) {
     registerCursorMCP();
 
     (result.integrations as Record<string, unknown>).cursor = {
       mcp: true,
       path: getCursorMcpConfigPath(),
+      cursorRules: true,
+      cursorRulesPath: getCursorRulesPath(),
     };
   }
 
@@ -131,6 +136,11 @@ function printTextOutput(
 
   if (cursor) {
     w(`  Cursor MCP: ${result.integrations.cursor!.path}\n`);
+    if (result.integrations.cursor!.cursorRules) {
+      w(`  .cursorrules: ${result.integrations.cursor!.cursorRulesPath} (memory instructions added)\n`);
+    } else {
+      w('  .cursorrules: already configured\n');
+    }
   }
 
   w('\n');

@@ -9,11 +9,11 @@ export const content = {
     hero: {
       badge: 'Open source -- MIT License',
       title: 'MemRosetta',
-      subtitle: 'Persistent memory for AI tools. One SQLite file. Zero cloud.',
+      subtitle: 'One persistent memory for all your AI tools. Local SQLite. Zero cloud.',
       install: 'npm install -g @memrosetta/cli',
       stats: {
         mrr: { value: '+324%', label: 'MRR improvement' },
-        cost: { value: '$0', label: 'LLM cost for core' },
+        cost: { value: '1 DB', label: 'shared by all AI tools' },
         setup: { value: '1', label: 'command to start' },
       },
     },
@@ -280,7 +280,7 @@ memrosetta maintain --user alice`,
     },
     architecture: {
       title: 'Architecture',
-      subtitle: 'Modular package design. Each package has a single responsibility. Core has zero LLM dependency.',
+      subtitle: 'Modular package design. Each package has a single responsibility. Core engine: zero LLM dependency. Your AI tool acts as the intelligent client -- it decides what to store and when to search.',
       packages: [
         {
           name: '@memrosetta/core',
@@ -336,7 +336,7 @@ memrosetta maintain --user alice`,
           mem0: 'Required',
           zep: 'Required',
           letta: 'Required',
-          memrosetta: 'None (core)',
+          memrosetta: 'None (AI tool is the client)',
         },
         {
           feature: 'Contradiction detection',
@@ -391,7 +391,7 @@ memrosetta maintain --user alice`,
     },
     footer: {
       tagline:
-        'Persistent, searchable long-term memory for AI tools. Local-first. No LLM required. Open source.',
+        'One persistent memory shared across all your AI tools. Local-first. Open source.',
       motto: 'Memory + Rosetta: unlocking AI memory, one fact at a time.',
     },
   },
@@ -404,11 +404,11 @@ memrosetta maintain --user alice`,
     hero: {
       badge: '오픈소스 -- MIT 라이선스',
       title: 'MemRosetta',
-      subtitle: 'AI 도구를 위한 영구 기억. 하나의 SQLite 파일. 클라우드 없음.',
+      subtitle: '모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 SQLite. 클라우드 없음.',
       install: 'npm install -g @memrosetta/cli',
       stats: {
         mrr: { value: '+324%', label: 'MRR 향상' },
-        cost: { value: '$0', label: '코어 LLM 비용' },
+        cost: { value: '1 DB', label: '모든 AI 도구 공유' },
         setup: { value: '1', label: '명령어로 시작' },
       },
     },
@@ -675,7 +675,7 @@ memrosetta maintain --user alice`,
     },
     architecture: {
       title: '아키텍처',
-      subtitle: '모듈형 패키지 설계. 각 패키지는 단일 책임. 코어는 LLM 의존성 제로.',
+      subtitle: '모듈형 패키지 설계. 각 패키지는 단일 책임. 코어 엔진: LLM 의존성 제로. AI 도구가 지능적 클라이언트 역할 -- 무엇을 저장하고 언제 검색할지 결정.',
       packages: [
         {
           name: '@memrosetta/core',
@@ -731,7 +731,7 @@ memrosetta maintain --user alice`,
           mem0: '필수',
           zep: '필수',
           letta: '필수',
-          memrosetta: '없음 (코어)',
+          memrosetta: '없음 (AI 도구가 클라이언트)',
         },
         {
           feature: '모순 감지',
@@ -786,7 +786,7 @@ memrosetta maintain --user alice`,
     },
     footer: {
       tagline:
-        'AI 도구를 위한 영구적이고 검색 가능한 장기 기억. 로컬 우선. LLM 불필요. 오픈소스.',
+        '모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 우선. 오픈소스.',
       motto: 'Memory + Rosetta: AI 기억의 열쇠, 한 사실씩.',
     },
   },

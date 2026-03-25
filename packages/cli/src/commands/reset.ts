@@ -5,6 +5,7 @@ import {
   removeClaudeMdSection,
   removeGenericMCP,
   removeCursorMCP,
+  removeCursorRulesSection,
 } from '../integrations/index.js';
 
 interface ResetOptions {
@@ -20,6 +21,7 @@ interface ResetResult {
     readonly claudeMd: boolean;
     readonly mcp: boolean;
     readonly cursor: boolean;
+    readonly cursorRules: boolean;
   };
 }
 
@@ -57,6 +59,7 @@ export async function run(options: ResetOptions): Promise<void> {
       claudeMd: false,
       mcp: false,
       cursor: false,
+      cursorRules: false,
     },
   };
 
@@ -79,6 +82,8 @@ export async function run(options: ResetOptions): Promise<void> {
   if (wantCursor || wantAll) {
     const removed = removeCursorMCP();
     (result.removed as Record<string, boolean>).cursor = removed;
+    const rulesRemoved = removeCursorRulesSection();
+    (result.removed as Record<string, boolean>).cursorRules = rulesRemoved;
   }
 
   // Generic MCP
@@ -111,12 +116,16 @@ function printTextOutput(result: ResetResult): void {
   if (removed.cursor) {
     w('Removed Cursor MCP from ~/.cursor/mcp.json\n');
   }
+  if (removed.cursorRules) {
+    w('Removed MemRosetta section from ~/.cursorrules\n');
+  }
 
   const anyRemoved =
     removed.claudeCodeHooks ||
     removed.claudeMd ||
     removed.mcp ||
-    removed.cursor;
+    removed.cursor ||
+    removed.cursorRules;
 
   if (!anyRemoved) {
     w('Nothing to remove (no integrations were configured).\n');

@@ -3,6 +3,34 @@ import { homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 const SERVER_NAME = 'memory-service';
+const CURSOR_RULES_PATH_GETTER = () => join(homedir(), '.cursorrules');
+const MEMROSETTA_CURSOR_RULES_MARKER = '## MemRosetta (Long-term Memory)';
+
+const MEMROSETTA_CURSOR_RULES = `
+
+${MEMROSETTA_CURSOR_RULES_MARKER}
+
+MCP server \`memory-service\` provides persistent memory across sessions.
+
+### When to search (memrosetta_search)
+When you need information not in the current context, search past memories.
+
+### When to store (memrosetta_store)
+When you encounter important information, store it immediately:
+- **decision**: technical choices, architecture decisions
+- **fact**: key facts about projects or systems
+- **preference**: user preferences and coding style
+- **event**: completed work, deployments, incidents
+
+Do NOT store: code itself, debugging steps, simple confirmations.
+Always include keywords for better search quality.
+
+### When to relate (memrosetta_relate)
+When new information updates or contradicts existing memories, create a relation.
+
+### Working memory (memrosetta_working_memory)
+Call this at the start of complex tasks to load relevant context.
+`;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,7 +93,7 @@ export function isCursorConfigured(): boolean {
 }
 
 /**
- * Register MCP server in ~/.cursor/mcp.json.
+ * Register MCP server in ~/.cursor/mcp.json and update .cursorrules.
  */
 export function registerCursorMCP(): void {
   const path = getCursorMcpPath();
@@ -75,10 +103,11 @@ export function registerCursorMCP(): void {
     ...config,
     mcpServers: { ...servers, [SERVER_NAME]: mcpServerEntry() },
   });
+  updateCursorRules();
 }
 
 /**
- * Remove MemRosetta from ~/.cursor/mcp.json.
+ * Remove MemRosetta from ~/.cursor/mcp.json and .cursorrules.
  */
 export function removeCursorMCP(): boolean {
   const path = getCursorMcpPath();
@@ -89,9 +118,62 @@ export function removeCursorMCP(): boolean {
 
   const { [SERVER_NAME]: _, ...rest } = config.mcpServers;
   writeCursorConfig(path, { ...config, mcpServers: rest });
+  removeCursorRulesSection();
   return true;
 }
 
 export function getCursorMcpConfigPath(): string {
   return getCursorMcpPath();
+}
+
+export function getCursorRulesPath(): string {
+  return CURSOR_RULES_PATH_GETTER();
+}
+
+/**
+ * Append MemRosetta instructions to ~/.cursorrules.
+ * Returns true if instructions were added, false if already present.
+ */
+export function updateCursorRules(): boolean {
+  const rulesPath = CURSOR_RULES_PATH_GETTER();
+  const existing = existsSync(rulesPath)
+    ? readFileSync(rulesPath, 'utf-8')
+    : '';
+
+  if (existing.includes(MEMROSETTA_CURSOR_RULES_MARKER)) return false;
+
+  writeFileSync(rulesPath, existing + MEMROSETTA_CURSOR_RULES, 'utf-8');
+  return true;
+}
+
+/**
+ * Remove the MemRosetta section from ~/.cursorrules.
+ * Returns true if section was removed, false if not found.
+ */
+export function removeCursorRulesSection(): boolean {
+  const rulesPath = CURSOR_RULES_PATH_GETTER();
+  if (!existsSync(rulesPath)) return false;
+
+  const content = readFileSync(rulesPath, 'utf-8');
+  const markerIdx = content.indexOf(MEMROSETTA_CURSOR_RULES_MARKER);
+
+  if (markerIdx === -1) return false;
+
+  // Find the next top-level heading (## at the start of a line) after the marker
+  const afterMarker = content.slice(
+    markerIdx + MEMROSETTA_CURSOR_RULES_MARKER.length,
+  );
+  const nextHeadingMatch = afterMarker.match(/\n## (?!MemRosetta)/);
+  const endIdx = nextHeadingMatch
+    ? markerIdx +
+      MEMROSETTA_CURSOR_RULES_MARKER.length +
+      (nextHeadingMatch.index ?? afterMarker.length)
+    : content.length;
+
+  const before = content.slice(0, markerIdx).replace(/\n+$/, '');
+  const after = content.slice(endIdx);
+  const updated = (before + after).trimEnd() + '\n';
+
+  writeFileSync(rulesPath, updated, 'utf-8');
+  return true;
 }

@@ -18,6 +18,7 @@ vi.mock('../../src/integrations/index.js', () => ({
   registerCursorMCP: (...args: unknown[]) => mockRegisterCursorMCP(...args),
   getGenericMCPPath: () => '/mock-home/.mcp.json',
   getCursorMcpConfigPath: () => '/mock-home/.cursor/mcp.json',
+  getCursorRulesPath: () => '/mock-home/.cursorrules',
 }));
 
 vi.mock('../../src/engine.js', () => ({

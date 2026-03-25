@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">MemRosetta</h1>
-  <p align="center">Persistent memory for AI tools. One SQLite file. Zero cloud.</p>
+  <p align="center">One persistent memory shared across all your AI tools. Local SQLite. Zero cloud.</p>
 </p>
 
 ```bash
@@ -129,6 +129,27 @@ Evening   Claude Desktop: write architecture doc  --> has full context from both
 No sync. No cloud. No config. One local file.
 
 ## How It Works
+
+### Your AI is the client. MemRosetta is the memory.
+
+MemRosetta does not call any LLM. Instead, your AI tool (Claude Code, Cursor, etc.) calls MemRosetta:
+
+```
+Your AI tool                    MemRosetta
+-----------                     ----------
+"This is important,             store() --> SQLite
+ let me save it"
+
+"I need context about           search() --> hybrid retrieval
+ the auth system"
+
+"This contradicts what          relate() --> contradiction graph
+ we said before"
+```
+
+The engine handles storage, search, contradiction detection, and forgetting -- all locally, with zero API calls. Your AI decides WHAT to store. MemRosetta decides HOW to store and retrieve it.
+
+### Atomic memories + hybrid search
 
 MemRosetta stores **atomic memories** -- one fact per record, not text chunks -- in a local SQLite database. Retrieval uses hybrid search that combines keyword matching, semantic similarity, and activation-based ranking.
 
@@ -508,7 +529,7 @@ pnpm bench:hybrid --converter fact --llm-provider openai  # With LLM extraction
 | | Mem0 | Zep | Letta | **MemRosetta** |
 |---|---|---|---|---|
 | Runs locally | Cloud | Cloud | Cloud + Local | **SQLite, no server** |
-| LLM required | Yes | Yes | Yes | **No** |
+| Core LLM dep | Yes | Yes | Yes | **None (AI tool is the client)** |
 | Contradiction detection | No | No | No | **Yes (NLI, local)** |
 | Forgetting model | No | No | No | **Yes (ACT-R)** |
 | Time model | No | No | No | **4 timestamps** |

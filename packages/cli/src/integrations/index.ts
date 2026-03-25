@@ -19,4 +19,7 @@ export {
   registerCursorMCP,
   removeCursorMCP,
   getCursorMcpConfigPath,
+  getCursorRulesPath,
+  updateCursorRules,
+  removeCursorRulesSection,
 } from './cursor.js';

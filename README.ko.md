@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">MemRosetta</h1>
-  <p align="center">AI 도구를 위한 영구 기억 엔진. SQLite 파일 하나. 클라우드 없음.</p>
+  <p align="center">모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 SQLite. 클라우드 없음.</p>
 </p>
 
 > English version: [README.md](README.md)
@@ -131,6 +131,27 @@ Windsurf -------+     (로컬 SQLite 파일 하나)       +-- Cline
 동기화 없음. 클라우드 없음. 설정 없음. 로컬 파일 하나로 동작합니다.
 
 ## 작동 원리
+
+### AI가 클라이언트. MemRosetta가 기억.
+
+MemRosetta는 LLM을 호출하지 않습니다. 대신 AI 도구(Claude Code, Cursor 등)가 MemRosetta를 호출합니다:
+
+```
+AI 도구                          MemRosetta
+-------                          ----------
+"이건 중요하니까                  store() --> SQLite
+ 저장해두자"
+
+"인증 시스템에 대한                search() --> 하이브리드 검색
+ 맥락이 필요해"
+
+"이전에 말한 것과                  relate() --> 모순 그래프
+ 모순되네"
+```
+
+엔진은 저장, 검색, 모순 감지, 망각을 처리합니다 -- 모두 로컬에서, API 호출 없이. AI가 무엇을 저장할지 결정합니다. MemRosetta는 어떻게 저장하고 검색할지 결정합니다.
+
+### 원자적 기억 + 하이브리드 검색
 
 MemRosetta는 **원자적 기억**(텍스트 덩어리가 아닌 사실 하나 = 레코드 하나)을 로컬 SQLite에 저장하고, 키워드 매칭 + 의미 유사도 + 활성화 기반 랭킹을 결합한 하이브리드 검색으로 조회합니다.
 
@@ -510,7 +531,7 @@ pnpm bench:hybrid --converter fact --llm-provider openai  # LLM 추출 포함
 | | Mem0 | Zep | Letta | **MemRosetta** |
 |---|---|---|---|---|
 | 로컬 실행 | 클라우드 | 클라우드 | 클라우드 + 로컬 | **SQLite, 서버 불필요** |
-| LLM 필수 | Yes | Yes | Yes | **No** |
+| 코어 LLM 의존 | Yes | Yes | Yes | **없음 (AI 도구가 클라이언트)** |
 | 모순 감지 | No | No | No | **Yes (NLI, 로컬)** |
 | 망각 모델 | No | No | No | **Yes (ACT-R)** |
 | 시간 모델 | No | No | No | **4개 타임스탬프** |
