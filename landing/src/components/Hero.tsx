@@ -28,9 +28,9 @@ export function Hero({ lang }: HeroProps) {
         </div>
 
         {/* Title */}
-        <h1 className="mb-4 text-4xl font-bold tracking-tight text-zinc-900 md:text-6xl">
+        <h1 className="mb-4 text-5xl font-extrabold tracking-tight text-zinc-900 md:text-7xl">
           Mem
-          <span className="text-amber-600">Rosetta</span>
+          <span className="bg-gradient-to-r from-amber-500 to-amber-700 bg-clip-text text-transparent">Rosetta</span>
         </h1>
 
         {/* Subtitle */}
