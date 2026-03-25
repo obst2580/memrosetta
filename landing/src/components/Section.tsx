@@ -10,9 +10,9 @@ export function Section({ id, children, className = '' }: SectionProps) {
   return (
     <section
       id={id}
-      className={`px-6 py-20 md:px-12 lg:px-24 ${className}`}
+      className={`px-6 py-16 md:px-8 md:py-24 ${className}`}
     >
-      <div className="mx-auto max-w-5xl">{children}</div>
+      <div className="mx-auto max-w-4xl">{children}</div>
     </section>
   )
 }
@@ -24,12 +24,14 @@ interface SectionTitleProps {
 
 export function SectionTitle({ children, subtitle }: SectionTitleProps) {
   return (
-    <div className="mb-12 text-center">
-      <h2 className="mb-3 text-3xl font-bold tracking-tight text-zinc-900 md:text-4xl">
+    <div className="mb-12">
+      <h2 className="mb-3 text-2xl font-semibold tracking-tight text-zinc-900 md:text-3xl">
         {children}
       </h2>
       {subtitle && (
-        <p className="mx-auto max-w-2xl text-lg text-zinc-500">{subtitle}</p>
+        <p className="max-w-2xl text-base leading-relaxed text-zinc-500">
+          {subtitle}
+        </p>
       )}
     </div>
   )

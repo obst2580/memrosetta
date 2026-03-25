@@ -1,78 +1,59 @@
+import type { Lang } from '../i18n'
+import { content } from '../i18n'
 import { Section, SectionTitle } from './Section'
 
-const LAYERS = [
-  {
-    number: '1',
-    title: 'Claude stores directly during session',
-    description:
-      'Claude Code acts as both the LLM and the memory author. When it encounters an important fact, decision, or preference, it stores it via MCP in real time.',
-    quality: 'Best quality',
-    cost: '$0',
-    qualityColor: 'text-emerald-600',
-    costColor: 'text-emerald-600',
-  },
-  {
-    number: '2',
-    title: 'Stop Hook + LLM extraction on session end',
-    description:
-      'When a session ends, the Stop Hook sends the transcript to an LLM for fact extraction. Catches anything Claude missed during the session.',
-    quality: 'Good',
-    cost: 'Needs API key',
-    qualityColor: 'text-amber-600',
-    costColor: 'text-amber-600',
-  },
-  {
-    number: '3',
-    title: 'Stop Hook + rule-based fallback',
-    description:
-      'No API key? No problem. Pattern matching extracts decisions, preferences, and facts from the transcript. Zero external dependencies.',
-    quality: 'Basic',
-    cost: '$0',
-    qualityColor: 'text-zinc-500',
-    costColor: 'text-emerald-600',
-  },
-]
+interface HowItWorksProps {
+  readonly lang: Lang
+}
 
-export function HowItWorks() {
+export function HowItWorks({ lang }: HowItWorksProps) {
+  const t = content[lang].howItWorks
+
   return (
     <Section id="how-it-works" className="border-t border-zinc-100">
-      <SectionTitle subtitle="Three layers of memory capture, in priority order. Every session contributes to your AI's long-term knowledge.">
-        How It Works
+      <SectionTitle subtitle={t.subtitle}>
+        {t.title}
       </SectionTitle>
 
-      {/* Pipeline diagram */}
-      <div className="relative space-y-4">
-        {LAYERS.map((layer, i) => (
-          <div key={i} className="relative">
-            {/* Connector line */}
-            {i < LAYERS.length - 1 && (
-              <div className="absolute left-[27px] top-full z-0 h-4 w-px bg-zinc-200" />
-            )}
-
-            <div className="relative flex gap-4 rounded-lg border border-zinc-200 bg-white p-5 transition-colors hover:border-zinc-300 hover:shadow-sm">
+      {/* Layers */}
+      <div className="space-y-3">
+        {t.layers.map((layer, i) => (
+          <div
+            key={i}
+            className="rounded-lg border border-zinc-200 bg-white p-5 transition-colors hover:border-zinc-300"
+          >
+            <div className="flex gap-4">
               {/* Number */}
-              <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-amber-300 bg-amber-50 font-mono text-sm font-semibold text-amber-600">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-100 font-mono text-sm font-medium text-zinc-500">
                 {layer.number}
               </div>
 
               {/* Content */}
-              <div className="flex-1 text-left">
-                <h3 className="mb-1 text-base font-semibold text-zinc-800">
+              <div className="min-w-0 flex-1">
+                <h3 className="mb-1 text-sm font-semibold text-zinc-800">
                   {layer.title}
                 </h3>
                 <p className="mb-3 text-sm leading-relaxed text-zinc-500">
                   {layer.description}
                 </p>
-                <div className="flex gap-4 text-xs">
+                <div className="flex gap-4 font-mono text-xs text-zinc-400">
                   <span>
-                    Quality:{' '}
-                    <span className={`font-medium ${layer.qualityColor}`}>
+                    quality:{' '}
+                    <span className={
+                      i === 0
+                        ? 'text-emerald-600'
+                        : i === 1
+                          ? 'text-amber-600'
+                          : 'text-zinc-500'
+                    }>
                       {layer.quality}
                     </span>
                   </span>
                   <span>
-                    Cost:{' '}
-                    <span className={`font-medium ${layer.costColor}`}>
+                    cost:{' '}
+                    <span className={
+                      i === 1 ? 'text-amber-600' : 'text-emerald-600'
+                    }>
                       {layer.cost}
                     </span>
                   </span>
@@ -83,18 +64,19 @@ export function HowItWorks() {
         ))}
       </div>
 
-      {/* Flow summary */}
-      <div className="mt-10 rounded-lg border border-zinc-200 bg-zinc-50 p-5">
-        <p className="font-mono text-xs leading-relaxed text-zinc-500">
-          <span className="text-zinc-600">Session active</span>
-          {'  ->  '}
-          <span className="text-amber-600">Claude stores via MCP</span>
-          {'  ->  '}
-          <span className="text-zinc-600">Session ends</span>
-          {'  ->  '}
-          <span className="text-amber-600">Stop Hook extracts remaining</span>
-          {'  ->  '}
-          <span className="text-zinc-600">~/.memrosetta/memories.db</span>
+      {/* Pipeline flow */}
+      <div className="mt-8 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-950 px-5 py-4">
+        <p className="font-mono text-xs text-zinc-500">
+          {t.flow.map((step, i) => (
+            <span key={i}>
+              {i > 0 && (
+                <span className="text-zinc-700">{' -> '}</span>
+              )}
+              <span className={i % 2 === 1 ? 'text-amber-500/80' : 'text-zinc-400'}>
+                {step}
+              </span>
+            </span>
+          ))}
         </p>
       </div>
     </Section>

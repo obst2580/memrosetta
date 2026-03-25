@@ -1,82 +1,89 @@
+import type { Lang } from '../i18n'
+import { content } from '../i18n'
 import { InlineCode } from './CodeBlock'
 
 const GITHUB_URL = 'https://github.com/obst2580/memrosetta'
 
-export function Hero() {
-  return (
-    <section className="relative overflow-hidden px-6 pb-20 pt-24 md:px-12 md:pt-32 lg:px-24">
-      {/* Background glow */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-0 h-[600px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500/5 blur-3xl" />
-      </div>
+interface HeroProps {
+  readonly lang: Lang
+}
 
-      <div className="relative mx-auto max-w-4xl text-center">
+export function Hero({ lang }: HeroProps) {
+  const t = content[lang].hero
+
+  return (
+    <section className="px-6 pt-28 pb-16 md:px-8 md:pt-36 md:pb-24">
+      <div className="mx-auto max-w-3xl">
         {/* Badge */}
-        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-4 py-1.5 text-sm text-zinc-500">
+        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1 text-xs text-zinc-500">
           <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-          Open source -- MIT License
+          {t.badge}
         </div>
 
         {/* Title */}
-        <h1 className="mb-6 text-5xl font-extrabold tracking-tight text-zinc-900 md:text-7xl">
+        <h1 className="mb-4 text-4xl font-bold tracking-tight text-zinc-900 md:text-6xl">
           Mem
-          <span className="text-amber-500">Rosetta</span>
+          <span className="text-amber-600">Rosetta</span>
         </h1>
 
-        {/* Tagline */}
-        <p className="mb-4 text-xl font-medium text-zinc-700 md:text-2xl">
-          Your AI keeps forgetting. MemRosetta fixes that.
+        {/* Subtitle */}
+        <p className="mb-8 max-w-xl text-lg text-zinc-500 md:text-xl">
+          {t.subtitle}
         </p>
 
-        {/* Description */}
-        <p className="mx-auto mb-10 max-w-2xl text-base text-zinc-500 md:text-lg">
-          Persistent, searchable long-term memory for AI tools.
-          Local SQLite, no LLM dependency, contradiction detection, cognitive-model forgetting.
-        </p>
-
-        {/* CTA */}
-        <div className="mb-4 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-          <InlineCode copyable>npm install @memrosetta/cli</InlineCode>
-          <span className="text-sm text-zinc-400">or</span>
-          <InlineCode copyable>npx @memrosetta/claude-code init</InlineCode>
+        {/* Install command */}
+        <div className="mb-8">
+          <InlineCode copyable>{t.install}</InlineCode>
         </div>
 
-        <div className="mb-8">
+        {/* GitHub link */}
+        <div className="mb-12">
           <a
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-all hover:border-zinc-300 hover:bg-zinc-50"
+            className="inline-flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-zinc-800"
           >
             <GitHubIcon />
-            GitHub
+            <span>GitHub</span>
+            <span className="text-zinc-300">/</span>
+            <span className="font-mono text-xs">obst2580/memrosetta</span>
           </a>
         </div>
 
         {/* Stats */}
-        <div className="flex flex-wrap items-center justify-center gap-8 text-sm text-zinc-500">
-          <Stat label="MRR improvement" value="+324%" />
-          <Stat label="LLM cost for core" value="$0" />
-          <Stat label="Setup commands" value="1" />
+        <div className="flex flex-wrap gap-8 border-t border-zinc-100 pt-8 text-sm">
+          <StatItem
+            value={t.stats.mrr.value}
+            label={t.stats.mrr.label}
+          />
+          <StatItem
+            value={t.stats.cost.value}
+            label={t.stats.cost.label}
+          />
+          <StatItem
+            value={t.stats.setup.value}
+            label={t.stats.setup.label}
+          />
         </div>
       </div>
     </section>
   )
 }
 
-function Stat({
-  label,
+function StatItem({
   value,
+  label,
 }: {
-  readonly label: string
   readonly value: string
+  readonly label: string
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="font-mono text-lg font-semibold text-amber-500">
+    <div className="flex items-baseline gap-2">
+      <span className="font-mono text-lg font-semibold text-zinc-900">
         {value}
       </span>
-      <span>{label}</span>
+      <span className="text-zinc-400">{label}</span>
     </div>
   )
 }

@@ -1,100 +1,52 @@
 import { useState } from 'react'
+import type { Lang } from '../i18n'
+import { content } from '../i18n'
 import { Section, SectionTitle } from './Section'
 import { CodeBlock } from './CodeBlock'
 
 type Tab = 'claude-code' | 'cursor' | 'cli'
 
-const TAB_CONFIG: readonly { readonly id: Tab; readonly label: string }[] = [
-  { id: 'claude-code', label: 'Claude Code' },
-  { id: 'cursor', label: 'Cursor / MCP' },
-  { id: 'cli', label: 'CLI' },
+const TAB_ORDER: readonly Tab[] = ['claude-code', 'cursor', 'cli']
+
+interface QuickStartProps {
+  readonly lang: Lang
+}
+
+const PACKAGES = [
+  { name: '@memrosetta/core', en: 'Memory engine: SQLite + FTS5 + vector + NLI', ko: '메모리 엔진: SQLite + FTS5 + 벡터 + NLI' },
+  { name: '@memrosetta/embeddings', en: 'Local embeddings (bge-small-en-v1.5) + NLI', ko: '로컬 임베딩 (bge-small-en-v1.5) + NLI' },
+  { name: '@memrosetta/mcp', en: 'MCP server for AI tool integration', ko: 'AI 도구 연동용 MCP 서버' },
+  { name: '@memrosetta/claude-code', en: 'Claude Code integration (hooks + init)', ko: 'Claude Code 통합 (hooks + init)' },
+  { name: '@memrosetta/cli', en: 'Command-line interface', ko: '커맨드라인 인터페이스' },
+  { name: '@memrosetta/api', en: 'REST API (Hono)', ko: 'REST API (Hono)' },
+  { name: '@memrosetta/llm', en: 'LLM fact extraction (optional)', ko: 'LLM 사실 추출 (옵션)' },
+  { name: '@memrosetta/obsidian', en: 'Obsidian vault sync', ko: '옵시디언 볼트 동기화' },
 ]
 
-const CODE_SNIPPETS: Record<Tab, { code: string; language: string }> = {
-  'claude-code': {
-    language: 'bash',
-    code: `# One command sets up everything
-npx @memrosetta/claude-code init
-
-# That's it. Restart Claude Code.
-# Claude will automatically:
-#   - Store memories during sessions (via MCP)
-#   - Search past memories when needed (via MCP)
-#   - Extract facts on session end (via Stop Hook)
-
-# Check status
-npx @memrosetta/claude-code status
-
-# Remove integration
-npx @memrosetta/claude-code reset`,
-  },
-  cursor: {
-    language: 'json',
-    code: `// Add to .mcp.json (project root or ~/.mcp.json)
-{
-  "mcpServers": {
-    "memory-service": {
-      "command": "npx",
-      "args": ["-y", "@memrosetta/mcp"]
-    }
-  }
-}
-
-// Available MCP tools:
-//   memrosetta_search  -- search past memories
-//   memrosetta_store   -- save a memory
-//   memrosetta_working_memory -- get top context
-//   memrosetta_relate  -- link related memories
-//   memrosetta_invalidate -- mark outdated`,
-  },
-  cli: {
-    language: 'bash',
-    code: `# Install globally
-npm install -g @memrosetta/cli
-
-# Store memories
-memrosetta store --user alice \\
-  --content "Prefers TypeScript over JavaScript" \\
-  --type preference
-
-# Search
-memrosetta search --user alice \\
-  --query "tech stack choices" \\
-  --format text
-# [0.95] Decided to use Tailwind CSS (decision)
-# [0.88] Prefers TypeScript over JavaScript (preference)
-
-# Working memory (top-priority context)
-memrosetta working-memory --user alice
-
-# Run maintenance (recompute activation scores)
-memrosetta maintain --user alice`,
-  },
-}
-
-export function QuickStart() {
+export function QuickStart({ lang }: QuickStartProps) {
   const [activeTab, setActiveTab] = useState<Tab>('claude-code')
-  const snippet = CODE_SNIPPETS[activeTab]
+  const t = content[lang].quickStart
+  const snippet = t.code[activeTab]
 
   return (
     <Section id="quick-start" className="border-t border-zinc-100">
-      <SectionTitle subtitle="Get started in under a minute.">
-        Quick Start
+      <SectionTitle subtitle={t.subtitle}>
+        {t.title}
       </SectionTitle>
 
       {/* Tabs */}
-      <div className="mb-6 flex gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1">
-        {TAB_CONFIG.map((tab) => (
+      <div className="mb-4 flex gap-1 border-b border-zinc-200">
+        {TAB_ORDER.map((tab) => (
           <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 rounded-md px-4 py-2 font-mono text-sm transition-all ${
-              activeTab === tab.id
-                ? 'bg-white text-amber-600 shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-600'
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`border-b-2 px-4 py-2 font-mono text-sm transition-colors ${
+              activeTab === tab
+                ? 'border-amber-500 text-zinc-900'
+                : 'border-transparent text-zinc-400 hover:text-zinc-600'
             }`}
           >
-            {tab.label}
+            {t.tabs[tab]}
           </button>
         ))}
       </div>
@@ -103,21 +55,27 @@ export function QuickStart() {
       <CodeBlock code={snippet.code} language={snippet.language} />
 
       {/* Packages */}
-      <div className="mt-10">
-        <h3 className="mb-4 text-center text-sm font-medium text-zinc-400">
-          Packages
+      <div className="mt-14">
+        <h3 className="mb-4 font-mono text-xs font-medium uppercase tracking-wider text-zinc-400">
+          {t.packages.title}
         </h3>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2">
           {PACKAGES.map((pkg) => (
             <a
               key={pkg.name}
               href={`https://www.npmjs.com/package/${pkg.name}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-lg border border-zinc-200 bg-white p-3 text-left transition-colors hover:border-amber-300 hover:shadow-sm"
+              className="group flex items-start gap-3 rounded-md border border-zinc-100 px-4 py-3 transition-colors hover:border-zinc-200 hover:bg-zinc-50"
             >
-              <p className="font-mono text-xs text-amber-600">{pkg.name}</p>
-              <p className="mt-1 text-xs text-zinc-500">{pkg.description}</p>
+              <div className="min-w-0">
+                <p className="font-mono text-xs text-zinc-700 group-hover:text-amber-600">
+                  {pkg.name}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-400">
+                  {lang === 'en' ? pkg.en : pkg.ko}
+                </p>
+              </div>
             </a>
           ))}
         </div>
@@ -125,14 +83,3 @@ export function QuickStart() {
     </Section>
   )
 }
-
-const PACKAGES = [
-  { name: '@memrosetta/core', description: 'Memory engine (SQLite + FTS5 + vector + NLI)' },
-  { name: '@memrosetta/embeddings', description: 'Local embeddings + NLI contradiction' },
-  { name: '@memrosetta/mcp', description: 'MCP server for AI tool integration' },
-  { name: '@memrosetta/claude-code', description: 'Claude Code integration (hooks + init)' },
-  { name: '@memrosetta/cli', description: 'Command-line interface' },
-  { name: '@memrosetta/api', description: 'REST API (Hono)' },
-  { name: '@memrosetta/llm', description: 'LLM fact extraction (optional)' },
-  { name: '@memrosetta/obsidian', description: 'Obsidian vault sync' },
-]
