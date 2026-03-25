@@ -52,19 +52,34 @@ interface FeatureExtractionPipeline {
   dispose?: () => Promise<void>;
 }
 
+export interface EmbedderOptions {
+  readonly modelId?: string;
+  readonly preset?: EmbeddingPreset;
+  readonly dimension?: number;
+}
+
 export class HuggingFaceEmbedder implements Embedder {
   readonly dimension: number;
   private pipeline: FeatureExtractionPipeline | null = null;
   private readonly modelId: string;
 
-  constructor(options?: { readonly modelId?: string; readonly preset?: EmbeddingPreset }) {
+  constructor(options?: EmbedderOptions) {
     if (options?.preset) {
       const p = EMBEDDING_PRESETS[options.preset];
       this.modelId = p.modelId;
-      this.dimension = p.dimension;
+      this.dimension = options.dimension ?? p.dimension;
+    } else if (options?.modelId) {
+      if (!options.dimension) {
+        throw new Error(
+          'dimension is required when using a custom modelId. ' +
+          'Use a preset (en, multilingual, ko) for automatic dimension detection.',
+        );
+      }
+      this.modelId = options.modelId;
+      this.dimension = options.dimension;
     } else {
-      this.modelId = options?.modelId ?? EMBEDDING_PRESETS.en.modelId;
-      this.dimension = 384;
+      this.modelId = EMBEDDING_PRESETS.en.modelId;
+      this.dimension = EMBEDDING_PRESETS.en.dimension;
     }
   }
 

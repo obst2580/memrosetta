@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import type { IMemoryEngine } from '@memrosetta/types';
 import type { BenchmarkResult } from '../metrics/metric-types.js';
 import type { BenchmarkQuery } from '../datasets/dataset-loader.js';
@@ -11,6 +12,9 @@ import {
   mrr,
 } from '../metrics/retrieval-metrics.js';
 import { computeLatencyMetrics } from '../metrics/latency-metrics.js';
+
+const _require = createRequire(import.meta.url);
+const corePkg = _require('@memrosetta/core/package.json') as { version: string };
 
 // ---------------------------------------------------------------------------
 // Types
@@ -218,7 +222,7 @@ export async function runPhase1(
     phase: 'phase1',
     timestamp: new Date().toISOString(),
     dataset: 'LoCoMo',
-    engineVersion: '0.2.2',
+    engineVersion: corePkg.version,
     retrieval: {
       precisionAtK: { 5: avgP5 },
       recallAtK: { 5: avgR5 },

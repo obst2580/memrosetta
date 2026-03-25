@@ -23,9 +23,20 @@ describe('HuggingFaceEmbedder presets (no model download)', () => {
     expect(embedder.dimension).toBe(768);
   });
 
-  it('custom modelId defaults to dimension 384', () => {
-    const embedder = new HuggingFaceEmbedder({ modelId: 'some/custom-model' });
-    expect(embedder.dimension).toBe(384);
+  it('custom modelId with explicit dimension works', () => {
+    const embedder = new HuggingFaceEmbedder({ modelId: 'some/custom-model', dimension: 512 });
+    expect(embedder.dimension).toBe(512);
+  });
+
+  it('custom modelId without dimension throws', () => {
+    expect(() => new HuggingFaceEmbedder({ modelId: 'some/custom-model' })).toThrow(
+      'dimension is required when using a custom modelId',
+    );
+  });
+
+  it('preset with explicit dimension override works', () => {
+    const embedder = new HuggingFaceEmbedder({ preset: 'en', dimension: 256 });
+    expect(embedder.dimension).toBe(256);
   });
 
   it('EMBEDDING_PRESETS contains all expected presets', () => {

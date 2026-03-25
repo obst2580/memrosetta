@@ -154,4 +154,18 @@ describe('ensureSchema', () => {
       `).run('mem-a', 'mem-b', 'invalid_relation', '2025-01-01T00:00:00.000Z');
     }).toThrow();
   });
+
+  it('stores embedding_dimension in schema_version for fresh database', () => {
+    ensureSchema(db, { vectorEnabled: false, embeddingDimension: 768 });
+
+    const row = db.prepare('SELECT embedding_dimension FROM schema_version').get() as { embedding_dimension: number };
+    expect(row.embedding_dimension).toBe(768);
+  });
+
+  it('defaults embedding_dimension to 384 when not specified', () => {
+    ensureSchema(db);
+
+    const row = db.prepare('SELECT embedding_dimension FROM schema_version').get() as { embedding_dimension: number };
+    expect(row.embedding_dimension).toBe(384);
+  });
 });

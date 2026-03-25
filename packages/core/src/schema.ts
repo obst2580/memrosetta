@@ -76,13 +76,12 @@ END;
 
 export interface SchemaOptions {
   readonly vectorEnabled?: boolean;
+  readonly embeddingDimension?: number;
 }
 
-const SCHEMA_V2 = `
-CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories USING vec0(
-  embedding float[384]
-);
-`;
+function schemaV2(dim: number): string {
+  return `CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories USING vec0(embedding float[${dim}]);`;
+}
 
 const SCHEMA_V3 = `
 ALTER TABLE memories ADD COLUMN event_date_start TEXT;
@@ -109,18 +108,20 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
     "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
   ).get();
 
+  const dim = options?.embeddingDimension ?? 384;
+
   if (!hasVersionTable) {
-    db.exec('CREATE TABLE schema_version (version INTEGER NOT NULL)');
+    db.exec('CREATE TABLE schema_version (version INTEGER NOT NULL, embedding_dimension INTEGER DEFAULT 384)');
     db.exec(SCHEMA_V1);
 
     let version = 1;
     if (options?.vectorEnabled) {
-      db.exec(SCHEMA_V2);
+      db.exec(schemaV2(dim));
       version = 2;
     }
     // Fresh databases already include v3 + v4 columns in SCHEMA_V1
     version = 4;
-    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(version);
+    db.prepare('INSERT INTO schema_version (version, embedding_dimension) VALUES (?, ?)').run(version, dim);
     return;
   }
 
@@ -133,7 +134,7 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
   }
 
   if (currentVersion < 2 && options?.vectorEnabled) {
-    db.exec(SCHEMA_V2);
+    db.exec(schemaV2(dim));
     db.prepare('UPDATE schema_version SET version = ?').run(2);
   }
 
@@ -153,5 +154,27 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
       db.exec(SCHEMA_V4);
     }
     db.prepare('UPDATE schema_version SET version = ?').run(4);
+  }
+
+  // Ensure embedding_dimension column exists and handle dimension mismatch
+  if (options?.vectorEnabled) {
+    const hasDimCol = (db.prepare('PRAGMA table_info(schema_version)').all() as readonly { name: string }[])
+      .some((col) => col.name === 'embedding_dimension');
+
+    if (!hasDimCol) {
+      db.exec('ALTER TABLE schema_version ADD COLUMN embedding_dimension INTEGER DEFAULT 384');
+    }
+
+    const storedDim = (db.prepare('SELECT embedding_dimension FROM schema_version').get() as { embedding_dimension: number | null })
+      ?.embedding_dimension ?? 384;
+
+    if (storedDim !== dim) {
+      process.stderr.write(
+        `[memrosetta] Embedding dimension changed (${storedDim} -> ${dim}). Recreating vector index...\n`,
+      );
+      try { db.exec('DROP TABLE IF EXISTS vec_memories'); } catch { /* ignore */ }
+      db.exec(schemaV2(dim));
+      db.prepare('UPDATE schema_version SET embedding_dimension = ?').run(dim);
+    }
   }
 }

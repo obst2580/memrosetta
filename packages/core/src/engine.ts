@@ -74,7 +74,10 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       }
     }
 
-    ensureSchema(this.db, { vectorEnabled: this.vectorEnabled });
+    ensureSchema(this.db, {
+      vectorEnabled: this.vectorEnabled,
+      embeddingDimension: this.options.embedder?.dimension ?? 384,
+    });
 
     this.stmts = createPreparedStatements(this.db);
     this.relStmts = createRelationStatements(this.db);
