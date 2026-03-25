@@ -47,6 +47,58 @@ memrosetta init --cursor
 
 끝입니다. 도구를 재시작하면 기억이 작동합니다.
 
+## Claude Code 통합 작동 원리
+
+`memrosetta init --claude-code`를 실행하면 세 가지가 설정됩니다:
+
+### 1. MCP 서버 (Claude를 위한 기억 도구)
+
+Claude가 세션 중 호출할 수 있는 6개의 기억 도구를 제공합니다:
+
+**memrosetta_store** -- Claude가 중요한 정보를 만나면 호출합니다:
+- 기술적 결정 ("MySQL 대신 PostgreSQL을 선택한 이유는...")
+- 사용자 선호 ("사용자는 OOP보다 함수형 스타일을 선호")
+- 프로젝트 사실 ("API는 포트 8080에서 JWT 인증으로 실행")
+- 완료된 작업 ("user 테이블을 새 스키마로 마이그레이션, 3개 컬럼 추가")
+
+**memrosetta_search** -- Claude가 맥락이 필요할 때 호출합니다:
+- "인증 시스템에 대해 뭘 결정했지?" --> 과거 기억 검색
+- "API가 어떻게 설정되어 있지?" --> 이전 세션의 기술 사실 검색
+- "사용자가 에러 처리에 대해 뭘 선호하지?" --> 선호 기억 조회
+
+**memrosetta_working_memory** -- Claude가 관련 컨텍스트를 로드할 때 호출합니다:
+- 가장 높은 활성화 점수의 기억을 반환 (~3K 토큰)
+- 자주 접근하고 최근의 기억을 우선
+- "지금 알아야 할 것" 요약 역할
+
+**memrosetta_relate** -- Claude가 관련 기억을 연결합니다:
+- "인증 방식이 바뀌었다" --> `updates` 관계 생성
+- "이전 결정과 모순된다" --> `contradicts` 관계 생성
+
+**memrosetta_invalidate** -- Claude가 오래된 사실을 표시합니다:
+- "더 이상 React를 사용하지 않고 Vue로 전환했다" --> React 사실을 무효화
+
+**memrosetta_count** -- 빠른 확인: "이 프로젝트에 기억이 몇 개 있지?"
+
+### 2. Stop Hook (세션 종료 시 자동 백업)
+
+Claude Code 세션이 끝나면 Hook이 자동으로:
+1. 세션 트랜스크립트(JSONL)를 읽습니다
+2. 의미 있는 대화만 추출합니다 (확인, 코드 블록, 도구 호출 건너뜀)
+3. 데이터베이스에 기억으로 저장합니다
+4. 중복 제거: 같은 세션이 두 번 저장되면 이전 항목을 대체합니다
+
+이것은 안전망입니다. Claude가 세션 중 MCP로 중요한 것을 저장하지만,
+Stop Hook이 놓친 것을 잡아냅니다.
+
+### 3. CLAUDE.md 지침
+
+전역 CLAUDE.md에 다음 지침을 추가합니다:
+- 기억을 저장할 때 (결정, 사실, 선호, 이벤트)
+- 저장하지 않을 때 (코드 자체, 디버깅 과정, 확인 응답)
+- 맥락이 부족할 때 과거 기억을 검색하는 방법
+- 더 나은 검색 품질을 위해 항상 키워드를 포함
+
 ## 지원 도구
 
 모든 도구가 같은 로컬 데이터베이스를 공유합니다. 한 도구에서 저장한 기억은 다른 도구에서 즉시 검색할 수 있습니다.
@@ -116,11 +168,105 @@ MemRosetta는 **원자적 기억**(텍스트 덩어리가 아닌 사실 하나 =
 | **시간** | 없음 | 기억당 4개 타임스탬프 |
 | **망각** | 모두 동일 가중치 | ACT-R: 자주 쓰면 높은 순위 |
 
+## 검색 아키텍처
+
+MemRosetta는 3단계 하이브리드 검색 파이프라인을 사용합니다:
+
+### 1단계: FTS5 전문 검색 (BM25)
+
+SQLite 내장 전문 검색과 BM25 랭킹:
+- 쿼리를 키워드로 토큰화
+- 일반적인 불용어 필터링 (the, is, are...)
+- 기억 내용과 키워드에 대해 매칭
+- 단어 빈도 * 역문서 빈도로 랭킹
+- 속도: 13K 기억에서 ~0.2ms
+
+### 2단계: 벡터 유사도 검색 (KNN)
+
+로컬 임베딩 모델 (bge-small-en-v1.5, 33MB, MIT 라이선스):
+- 쿼리와 기억을 384차원 벡터로 변환
+- sqlite-vec을 사용한 KNN 검색
+- 키워드가 놓치는 의미적 매칭 포착 ("UI 테마"가 공유 키워드 없이도 "다크 모드 선호"와 매칭)
+- 속도: 13K 기억에서 ~3ms
+
+### 3단계: Reciprocal Rank Fusion (RRF)
+
+FTS5와 벡터 검색 결과를 결합:
+- `score = 1/(k + rank_fts) + 1/(k + rank_vec)` (k = 60)
+- 두 방법 모두에서 발견된 기억은 부스트
+- 최종 결과에 활성화 점수(ACT-R) 가중치 적용
+- 자주 접근한 기억이 더 높은 순위
+
+## 모순 감지
+
+새로운 기억이 저장될 때 MemRosetta가 자동으로 모순을 확인합니다:
+
+1. 새 기억의 임베딩 계산
+2. 유사한 기존 기억 검색 (상위 5개)
+3. 각 쌍에 NLI(자연어 추론) 검사 실행
+4. 모순 점수 >= 0.7이면 `contradicts` 관계 자동 생성
+
+```
+예시:
+  기존: "우리 시급은 5만원"
+  신규: "우리 시급은 4만원"
+  결과: 모순 감지 (점수: 0.93)
+        --> 자동 생성: 신규 --[contradicts]--> 기존
+```
+
+NLI 모델 (nli-deberta-v3-xsmall)은 완전히 로컬에서 실행:
+- 크기: 71MB
+- 라이선스: Apache 2.0
+- API 호출 없음, LLM 불필요
+- 논리적 부정 감지 정확도 우수 (MNLI에서 0.92+)
+- 숫자 모순은 항상 잡히지 않을 수 있음 (모델 한계)
+
+## 기억 계층 & 적응형 망각
+
+인간의 기억 응고화에서 영감을 받았습니다:
+
+### 계층
+
+| 계층 | 내용 | 동작 |
+|------|------|------|
+| **Hot** | 작업 기억 (~3K 토큰) | 항상 로드. 최고 활성화. |
+| **Warm** | 최근 30일 | 활성 기억. 정상 검색 랭킹. |
+| **Cold** | 30일 이전 | 낮은 활성화. 압축 저장. 검색 가능. |
+
+### ACT-R 활성화 공식
+
+각 기억은 ACT-R 기저율 학습 방정식으로 계산된 활성화 점수를 가집니다:
+
+```
+activation = sigmoid( ln( sum( t_j ^ -0.5 ) ) + salience )
+```
+
+여기서:
+- `t_j` = j번째 접근 이후 경과일
+- `salience` = 기억 중요도 (0-1)
+- 접근 횟수가 많을수록 --> 높은 활성화
+- 최근 접근일수록 --> 높은 활성화
+- 높은 중요도 --> 기본 활성화 부스트
+
+### 압축
+
+매우 낮은 활성화(< 0.1)의 Cold 기억은 압축 대상:
+- 네임스페이스(세션/프로젝트)별로 그룹화
+- 내용을 요약으로 결합
+- 원본 기억은 not-latest로 표시 (보존, 삭제하지 않음)
+- 요약이 새로운 검색 가능 항목이 됨
+
+수동으로 유지보수 실행:
+
+```bash
+memrosetta maintain --user alice
+```
+
 ## 주요 기능
 
-**하이브리드 검색** -- FTS5 (BM25) + 벡터 유사도 (bge-small-en-v1.5) + Reciprocal Rank Fusion.
+**하이브리드 검색** -- FTS5 (BM25) + 벡터 유사도 (bge-small-en-v1.5) + Reciprocal Rank Fusion. 개별 방식보다 높은 검색 정확도.
 
-**모순 감지** -- 로컬 NLI 모델 (nli-deberta-v3-xsmall, 71MB)이 새로운 사실과 기존 사실 사이의 모순을 자동으로 감지합니다.
+**모순 감지** -- 로컬 NLI 모델 (nli-deberta-v3-xsmall, 71MB)이 새로운 사실과 기존 사실 사이의 모순을 자동으로 감지합니다. LLM 불필요.
 
 **적응형 망각** -- ACT-R 활성화 점수. 자주 접근하는 기억은 순위가 올라가고, 사용하지 않는 기억은 서서히 사라지지만 삭제되지는 않습니다.
 
@@ -146,6 +292,126 @@ MCP로 연결하면 AI 도구가 다음 기능을 사용할 수 있습니다:
 | `memrosetta_relate` | 관련 기억 연결 |
 | `memrosetta_invalidate` | 기억을 무효화 표시 |
 | `memrosetta_count` | 저장된 기억 수 조회 |
+
+## REST API
+
+### 기억 저장
+
+```http
+POST /api/memories
+Content-Type: application/json
+
+{
+  "userId": "alice",
+  "content": "모든 애플리케이션에서 다크 모드를 선호",
+  "memoryType": "preference",
+  "keywords": ["dark-mode", "ui"],
+  "confidence": 0.95
+}
+```
+
+응답:
+
+```json
+{
+  "success": true,
+  "data": {
+    "memoryId": "mem-WL5IFdnKmMjx9_ES",
+    "userId": "alice",
+    "content": "모든 애플리케이션에서 다크 모드를 선호",
+    "memoryType": "preference",
+    "learnedAt": "2026-03-24T06:42:00Z",
+    "tier": "warm",
+    "activationScore": 1.0
+  }
+}
+```
+
+### 기억 검색
+
+```http
+POST /api/search
+Content-Type: application/json
+
+{
+  "userId": "alice",
+  "query": "UI 선호사항",
+  "limit": 5,
+  "filters": {
+    "onlyLatest": true,
+    "minConfidence": 0.5
+  }
+}
+```
+
+응답:
+
+```json
+{
+  "success": true,
+  "data": {
+    "results": [
+      {
+        "memory": {
+          "memoryId": "mem-WL5IFdnKmMjx9_ES",
+          "content": "모든 애플리케이션에서 다크 모드를 선호",
+          "memoryType": "preference",
+          "activationScore": 0.87
+        },
+        "score": 0.92,
+        "matchType": "hybrid"
+      }
+    ],
+    "totalCount": 1,
+    "queryTimeMs": 3.2
+  }
+}
+```
+
+### 작업 기억
+
+```http
+GET /api/working-memory?userId=alice&maxTokens=3000
+```
+
+응답:
+
+```json
+{
+  "success": true,
+  "data": {
+    "memories": [
+      {
+        "content": "모든 애플리케이션에서 다크 모드를 선호",
+        "memoryType": "preference",
+        "activationScore": 0.87
+      }
+    ],
+    "totalTokens": 2847,
+    "memoryCount": 12
+  }
+}
+```
+
+### 관계 생성
+
+```http
+POST /api/relations
+Content-Type: application/json
+
+{
+  "srcMemoryId": "mem-abc123",
+  "dstMemoryId": "mem-def456",
+  "relationType": "updates",
+  "reason": "시급이 5만원에서 4만원으로 변경"
+}
+```
+
+### 기억 무효화
+
+```http
+POST /api/memories/mem-abc123/invalidate
+```
 
 ## CLI 레퍼런스
 
@@ -272,6 +538,7 @@ pnpm bench:hybrid --converter fact --llm-provider openai  # LLM 추출 포함
 | 망각 모델 | No | No | No | **Yes (ACT-R)** |
 | 시간 모델 | No | No | No | **4개 타임스탬프** |
 | 관계형 버전 관리 | No | No | No | **5가지 관계 타입** |
+| 도구 간 공유 | No | No | No | **Yes, 로컬 DB 하나** |
 | 프로토콜 | REST API | REST API | REST API | **MCP + CLI + REST** |
 | 설치 | 복잡 | 복잡 | 복잡 | **명령어 하나** |
 

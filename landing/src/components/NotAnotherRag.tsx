@@ -43,6 +43,13 @@ export function NotAnotherRag({ lang }: NotAnotherRagProps) {
         </table>
       </div>
 
+      {/* Explanation */}
+      <div className="mt-6 rounded-lg border border-zinc-100 bg-zinc-50 p-5">
+        <p className="text-sm leading-relaxed text-zinc-600">
+          {t.explanation}
+        </p>
+      </div>
+
       {/* Visual comparison */}
       <div className="mt-10 grid gap-px overflow-hidden rounded-lg border border-zinc-200 bg-zinc-200 md:grid-cols-2">
         {/* RAG side */}

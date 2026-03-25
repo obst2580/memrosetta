@@ -140,7 +140,7 @@ memrosetta maintain --user alice`,
           number: '1',
           title: 'Claude stores directly during session',
           description:
-            'Claude Code acts as both the LLM and the memory author. When it encounters an important fact, decision, or preference, it stores it via MCP in real time.',
+            'Claude Code acts as both the LLM and the memory author. When it encounters an important fact, decision, or preference, it calls memrosetta_store via MCP in real time. This is the highest-quality path: Claude understands context, extracts clean atomic facts, and tags them with type and keywords. No extra cost, no post-processing needed.',
           quality: 'Best quality',
           cost: '$0',
         },
@@ -148,7 +148,7 @@ memrosetta maintain --user alice`,
           number: '2',
           title: 'Stop Hook + LLM extraction on session end',
           description:
-            'When a session ends, the Stop Hook sends the transcript to an LLM for fact extraction. Catches anything Claude missed during the session.',
+            'When a session ends, the Stop Hook reads the JSONL transcript and sends meaningful turns to an LLM (OpenAI or Anthropic) for fact extraction. The LLM identifies decisions, preferences, and facts that Claude may have missed during the conversation. Extracted facts are deduplicated against existing memories before storage.',
           quality: 'Good',
           cost: 'Needs API key',
         },
@@ -156,7 +156,7 @@ memrosetta maintain --user alice`,
           number: '3',
           title: 'Stop Hook + rule-based fallback',
           description:
-            'No API key? No problem. Pattern matching extracts decisions, preferences, and facts from the transcript. Zero external dependencies.',
+            'No API key? No problem. Pattern matching extracts decisions ("decided to...", "let\'s go with..."), preferences ("prefers...", "always use..."), and facts from the transcript using regular expressions. Zero external dependencies, zero cost. Lower recall than LLM extraction, but catches the most important patterns.',
           quality: 'Basic',
           cost: '$0',
         },
@@ -191,7 +191,7 @@ memrosetta maintain --user alice`,
         {
           feature: 'Contradictions',
           rag: 'Both versions returned, AI guesses',
-          memrosetta: 'Auto-detected by NLI model',
+          memrosetta: 'Auto-detected by NLI model (71MB, local)',
         },
         {
           feature: 'Time awareness',
@@ -203,7 +203,14 @@ memrosetta maintain --user alice`,
           rag: 'Everything equal weight',
           memrosetta: 'ACT-R: frequently used memories rank higher',
         },
+        {
+          feature: 'Cross-tool sharing',
+          rag: 'Per-tool index',
+          memrosetta: 'One local DB, shared across all tools',
+        },
       ],
+      explanation:
+        'Why atomic? A text chunk like "...API uses Spring Boot with Post..." split mid-sentence loses meaning. An atomic memory like "API uses Spring Boot + PostgreSQL on Azure" is a complete, searchable, updatable fact. When your tech stack changes, you create an updates relation -- no re-indexing, no lost context, full version history preserved.',
       ragLabel: 'RAG approach',
       ragChunks: [
         'Chunk 1: "...API uses Spring Boot with Post..."',
@@ -231,44 +238,83 @@ memrosetta maintain --user alice`,
         {
           title: 'Hybrid Search',
           description:
-            'FTS5 (BM25) + vector similarity (bge-small-en-v1.5) + Reciprocal Rank Fusion. Better recall than either approach alone.',
+            'Three-stage pipeline: FTS5 (BM25) for keyword matching, vector similarity (bge-small-en-v1.5, 33MB) for semantic matching, and Reciprocal Rank Fusion to combine results. Memories found by both methods get boosted. ~3ms latency for 13K memories. Better recall than either approach alone.',
         },
         {
           title: 'Contradiction Detection',
           description:
-            'Local NLI model (nli-deberta-v3-xsmall, 71MB) automatically detects conflicting facts. No LLM needed.',
+            'When a new memory is stored, the NLI model (nli-deberta-v3-xsmall, 71MB, Apache 2.0) checks the top 5 similar existing memories for logical contradictions. Score >= 0.7 triggers auto-creation of a contradicts relation. Runs entirely locally -- no API calls, no LLM needed.',
         },
         {
           title: 'Adaptive Forgetting',
           description:
-            'ACT-R activation scoring. Frequently accessed memories rank higher. Unused memories fade but are never deleted.',
+            'Based on the ACT-R cognitive architecture. Activation = sigmoid(ln(sum(t_j^-0.5)) + salience). Frequently accessed memories keep high activation. Unused memories decay over time but are never deleted -- they just rank lower in search results.',
         },
         {
           title: 'Memory Tiers',
           description:
-            'Hot (working memory, ~3K tokens), Warm (last 30 days), Cold (compressed long-term). Automatic tier management.',
+            'Hot tier (~3K tokens): working memory, always loaded, highest-activation facts. Warm tier: last 30 days of active memories, normal search ranking. Cold tier: older than 30 days, compressed into summaries. Automatic tier management via the maintain command.',
         },
         {
           title: 'Relations',
           description:
-            '5 relation types: updates, extends, derives, contradicts, supports. Memories form a graph, not a flat list.',
+            '5 relation types form a knowledge graph: updates (fact changed), extends (detail added), derives (inference made), contradicts (conflict detected), supports (corroborating evidence). Old versions are preserved via isLatest flags, not deleted.',
         },
         {
           title: 'Time Model',
           description:
-            'Four timestamps per memory: learnedAt, documentDate, eventDateStart/End, invalidatedAt.',
+            'Four timestamps per memory: learnedAt (when MemRosetta first saw it), documentDate (when the conversation happened), eventDateStart/End (when the real-world event occurred), invalidatedAt (when it became outdated). Enables temporal queries like "what did we know as of last Tuesday?"',
         },
         {
           title: 'Non-destructive',
           description:
-            'Nothing is ever deleted. Old versions preserved via relations and isLatest flags. Full audit trail.',
+            'Nothing is ever deleted. When a fact is updated, the old version remains with isLatest=false and a relation edge pointing to the new version. When a fact is invalidated, it gets an invalidatedAt timestamp. Full audit trail of every change.',
         },
         {
           title: '588+ Tests',
           description:
-            'Comprehensive test suite covering core engine, search, relations, compression, and all integrations.',
+            'Comprehensive test suite covering core engine, hybrid search, NLI contradiction detection, relation graph traversal, tier compression, activation scoring, MCP tools, REST API, CLI commands, and Claude Code integration.',
         },
       ],
+    },
+    architecture: {
+      title: 'Architecture',
+      subtitle: 'Modular package design. Each package has a single responsibility. Core has zero LLM dependency.',
+      packages: [
+        {
+          name: '@memrosetta/core',
+          description: 'Memory engine: SQLite + FTS5 + sqlite-vec + relation graph. Stores, searches, relates, compresses. Zero LLM dependency -- all intelligence is in the storage and retrieval layer.',
+        },
+        {
+          name: '@memrosetta/embeddings',
+          description: 'Local ML models: bge-small-en-v1.5 (33MB, MIT) for vector embeddings, nli-deberta-v3-xsmall (71MB, Apache 2.0) for contradiction detection. Runs on CPU, no GPU required.',
+        },
+        {
+          name: '@memrosetta/mcp',
+          description: 'MCP (Model Context Protocol) server exposing 6 tools: store, search, working_memory, relate, invalidate, count. Any MCP-compatible AI tool can connect.',
+        },
+        {
+          name: '@memrosetta/claude-code',
+          description: 'Claude Code integration: init command sets up MCP server, Stop Hook for transcript extraction, and CLAUDE.md instructions. Reset command cleanly removes everything.',
+        },
+        {
+          name: '@memrosetta/cli',
+          description: 'Full CLI for manual memory management: store, search, relate, maintain, compress, ingest, status. Supports JSON and text output formats.',
+        },
+        {
+          name: '@memrosetta/api',
+          description: 'REST API built with Hono. Endpoints for all memory operations. Can be deployed as a standalone server for team use.',
+        },
+        {
+          name: '@memrosetta/llm',
+          description: 'Optional LLM-based fact extraction from conversation transcripts. Supports OpenAI and Anthropic. Used by Stop Hook layer 2 for higher-quality extraction.',
+        },
+        {
+          name: '@memrosetta/obsidian',
+          description: 'Bidirectional sync between MemRosetta and Obsidian vaults. Memories become notes, notes become memories.',
+        },
+      ],
+      dependencyGraph: 'cli, mcp, api, claude-code --> core --> embeddings',
     },
     comparison: {
       title: 'Why MemRosetta?',
@@ -322,6 +368,13 @@ memrosetta maintain --user alice`,
           zep: 'No',
           letta: 'No',
           memrosetta: 'Yes (5 types)',
+        },
+        {
+          feature: 'Cross-tool sharing',
+          mem0: 'No',
+          zep: 'No',
+          letta: 'No',
+          memrosetta: 'Yes, one local DB',
         },
         {
           feature: 'Open protocol',
@@ -485,7 +538,7 @@ memrosetta maintain --user alice`,
           number: '1',
           title: 'Claude가 세션 중 직접 저장',
           description:
-            'Claude Code가 LLM과 기억 작성자 역할을 동시에 수행합니다. 중요한 사실, 결정, 선호를 만나면 MCP를 통해 실시간으로 저장합니다.',
+            'Claude Code가 LLM과 기억 작성자 역할을 동시에 수행합니다. 중요한 사실, 결정, 선호를 만나면 MCP를 통해 memrosetta_store를 실시간으로 호출합니다. 최고 품질의 경로: Claude가 맥락을 이해하고, 깨끗한 원자적 사실을 추출하며, 타입과 키워드를 태깅합니다. 추가 비용 없음, 후처리 불필요.',
           quality: '최고 품질',
           cost: '$0',
         },
@@ -493,7 +546,7 @@ memrosetta maintain --user alice`,
           number: '2',
           title: 'Stop Hook + LLM 추출 (세션 종료 시)',
           description:
-            '세션이 끝나면 Stop Hook이 대화 내용을 LLM에 보내 사실을 추출합니다. Claude가 세션 중 놓친 것을 보완합니다.',
+            '세션이 끝나면 Stop Hook이 JSONL 트랜스크립트를 읽고 의미 있는 턴을 LLM(OpenAI 또는 Anthropic)에 보내 사실을 추출합니다. LLM이 대화 중 Claude가 놓쳤을 수 있는 결정, 선호, 사실을 식별합니다. 추출된 사실은 저장 전에 기존 기억과 중복 검사를 합니다.',
           quality: '양호',
           cost: 'API 키 필요',
         },
@@ -501,7 +554,7 @@ memrosetta maintain --user alice`,
           number: '3',
           title: 'Stop Hook + 규칙 기반 폴백',
           description:
-            'API 키가 없어도 괜찮습니다. 패턴 매칭으로 대화에서 결정, 선호, 사실을 추출합니다. 외부 의존성 제로.',
+            'API 키가 없어도 괜찮습니다. 정규식 패턴 매칭으로 결정("결정했다...", "~로 가자..."), 선호("~를 선호한다...", "항상 ~를 사용..."), 사실을 트랜스크립트에서 추출합니다. 외부 의존성 제로, 비용 제로. LLM 추출보다 재현율은 낮지만, 가장 중요한 패턴은 잡아냅니다.',
           quality: '기본',
           cost: '$0',
         },
@@ -536,7 +589,7 @@ memrosetta maintain --user alice`,
         {
           feature: '모순 감지',
           rag: '양쪽 다 반환, AI가 추측',
-          memrosetta: 'NLI 모델로 자동 감지',
+          memrosetta: 'NLI 모델로 자동 감지 (71MB, 로컬)',
         },
         {
           feature: '시간 인식',
@@ -548,7 +601,14 @@ memrosetta maintain --user alice`,
           rag: '모든 기억 동일 가중치',
           memrosetta: 'ACT-R: 자주 사용하는 기억 우선',
         },
+        {
+          feature: '도구 간 공유',
+          rag: '도구별 인덱스',
+          memrosetta: '로컬 DB 하나, 모든 도구가 공유',
+        },
       ],
+      explanation:
+        '왜 원자적인가? "...API는 Spring Boot을 사용하고 Post..."처럼 문장 중간에서 잘린 텍스트 청크는 의미를 잃습니다. "API는 Azure에 배포된 Spring Boot + PostgreSQL"이라는 원자적 기억은 완전하고, 검색 가능하며, 업데이트할 수 있는 사실입니다. 기술 스택이 바뀌면 updates 관계를 생성하면 됩니다 -- 재색인 없이, 맥락 유실 없이, 전체 버전 이력이 보존됩니다.',
       ragLabel: 'RAG 방식',
       ragChunks: [
         'Chunk 1: "...API는 Spring Boot을 사용하고 Post..."',
@@ -576,44 +636,83 @@ memrosetta maintain --user alice`,
         {
           title: '하이브리드 검색',
           description:
-            'FTS5 (BM25) + 벡터 유사도 (bge-small-en-v1.5) + Reciprocal Rank Fusion. 개별 방식보다 높은 검색 정확도.',
+            '3단계 파이프라인: FTS5 (BM25) 키워드 매칭, 벡터 유사도 (bge-small-en-v1.5, 33MB) 시맨틱 매칭, Reciprocal Rank Fusion으로 결과 결합. 두 방법 모두에서 발견된 기억은 부스트. 13K 기억에서 ~3ms 지연. 개별 방식보다 높은 검색 정확도.',
         },
         {
           title: '모순 감지',
           description:
-            '로컬 NLI 모델 (nli-deberta-v3-xsmall, 71MB)로 충돌하는 사실을 자동 감지. LLM 불필요.',
+            '새 기억 저장 시 NLI 모델(nli-deberta-v3-xsmall, 71MB, Apache 2.0)이 유사한 기존 기억 상위 5개를 논리적 모순 검사. 점수 >= 0.7이면 contradicts 관계 자동 생성. 완전히 로컬 실행 -- API 호출 없음, LLM 불필요.',
         },
         {
           title: '적응형 망각',
           description:
-            'ACT-R 활성화 점수 기반. 자주 접근하는 기억 우선. 안 쓰는 기억은 사라지지만 절대 삭제되지 않음.',
+            'ACT-R 인지 아키텍처 기반. activation = sigmoid(ln(sum(t_j^-0.5)) + salience). 자주 접근하는 기억은 높은 활성화 유지. 안 쓰는 기억은 시간이 지나며 감소하지만 절대 삭제되지 않음 -- 검색 결과에서 순위만 낮아짐.',
         },
         {
           title: '기억 계층',
           description:
-            'Hot (작업 기억, ~3K 토큰), Warm (최근 30일), Cold (압축된 장기 기억). 자동 계층 관리.',
+            'Hot 계층 (~3K 토큰): 작업 기억, 항상 로드, 최고 활성화 사실. Warm 계층: 최근 30일 활성 기억, 정상 검색 랭킹. Cold 계층: 30일 이상, 요약으로 압축. maintain 명령으로 자동 계층 관리.',
         },
         {
           title: '관계',
           description:
-            '5가지 관계: updates, extends, derives, contradicts, supports. 기억은 리스트가 아닌 그래프.',
+            '5가지 관계 타입이 지식 그래프 형성: updates (사실 변경), extends (세부사항 추가), derives (추론 도출), contradicts (충돌 감지), supports (뒷받침 증거). 이전 버전은 isLatest 플래그로 보존, 삭제하지 않음.',
         },
         {
           title: '시간 모델',
           description:
-            '기억당 4개 타임스탬프: learnedAt, documentDate, eventDateStart/End, invalidatedAt.',
+            '기억당 4개 타임스탬프: learnedAt (MemRosetta가 처음 인지한 시점), documentDate (대화가 일어난 시점), eventDateStart/End (실제 사건 발생 시점), invalidatedAt (무효화된 시점). "지난 화요일 시점에 우리가 알고 있던 것은?" 같은 시간 기반 쿼리 가능.',
         },
         {
           title: '비파괴적',
           description:
-            '삭제 없음. 이전 버전은 관계와 isLatest 플래그로 보존. 전체 감사 추적.',
+            '삭제 없음. 사실이 업데이트되면 이전 버전은 isLatest=false로 남고, 새 버전을 가리키는 관계 엣지가 생성. 사실이 무효화되면 invalidatedAt 타임스탬프를 받음. 모든 변경의 전체 감사 추적.',
         },
         {
           title: '588+ 테스트',
           description:
-            '코어 엔진, 검색, 관계, 압축, 모든 통합을 커버하는 종합 테스트 스위트.',
+            '코어 엔진, 하이브리드 검색, NLI 모순 감지, 관계 그래프 탐색, 계층 압축, 활성화 점수, MCP 도구, REST API, CLI 명령어, Claude Code 통합을 커버하는 종합 테스트 스위트.',
         },
       ],
+    },
+    architecture: {
+      title: '아키텍처',
+      subtitle: '모듈형 패키지 설계. 각 패키지는 단일 책임. 코어는 LLM 의존성 제로.',
+      packages: [
+        {
+          name: '@memrosetta/core',
+          description: '메모리 엔진: SQLite + FTS5 + sqlite-vec + 관계 그래프. 저장, 검색, 관계 연결, 압축. LLM 의존성 제로 -- 모든 지능은 저장/검색 레이어에 있음.',
+        },
+        {
+          name: '@memrosetta/embeddings',
+          description: '로컬 ML 모델: bge-small-en-v1.5 (33MB, MIT) 벡터 임베딩용, nli-deberta-v3-xsmall (71MB, Apache 2.0) 모순 감지용. CPU에서 실행, GPU 불필요.',
+        },
+        {
+          name: '@memrosetta/mcp',
+          description: 'MCP(Model Context Protocol) 서버. 6개 도구 노출: store, search, working_memory, relate, invalidate, count. MCP 호환 AI 도구라면 무엇이든 연결 가능.',
+        },
+        {
+          name: '@memrosetta/claude-code',
+          description: 'Claude Code 통합: init 명령으로 MCP 서버, 트랜스크립트 추출용 Stop Hook, CLAUDE.md 지침 설정. reset 명령으로 깔끔하게 제거.',
+        },
+        {
+          name: '@memrosetta/cli',
+          description: '수동 기억 관리를 위한 전체 CLI: store, search, relate, maintain, compress, ingest, status. JSON 및 텍스트 출력 형식 지원.',
+        },
+        {
+          name: '@memrosetta/api',
+          description: 'Hono로 구축된 REST API. 모든 기억 작업에 대한 엔드포인트. 팀 사용을 위한 독립 서버로 배포 가능.',
+        },
+        {
+          name: '@memrosetta/llm',
+          description: '대화 트랜스크립트에서 LLM 기반 사실 추출 (선택사항). OpenAI와 Anthropic 지원. Stop Hook 레이어 2에서 더 높은 품질의 추출에 사용.',
+        },
+        {
+          name: '@memrosetta/obsidian',
+          description: 'MemRosetta와 Obsidian 볼트 간 양방향 동기화. 기억이 노트가 되고, 노트가 기억이 됨.',
+        },
+      ],
+      dependencyGraph: 'cli, mcp, api, claude-code --> core --> embeddings',
     },
     comparison: {
       title: '왜 MemRosetta인가?',
@@ -667,6 +766,13 @@ memrosetta maintain --user alice`,
           zep: '없음',
           letta: '없음',
           memrosetta: '있음 (5가지)',
+        },
+        {
+          feature: '도구 간 공유',
+          mem0: '없음',
+          zep: '없음',
+          letta: '없음',
+          memrosetta: '있음, 로컬 DB 하나',
         },
         {
           feature: '개방 프로토콜',

@@ -45,6 +45,58 @@ memrosetta init --cursor
 
 That's it. Restart your tool and it has memory.
 
+## How Claude Code Integration Works
+
+When you run `memrosetta init --claude-code`, three things are set up:
+
+### 1. MCP Server (memory tools for Claude)
+
+Claude gets 6 memory tools it can call during any session:
+
+**memrosetta_store** -- Claude calls this when it encounters important information:
+- Technical decisions ("We chose PostgreSQL over MySQL because...")
+- User preferences ("The user prefers functional style over OOP")
+- Project facts ("The API runs on port 8080 with JWT auth")
+- Completed work ("Migrated user table to new schema, 3 columns added")
+
+**memrosetta_search** -- Claude calls this when it needs context:
+- "What did we decide about the auth system?" --> searches past memories
+- "How is the API configured?" --> finds technical facts from previous sessions
+- "What does the user prefer for error handling?" --> recalls preferences
+
+**memrosetta_working_memory** -- Claude calls this to load relevant context:
+- Returns the highest-activation memories (~3K tokens)
+- Prioritizes frequently accessed and recent memories
+- Acts as a "what do I need to know right now?" summary
+
+**memrosetta_relate** -- Claude links related memories:
+- "The auth approach changed" --> creates `updates` relation
+- "This contradicts what we decided before" --> creates `contradicts` relation
+
+**memrosetta_invalidate** -- Claude marks outdated facts:
+- "We're no longer using React, switched to Vue" --> invalidates the React fact
+
+**memrosetta_count** -- Quick check: "How many memories do I have for this project?"
+
+### 2. Stop Hook (automatic backup on session end)
+
+When a Claude Code session ends, a hook automatically:
+1. Reads the session transcript (JSONL)
+2. Extracts meaningful turns (skips confirmations, code blocks, tool calls)
+3. Stores them as memories in the database
+4. Deduplicates: if the same session is saved twice, old entries are replaced
+
+This is a safety net. Claude stores important things via MCP during the session,
+but the Stop Hook catches anything that was missed.
+
+### 3. CLAUDE.md Instructions
+
+Adds instructions to your global CLAUDE.md telling Claude:
+- When to store memories (decisions, facts, preferences, events)
+- When NOT to store (code itself, debugging steps, confirmations)
+- How to search past memories when context is missing
+- Always include keywords for better search quality
+
 ## Works With
 
 All tools share the same local database. Memories stored from one tool are instantly available in another.
@@ -114,11 +166,105 @@ Link relations                                         Cold -> compressed
 | **Time** | None | 4 timestamps per memory |
 | **Forgetting** | Everything weighted equally | ACT-R: used more = ranked higher |
 
+## Search Architecture
+
+MemRosetta uses a three-stage hybrid search pipeline:
+
+### Stage 1: FTS5 Full-Text Search (BM25)
+
+SQLite's built-in full-text search with BM25 ranking:
+- Tokenizes query into keywords
+- Filters common stop words (the, is, are...)
+- Matches against memory content and keywords
+- Ranks by term frequency * inverse document frequency
+- Speed: ~0.2ms for 13K memories
+
+### Stage 2: Vector Similarity Search (KNN)
+
+Local embedding model (bge-small-en-v1.5, 33MB, MIT license):
+- Converts query and memories to 384-dimensional vectors
+- Uses sqlite-vec for KNN search
+- Catches semantic matches that keywords miss ("UI theme" matches "prefers dark mode" even without shared keywords)
+- Speed: ~3ms for 13K memories
+
+### Stage 3: Reciprocal Rank Fusion (RRF)
+
+Combines results from FTS5 and vector search:
+- `score = 1/(k + rank_fts) + 1/(k + rank_vec)` where `k = 60`
+- Memories found by both methods get boosted
+- Final results weighted by activation score (ACT-R)
+- Frequently accessed memories rank higher
+
+## Contradiction Detection
+
+When a new memory is stored, MemRosetta automatically checks for contradictions:
+
+1. Compute embedding for the new memory
+2. Search for similar existing memories (top 5)
+3. Run NLI (Natural Language Inference) check on each pair
+4. If contradiction score >= 0.7, auto-create `contradicts` relation
+
+```
+Example:
+  Existing: "Our hourly rate is $50"
+  New:      "Our hourly rate is $40"
+  Result:   contradiction detected (score: 0.93)
+            --> auto-creates: new --[contradicts]--> existing
+```
+
+The NLI model (nli-deberta-v3-xsmall) runs entirely locally:
+- Size: 71MB
+- License: Apache 2.0
+- No API calls, no LLM needed
+- Detects logical negation well (0.92+ accuracy on MNLI)
+- Numeric contradictions may not always be caught (model limitation)
+
+## Memory Tiers & Adaptive Forgetting
+
+Inspired by human memory consolidation:
+
+### Tiers
+
+| Tier | Contents | Behavior |
+|------|----------|----------|
+| **Hot** | Working memory (~3K tokens) | Always loaded. Highest activation. |
+| **Warm** | Last 30 days | Active memories. Normal search ranking. |
+| **Cold** | Older than 30 days | Low activation. Compressed. Still searchable. |
+
+### ACT-R Activation Formula
+
+Each memory has an activation score computed using the ACT-R base-level learning equation:
+
+```
+activation = sigmoid( ln( sum( t_j ^ -0.5 ) ) + salience )
+```
+
+Where:
+- `t_j` = days since the j-th access
+- `salience` = memory importance (0-1)
+- More accesses --> higher activation
+- Recent accesses --> higher activation
+- High salience --> base activation boost
+
+### Compression
+
+Cold memories with very low activation (< 0.1) are eligible for compression:
+- Grouped by namespace (session/project)
+- Content concatenated into a summary
+- Original memories marked as not-latest (preserved, not deleted)
+- Summary becomes the new searchable entry
+
+Run maintenance manually:
+
+```bash
+memrosetta maintain --user alice
+```
+
 ## Features
 
-**Search** -- Hybrid retrieval combining FTS5 (BM25), vector similarity (bge-small-en-v1.5), and Reciprocal Rank Fusion.
+**Search** -- Hybrid retrieval combining FTS5 (BM25), vector similarity (bge-small-en-v1.5), and Reciprocal Rank Fusion. Better recall than either approach alone.
 
-**Contradiction Detection** -- Local NLI model (nli-deberta-v3-xsmall, 71MB) automatically detects when new facts contradict existing ones.
+**Contradiction Detection** -- Local NLI model (nli-deberta-v3-xsmall, 71MB) automatically detects when new facts contradict existing ones. No LLM needed.
 
 **Adaptive Forgetting** -- ACT-R activation scoring. Frequently accessed memories rank higher. Unused memories fade but are never deleted.
 
@@ -144,6 +290,126 @@ When connected via MCP, your AI tool gets these capabilities:
 | `memrosetta_relate` | Link related memories |
 | `memrosetta_invalidate` | Mark a memory as outdated |
 | `memrosetta_count` | Count stored memories |
+
+## REST API
+
+### Store a memory
+
+```http
+POST /api/memories
+Content-Type: application/json
+
+{
+  "userId": "alice",
+  "content": "Prefers dark mode in all applications",
+  "memoryType": "preference",
+  "keywords": ["dark-mode", "ui"],
+  "confidence": 0.95
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "memoryId": "mem-WL5IFdnKmMjx9_ES",
+    "userId": "alice",
+    "content": "Prefers dark mode in all applications",
+    "memoryType": "preference",
+    "learnedAt": "2026-03-24T06:42:00Z",
+    "tier": "warm",
+    "activationScore": 1.0
+  }
+}
+```
+
+### Search memories
+
+```http
+POST /api/search
+Content-Type: application/json
+
+{
+  "userId": "alice",
+  "query": "UI preferences",
+  "limit": 5,
+  "filters": {
+    "onlyLatest": true,
+    "minConfidence": 0.5
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "results": [
+      {
+        "memory": {
+          "memoryId": "mem-WL5IFdnKmMjx9_ES",
+          "content": "Prefers dark mode in all applications",
+          "memoryType": "preference",
+          "activationScore": 0.87
+        },
+        "score": 0.92,
+        "matchType": "hybrid"
+      }
+    ],
+    "totalCount": 1,
+    "queryTimeMs": 3.2
+  }
+}
+```
+
+### Working memory
+
+```http
+GET /api/working-memory?userId=alice&maxTokens=3000
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "memories": [
+      {
+        "content": "Prefers dark mode in all applications",
+        "memoryType": "preference",
+        "activationScore": 0.87
+      }
+    ],
+    "totalTokens": 2847,
+    "memoryCount": 12
+  }
+}
+```
+
+### Create relation
+
+```http
+POST /api/relations
+Content-Type: application/json
+
+{
+  "srcMemoryId": "mem-abc123",
+  "dstMemoryId": "mem-def456",
+  "relationType": "updates",
+  "reason": "Hourly rate changed from $50 to $40"
+}
+```
+
+### Invalidate a memory
+
+```http
+POST /api/memories/mem-abc123/invalidate
+```
 
 ## CLI Reference
 
@@ -270,6 +536,7 @@ pnpm bench:hybrid --converter fact --llm-provider openai  # With LLM extraction
 | Forgetting model | No | No | No | **Yes (ACT-R)** |
 | Time model | No | No | No | **4 timestamps** |
 | Relational versioning | No | No | No | **5 relation types** |
+| Cross-tool sharing | No | No | No | **Yes, one local DB** |
 | Protocol | REST API | REST API | REST API | **MCP + CLI + REST** |
 | Setup | Complex | Complex | Complex | **One command** |
 

@@ -8,6 +8,7 @@ import { Compatibility } from './components/Compatibility'
 import { HowItWorks } from './components/HowItWorks'
 import { NotAnotherRag } from './components/NotAnotherRag'
 import { Features } from './components/Features'
+import { Architecture } from './components/Architecture'
 import { Comparison } from './components/Comparison'
 import { Footer } from './components/Footer'
 
@@ -24,6 +25,7 @@ function App() {
       <HowItWorks lang={lang} />
       <NotAnotherRag lang={lang} />
       <Features lang={lang} />
+      <Architecture lang={lang} />
       <Comparison lang={lang} />
       <Footer lang={lang} />
     </div>
