@@ -46,7 +46,6 @@ export async function run(options: InitOptions): Promise<void> {
 
   const wantClaudeCode = hasFlag(args, '--claude-code');
   const wantCursor = hasFlag(args, '--cursor');
-  const wantMCP = hasFlag(args, '--mcp');
 
   // 1. Always: init DB
   const dbPath = db ?? getDefaultDbPath();
@@ -63,10 +62,16 @@ export async function run(options: InitOptions): Promise<void> {
     integrations: {},
   };
 
-  // 2. --claude-code: register hooks + MCP + CLAUDE.md
+  // 2. Always: register MCP server (base functionality)
+  registerGenericMCP();
+  (result.integrations as Record<string, unknown>).mcp = {
+    registered: true,
+    path: getGenericMCPPath(),
+  };
+
+  // 3. --claude-code: additionally register hooks + CLAUDE.md
   if (wantClaudeCode) {
     const hooksOk = registerClaudeCodeHooks();
-    registerGenericMCP();
     const claudeMdOk = updateClaudeMd();
 
     (result.integrations as Record<string, unknown>).claudeCode = {
@@ -76,7 +81,7 @@ export async function run(options: InitOptions): Promise<void> {
     };
   }
 
-  // 3. --cursor: register MCP in .cursor/
+  // 4. --cursor: additionally register MCP in .cursor/
   if (wantCursor) {
     registerCursorMCP();
 
@@ -86,19 +91,9 @@ export async function run(options: InitOptions): Promise<void> {
     };
   }
 
-  // 4. --mcp: register generic MCP
-  if (wantMCP) {
-    registerGenericMCP();
-
-    (result.integrations as Record<string, unknown>).mcp = {
-      registered: true,
-      path: getGenericMCPPath(),
-    };
-  }
-
   // 5. Output
   if (format === 'text') {
-    printTextOutput(result, wantClaudeCode, wantCursor, wantMCP);
+    printTextOutput(result, wantClaudeCode, wantCursor);
     return;
   }
 
@@ -109,7 +104,6 @@ function printTextOutput(
   result: InitResult,
   claudeCode: boolean,
   cursor: boolean,
-  mcp: boolean,
 ): void {
   const w = (s: string) => process.stdout.write(s);
 
@@ -118,6 +112,7 @@ function printTextOutput(
   w('  ----------------------------------------\n');
   w(`  Database:   ${result.database.path}`);
   w(result.database.created ? ' (created)\n' : ' (already exists)\n');
+  w(`  MCP Server: ${result.integrations.mcp!.path} (always included)\n`);
 
   if (claudeCode) {
     const cc = result.integrations.claudeCode!;
@@ -127,7 +122,6 @@ function printTextOutput(
       w('  Stop Hook:  SKIPPED (Claude Code not found at ~/.claude)\n');
       w('              Install Claude Code first, then run "memrosetta init --claude-code" again.\n');
     }
-    w('  MCP Server: ~/.mcp.json (search past memories)\n');
     if (cc.claudeMd) {
       w('  CLAUDE.md:  ~/.claude/CLAUDE.md (memory instructions added)\n');
     } else {
@@ -139,25 +133,15 @@ function printTextOutput(
     w(`  Cursor MCP: ${result.integrations.cursor!.path}\n`);
   }
 
-  if (mcp) {
-    w(`  MCP Server: ${result.integrations.mcp!.path}\n`);
-  }
-
   w('\n');
 
-  if (!claudeCode && !cursor && !mcp) {
-    w('  Tip: Use --claude-code, --cursor, or --mcp to set up integrations.\n');
+  if (!claudeCode && !cursor) {
+    w('  MCP is ready. Add --claude-code or --cursor for tool-specific setup.\n');
     w('  Example: memrosetta init --claude-code\n');
     w('\n');
   }
 
   if (claudeCode) {
-    w('  How it works:\n');
-    w('  ----------------------------------------\n');
-    w('  1. You chat with Claude Code as usual\n');
-    w('  2. When the session ends, conversations are saved automatically\n');
-    w('  3. In future sessions, Claude can search past memories via MCP\n');
-    w('\n');
-    w('  Restart Claude Code to activate.\n');
+    w('  Restart Claude Code to activate.\n\n');
   }
 }

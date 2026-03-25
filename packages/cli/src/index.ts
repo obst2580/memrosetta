@@ -25,14 +25,13 @@ Commands:
   compress         Run compression only
 
 Init Options:
-  --claude-code       Set up Claude Code hooks + MCP + CLAUDE.md
-  --cursor            Set up Cursor MCP config (~/.cursor/mcp.json)
-  --mcp               Set up generic MCP server (~/.mcp.json)
+  (no flag)           Initialize DB + MCP server (base setup)
+  --claude-code       Additionally: Claude Code hooks + CLAUDE.md
+  --cursor            Additionally: Cursor MCP config (~/.cursor/mcp.json)
 
 Reset Options:
-  --claude-code       Remove Claude Code hooks + MCP + CLAUDE.md section
+  --claude-code       Remove Claude Code hooks + CLAUDE.md section
   --cursor            Remove Cursor MCP config
-  --mcp               Remove generic MCP config
   --all               Remove all integrations
 
 Global Options:
@@ -43,10 +42,9 @@ Global Options:
   --version, -v       Show version
 
 Examples:
-  memrosetta init                          # Initialize DB only
-  memrosetta init --claude-code            # DB + Claude Code hooks + MCP
-  memrosetta init --cursor                 # DB + Cursor MCP
-  memrosetta init --mcp                    # DB + generic MCP
+  memrosetta init                          # DB + MCP server
+  memrosetta init --claude-code            # DB + MCP + Claude Code hooks
+  memrosetta init --cursor                 # DB + MCP + Cursor config
   memrosetta status --format text          # Show all status
   memrosetta reset --claude-code           # Remove Claude Code integration
   memrosetta reset --all                   # Remove all integrations

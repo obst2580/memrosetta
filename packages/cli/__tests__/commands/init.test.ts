@@ -54,7 +54,7 @@ describe('init command', () => {
     stdoutSpy.mockRestore();
   });
 
-  it('initializes DB without integration flags (json)', async () => {
+  it('initializes DB + MCP without integration flags (json)', async () => {
     await run({
       args: [],
       format: 'json',
@@ -65,10 +65,12 @@ describe('init command', () => {
     const parsed = JSON.parse(written);
     expect(parsed.database.path).toBe('/tmp/test-init.db');
     expect(parsed.database.created).toBe(true);
-    expect(parsed.integrations).toEqual({});
+    // MCP is always registered as base functionality
+    expect(parsed.integrations.mcp).toBeDefined();
+    expect(parsed.integrations.mcp.registered).toBe(true);
 
     expect(mockRegisterClaudeCodeHooks).not.toHaveBeenCalled();
-    expect(mockRegisterGenericMCP).not.toHaveBeenCalled();
+    expect(mockRegisterGenericMCP).toHaveBeenCalled(); // MCP always called
     expect(mockRegisterCursorMCP).not.toHaveBeenCalled();
   });
 
@@ -153,7 +155,7 @@ describe('init command', () => {
     expect(allOutput).toContain('MCP Server');
   });
 
-  it('shows tip when no integration flags used (text)', async () => {
+  it('shows MCP info when no integration flags used (text)', async () => {
     await run({
       args: [],
       format: 'text',
@@ -161,6 +163,6 @@ describe('init command', () => {
     });
 
     const allOutput = stdoutSpy.mock.calls.map((c) => c[0]).join('');
-    expect(allOutput).toContain('Tip: Use --claude-code');
+    expect(allOutput).toContain('MCP is ready');
   });
 });
