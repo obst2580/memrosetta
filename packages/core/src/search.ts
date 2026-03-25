@@ -51,6 +51,15 @@ export function buildFtsQuery(rawQuery: string): string {
   // Fall back to all tokens if every token was a stop word
   const tokens = meaningful.length > 0 ? meaningful : allTokens;
 
+  if (tokens.length === 0) return '';
+  if (tokens.length === 1) return `"${tokens[0]}"`;
+
+  // Short queries (2-4 tokens): AND mode for higher precision
+  // Long queries (5+ tokens): OR mode to avoid overly restrictive matching
+  if (tokens.length <= 4) {
+    return tokens.map(t => `"${t}"`).join(' AND ');
+  }
+
   return tokens.map(t => `"${t}"`).join(' OR ');
 }
 
@@ -410,13 +419,14 @@ export function vectorSearch(
  * Merge FTS and vector search results using Reciprocal Rank Fusion.
  *
  * RRF score = sum over lists of 1 / (k + rank).
- * Higher k smooths the influence of rank; 60 is the standard default
- * from Cormack, Clarke & Buettcher (2009).
+ * Lower k gives sharper rank discrimination; k=20 is better suited for
+ * memory search with smaller result sets (5-50 items) than the web-search
+ * default of 60.
  */
 export function rrfMerge(
   ftsResults: readonly { readonly memory: Memory; readonly rank: number }[],
   vecResults: readonly { readonly memory: Memory; readonly rank: number }[],
-  k: number = 60,
+  k: number = 20,
   limit: number = 10,
 ): readonly SearchResult[] {
   const scores = new Map<string, { score: number; memory: Memory }>();
@@ -502,6 +512,78 @@ function applyActivationWeighting(
   }).sort((a, b) => b.score - a.score);
 }
 
+// ---------------------------------------------------------------------------
+// Deduplication
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove duplicate search results based on content identity.
+ * Keeps the first (highest-scored) occurrence when duplicates exist.
+ */
+export function deduplicateResults(
+  results: readonly SearchResult[],
+): readonly SearchResult[] {
+  const seen = new Set<string>();
+  const deduped: SearchResult[] = [];
+
+  for (const result of results) {
+    const key = result.memory.content.toLowerCase().trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(result);
+  }
+
+  return deduped;
+}
+
+// ---------------------------------------------------------------------------
+// Keyword boost
+// ---------------------------------------------------------------------------
+
+/**
+ * Boost scores for results whose memory keywords overlap with the query tokens.
+ * Each matching keyword adds a 10% boost, capped at 50%.
+ */
+export function applyKeywordBoost(
+  results: readonly SearchResult[],
+  queryTokens: readonly string[],
+): readonly SearchResult[] {
+  if (queryTokens.length === 0) return results;
+
+  const querySet = new Set(queryTokens.map(t => t.toLowerCase()));
+
+  return results.map(result => {
+    const memKeywords = (result.memory.keywords ?? []).map(k => k.toLowerCase());
+    const overlap = memKeywords.filter(k => querySet.has(k)).length;
+
+    if (overlap === 0) return result;
+
+    // 10% boost per matching keyword, capped at 50%
+    const boost = Math.min(overlap * 0.1, 0.5);
+
+    return {
+      ...result,
+      score: result.score * (1 + boost),
+    };
+  }).sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Extract meaningful tokens from a query string (same logic as buildFtsQuery).
+ * Exported for use in keyword boosting.
+ */
+export function extractQueryTokens(rawQuery: string): readonly string[] {
+  const allTokens = rawQuery
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(t => t.length > 0)
+    .map(t => t.replace(FTS5_SPECIAL_CHARS, ''))
+    .filter(t => t.length > 0);
+
+  const meaningful = allTokens.filter(t => !STOP_WORDS.has(t));
+  return meaningful.length > 0 ? meaningful : allTokens;
+}
+
 /**
  * Update access tracking for memories returned in search results.
  * Increments access_count and sets last_accessed_at.
@@ -543,6 +625,9 @@ export function searchMemories(
 ): SearchResponse {
   const startTime = performance.now();
 
+  // Extract query tokens for keyword boosting
+  const queryTokens = extractQueryTokens(query.query);
+
   // Always run FTS search
   const ftsResults = ftsSearch(db, query);
 
@@ -550,7 +635,9 @@ export function searchMemories(
 
   // If no vector, return FTS-only results (backward compatible)
   if (!queryVec) {
-    finalResults = applyActivationWeighting(ftsResults);
+    const weighted = applyActivationWeighting(ftsResults);
+    const boosted = applyKeywordBoost(weighted, queryTokens);
+    finalResults = deduplicateResults(boosted);
 
     // Update access tracking for returned results
     updateAccessTracking(db, finalResults.map(r => r.memory.memoryId));
@@ -578,17 +665,23 @@ export function searchMemories(
         matchType: 'vector' as const,
       }));
 
-    finalResults = applyActivationWeighting(vecOnly);
+    const weighted = applyActivationWeighting(vecOnly);
+    const boosted = applyKeywordBoost(weighted, queryTokens);
+    finalResults = deduplicateResults(boosted);
   } else if (vecResults.length === 0) {
     // If vector returned nothing, return FTS-only
-    finalResults = applyActivationWeighting(ftsResults);
+    const weighted = applyActivationWeighting(ftsResults);
+    const boosted = applyKeywordBoost(weighted, queryTokens);
+    finalResults = deduplicateResults(boosted);
   } else {
     // RRF merge
     const ftsRanked = ftsResults.map((r, i) => ({ memory: r.memory, rank: i }));
     const vecRanked = vecResults.map((r, i) => ({ memory: r.memory, rank: i }));
 
-    const merged = rrfMerge(ftsRanked, vecRanked, 60, query.limit ?? DEFAULT_LIMIT);
-    finalResults = applyActivationWeighting(merged);
+    const merged = rrfMerge(ftsRanked, vecRanked, 20, query.limit ?? DEFAULT_LIMIT);
+    const weighted = applyActivationWeighting(merged);
+    const boosted = applyKeywordBoost(weighted, queryTokens);
+    finalResults = deduplicateResults(boosted);
   }
 
   // Update access tracking for returned results

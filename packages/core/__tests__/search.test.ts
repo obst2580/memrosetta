@@ -9,6 +9,9 @@ import {
   bruteForceVectorSearch,
   rrfMerge,
   searchMemories,
+  deduplicateResults,
+  applyKeywordBoost,
+  extractQueryTokens,
 } from '../src/search.js';
 import { serializeEmbedding, type MemoryRow } from '../src/mapper.js';
 import type { SearchQuery, Memory } from '@memrosetta/types';
@@ -65,8 +68,8 @@ function insertTestMemory(
 // buildFtsQuery
 // ---------------------------------------------------------------------------
 describe('buildFtsQuery', () => {
-  it('converts simple multi-word query to OR-joined quoted tokens', () => {
-    expect(buildFtsQuery('hello world')).toBe('"hello" OR "world"');
+  it('converts short multi-word query to AND-joined quoted tokens', () => {
+    expect(buildFtsQuery('hello world')).toBe('"hello" AND "world"');
   });
 
   it('escapes special FTS5 characters', () => {
@@ -89,23 +92,26 @@ describe('buildFtsQuery', () => {
 
   it('handles query with punctuation like question marks', () => {
     const result = buildFtsQuery('What color is the car?');
-    // Stop words (what, is, the) are filtered for better relevance
-    expect(result).toBe('"color" OR "car"');
+    // Stop words (what, is, the) are filtered; 2 tokens -> AND mode
+    expect(result).toBe('"color" AND "car"');
   });
 
   it('filters stop words from queries', () => {
     const result = buildFtsQuery('When did Caroline go to the LGBTQ support group?');
-    expect(result).toBe('"caroline" OR "lgbtq" OR "support" OR "group"');
+    // 4 tokens -> AND mode
+    expect(result).toBe('"caroline" AND "lgbtq" AND "support" AND "group"');
   });
 
   it('falls back to all tokens when every token is a stop word', () => {
     const result = buildFtsQuery('is the');
-    expect(result).toBe('"is" OR "the"');
+    // 2 tokens -> AND mode
+    expect(result).toBe('"is" AND "the"');
   });
 
   it('handles query with multiple special characters', () => {
     const result = buildFtsQuery('a(b) c*d {e}');
-    expect(result).toBe('"ab" OR "cd" OR "e"');
+    // 3 tokens -> AND mode
+    expect(result).toBe('"ab" AND "cd" AND "e"');
   });
 
   it('filters out tokens that become empty after escaping', () => {
@@ -591,10 +597,11 @@ describe('searchMemories', () => {
 
     for (const r of result.results) {
       expect(r.score).toBeGreaterThanOrEqual(0);
-      expect(r.score).toBeLessThanOrEqual(1);
+      // Scores can exceed 1.0 due to keyword boost
+      expect(r.score).toBeLessThanOrEqual(2.0);
     }
-    // At least one should be 1.0 (best match)
-    expect(result.results.some(r => r.score === 1.0)).toBe(true);
+    // Best match should have a high score (at least 1.0 before boost)
+    expect(result.results.some(r => r.score >= 1.0)).toBe(true);
   });
 
   it('sets matchType to fts for all results', () => {
@@ -1089,5 +1096,213 @@ describe('searchMemories hybrid', () => {
     // Should fall back to FTS results since no vector matches
     expect(result.results.length).toBe(1);
     expect(result.results[0].matchType).toBe('fts');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildFtsQuery AND/OR strategy
+// ---------------------------------------------------------------------------
+describe('buildFtsQuery AND/OR strategy', () => {
+  it('uses AND for 2-token queries', () => {
+    expect(buildFtsQuery('red car')).toBe('"red" AND "car"');
+  });
+
+  it('uses AND for 3-token queries', () => {
+    expect(buildFtsQuery('big red car')).toBe('"big" AND "red" AND "car"');
+  });
+
+  it('uses AND for 4-token queries', () => {
+    expect(buildFtsQuery('big red fast car')).toBe('"big" AND "red" AND "fast" AND "car"');
+  });
+
+  it('uses OR for 5+ token queries', () => {
+    expect(buildFtsQuery('big red fast shiny car')).toBe(
+      '"big" OR "red" OR "fast" OR "shiny" OR "car"',
+    );
+  });
+
+  it('counts only meaningful tokens for AND/OR threshold', () => {
+    // "the big and red car" -> stop words removed -> "big", "red", "car" (3 tokens -> AND)
+    expect(buildFtsQuery('the big and red car')).toBe('"big" AND "red" AND "car"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deduplicateResults
+// ---------------------------------------------------------------------------
+describe('deduplicateResults', () => {
+  function makeMockResult(id: string, content: string, score: number): SearchResult {
+    return {
+      memory: {
+        memoryId: id,
+        userId: 'user1',
+        memoryType: 'fact',
+        content,
+        learnedAt: '2025-01-01T00:00:00.000Z',
+        confidence: 1.0,
+        salience: 1.0,
+        isLatest: true,
+        keywords: [],
+        tier: 'warm',
+        activationScore: 1.0,
+        accessCount: 0,
+      },
+      score,
+      matchType: 'fts',
+    };
+  }
+
+  it('removes duplicate content, keeping highest-scored', () => {
+    const results = [
+      makeMockResult('mem-1', 'TypeScript is great', 0.9),
+      makeMockResult('mem-2', 'typescript is great', 0.5),  // same content, lower case
+      makeMockResult('mem-3', 'Python is also great', 0.3),
+    ];
+
+    const deduped = deduplicateResults(results);
+
+    expect(deduped.length).toBe(2);
+    expect(deduped[0].memory.memoryId).toBe('mem-1');
+    expect(deduped[1].memory.memoryId).toBe('mem-3');
+  });
+
+  it('preserves order for non-duplicate results', () => {
+    const results = [
+      makeMockResult('mem-a', 'first content', 0.9),
+      makeMockResult('mem-b', 'second content', 0.5),
+    ];
+
+    const deduped = deduplicateResults(results);
+    expect(deduped.length).toBe(2);
+    expect(deduped[0].memory.memoryId).toBe('mem-a');
+    expect(deduped[1].memory.memoryId).toBe('mem-b');
+  });
+
+  it('handles empty results', () => {
+    expect(deduplicateResults([])).toEqual([]);
+  });
+
+  it('handles single result', () => {
+    const results = [makeMockResult('mem-1', 'only one', 1.0)];
+    expect(deduplicateResults(results).length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyKeywordBoost
+// ---------------------------------------------------------------------------
+describe('applyKeywordBoost', () => {
+  function makeMockResult(
+    id: string,
+    keywords: readonly string[],
+    score: number,
+  ): SearchResult {
+    return {
+      memory: {
+        memoryId: id,
+        userId: 'user1',
+        memoryType: 'fact',
+        content: `content for ${id}`,
+        learnedAt: '2025-01-01T00:00:00.000Z',
+        confidence: 1.0,
+        salience: 1.0,
+        isLatest: true,
+        keywords,
+        tier: 'warm',
+        activationScore: 1.0,
+        accessCount: 0,
+      },
+      score,
+      matchType: 'fts',
+    };
+  }
+
+  it('boosts results with matching keywords', () => {
+    const results = [
+      makeMockResult('mem-1', ['typescript', 'javascript'], 0.5),
+      makeMockResult('mem-2', ['python'], 0.5),
+    ];
+
+    const boosted = applyKeywordBoost(results, ['typescript']);
+
+    // mem-1 should be boosted (1 keyword match -> 10% boost)
+    expect(boosted[0].memory.memoryId).toBe('mem-1');
+    expect(boosted[0].score).toBeCloseTo(0.55, 5);
+    // mem-2 should be unchanged
+    expect(boosted[1].score).toBeCloseTo(0.5, 5);
+  });
+
+  it('caps boost at 50%', () => {
+    const results = [
+      makeMockResult('mem-1', ['a', 'b', 'c', 'd', 'e', 'f', 'g'], 1.0),
+    ];
+
+    const boosted = applyKeywordBoost(results, ['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+
+    // 7 matches * 10% = 70%, capped at 50%
+    expect(boosted[0].score).toBeCloseTo(1.5, 5);
+  });
+
+  it('returns unchanged results when no keyword overlap', () => {
+    const results = [
+      makeMockResult('mem-1', ['typescript'], 0.8),
+    ];
+
+    const boosted = applyKeywordBoost(results, ['python']);
+    expect(boosted[0].score).toBeCloseTo(0.8, 5);
+  });
+
+  it('returns unchanged results for empty query tokens', () => {
+    const results = [
+      makeMockResult('mem-1', ['typescript'], 0.8),
+    ];
+
+    const boosted = applyKeywordBoost(results, []);
+    expect(boosted[0].score).toBeCloseTo(0.8, 5);
+  });
+
+  it('handles results with no keywords', () => {
+    const results = [
+      makeMockResult('mem-1', [], 0.5),
+    ];
+
+    const boosted = applyKeywordBoost(results, ['typescript']);
+    expect(boosted[0].score).toBeCloseTo(0.5, 5);
+  });
+
+  it('re-sorts by boosted score', () => {
+    const results = [
+      makeMockResult('mem-1', ['python'], 0.55),
+      makeMockResult('mem-2', ['typescript', 'javascript'], 0.5),
+    ];
+
+    const boosted = applyKeywordBoost(results, ['typescript', 'javascript']);
+
+    // mem-2 gets 2 * 10% = 20% boost: 0.5 * 1.2 = 0.6
+    // mem-1 gets 0% boost: stays at 0.55
+    // mem-2 should now rank higher
+    expect(boosted[0].memory.memoryId).toBe('mem-2');
+    expect(boosted[0].score).toBeCloseTo(0.6, 5);
+    expect(boosted[1].memory.memoryId).toBe('mem-1');
+    expect(boosted[1].score).toBeCloseTo(0.55, 5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractQueryTokens
+// ---------------------------------------------------------------------------
+describe('extractQueryTokens', () => {
+  it('extracts meaningful tokens from query', () => {
+    const tokens = extractQueryTokens('What color is the car?');
+    expect(tokens).toEqual(['color', 'car']);
+  });
+
+  it('falls back to all tokens for stop-word-only queries', () => {
+    const tokens = extractQueryTokens('is the');
+    expect(tokens).toEqual(['is', 'the']);
+  });
+
+  it('returns empty for empty query', () => {
+    expect(extractQueryTokens('')).toEqual([]);
   });
 });
