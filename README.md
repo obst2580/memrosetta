@@ -3,6 +3,8 @@
   <p align="center">One persistent memory shared across all your AI tools. Local SQLite. Zero cloud.</p>
 </p>
 
+> 한국어 버전: [README.ko.md](README.ko.md)
+
 ```bash
 npm install -g @memrosetta/cli && memrosetta init --claude-code
 ```
