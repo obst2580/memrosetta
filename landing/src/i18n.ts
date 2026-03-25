@@ -310,8 +310,6 @@ memrosetta maintain --user alice`,
           name: '@memrosetta/llm',
           description: 'Optional LLM-based fact extraction from conversation transcripts. Supports OpenAI and Anthropic. Used by Stop Hook layer 2 for higher-quality extraction.',
         },
-        {
-        },
       ],
       dependencyGraph: 'cli, mcp, api, claude-code --> core --> embeddings',
     },
@@ -706,8 +704,6 @@ memrosetta maintain --user alice`,
         {
           name: '@memrosetta/llm',
           description: '대화 트랜스크립트에서 LLM 기반 사실 추출 (선택사항). OpenAI와 Anthropic 지원. Stop Hook 레이어 2에서 더 높은 품질의 추출에 사용.',
-        },
-        {
         },
       ],
       dependencyGraph: 'cli, mcp, api, claude-code --> core --> embeddings',
