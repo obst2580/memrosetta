@@ -8,7 +8,8 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": ["dist", "README.md", "LICENSE"],
   "scripts": {

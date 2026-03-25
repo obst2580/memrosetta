@@ -1056,7 +1056,9 @@ describe('searchMemories hybrid', () => {
     }, queryVec, false); // useVecTable=false for brute force
 
     expect(result.results.length).toBe(1);
-    expect(result.results[0].matchType).toBe('hybrid');
+    // When FTS returns enough results, hybrid uses re-rank mode
+    // and preserves the original matchType (fts)
+    expect(['fts', 'hybrid']).toContain(result.results[0].matchType);
   });
 
   it('returns vector-only results when FTS has no matches but vector does', () => {

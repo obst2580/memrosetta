@@ -467,6 +467,63 @@ export function rrfMerge(
     }));
 }
 
+/**
+ * Weighted RRF merge: FTS results get higher weight than vector results.
+ *
+ * ftsWeight=2.0 means FTS rank contributes 2x more than vector rank.
+ * This preserves FTS precision while allowing vector to boost semantically
+ * similar results that FTS might rank lower.
+ *
+ * Items found by both FTS and vector get the combined score (strongest signal).
+ */
+export function rrfMergeWeighted(
+  ftsResults: readonly { readonly memory: Memory; readonly rank: number }[],
+  vecResults: readonly { readonly memory: Memory; readonly rank: number }[],
+  k: number = 20,
+  limit: number = 10,
+  ftsWeight: number = 2.0,
+  vecWeight: number = 1.0,
+): readonly SearchResult[] {
+  const scores = new Map<string, { score: number; memory: Memory }>();
+
+  for (let i = 0; i < ftsResults.length; i++) {
+    const item = ftsResults[i];
+    const contribution = ftsWeight / (k + i + 1);
+    const existing = scores.get(item.memory.memoryId);
+    if (existing) {
+      existing.score += contribution;
+    } else {
+      scores.set(item.memory.memoryId, {
+        score: contribution,
+        memory: item.memory,
+      });
+    }
+  }
+
+  for (let i = 0; i < vecResults.length; i++) {
+    const item = vecResults[i];
+    const contribution = vecWeight / (k + i + 1);
+    const existing = scores.get(item.memory.memoryId);
+    if (existing) {
+      existing.score += contribution;
+    } else {
+      scores.set(item.memory.memoryId, {
+        score: contribution,
+        memory: item.memory,
+      });
+    }
+  }
+
+  return [...scores.entries()]
+    .sort((a, b) => b[1].score - a[1].score)
+    .slice(0, limit)
+    .map(([, { score, memory }]) => ({
+      memory,
+      score,
+      matchType: 'hybrid' as const,
+    }));
+}
+
 // ---------------------------------------------------------------------------
 // Cosine similarity (JS fallback)
 // ---------------------------------------------------------------------------
@@ -674,14 +731,45 @@ export function searchMemories(
     const boosted = applyKeywordBoost(weighted, queryTokens);
     finalResults = deduplicateResults(boosted);
   } else {
-    // RRF merge
-    const ftsRanked = ftsResults.map((r, i) => ({ memory: r.memory, rank: i }));
-    const vecRanked = vecResults.map((r, i) => ({ memory: r.memory, rank: i }));
+    // FTS-primary hybrid strategy:
+    // - If FTS returned enough results, use vector only as a re-ranker
+    //   (boost FTS items that also appear in vector results, but don't add new items)
+    // - If FTS returned few results, allow vector to add new items
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const ftsHasEnough = ftsResults.length >= limit;
 
-    const merged = rrfMerge(ftsRanked, vecRanked, 20, query.limit ?? DEFAULT_LIMIT);
-    const weighted = applyActivationWeighting(merged);
-    const boosted = applyKeywordBoost(weighted, queryTokens);
-    finalResults = deduplicateResults(boosted);
+    if (ftsHasEnough) {
+      // Re-rank mode: boost FTS results that vector also found
+      const vecIds = new Set(vecResults.map(r => r.memory.memoryId));
+      const reranked: SearchResult[] = ftsResults.map(r => ({
+        ...r,
+        score: r.score * (vecIds.has(r.memory.memoryId) ? 1.3 : 1.0),
+      }));
+      reranked.sort((a, b) => b.score - a.score);
+
+      const weighted = applyActivationWeighting(reranked);
+      const boosted = applyKeywordBoost(weighted, queryTokens);
+      finalResults = deduplicateResults(boosted);
+    } else {
+      // Fill mode: FTS results first, then vector adds new items
+      const ftsIds = new Set(ftsResults.map(r => r.memory.memoryId));
+      const ftsItems: SearchResult[] = [...ftsResults];
+
+      // Add vector-only results after FTS
+      for (const vr of vecResults) {
+        if (ftsItems.length >= limit) break;
+        if (ftsIds.has(vr.memory.memoryId)) continue;
+        ftsItems.push({
+          memory: vr.memory,
+          score: (1 - vr.distance) * 0.5, // Lower score than FTS items
+          matchType: 'hybrid' as const,
+        });
+      }
+
+      const weighted = applyActivationWeighting(ftsItems);
+      const boosted = applyKeywordBoost(weighted, queryTokens);
+      finalResults = deduplicateResults(boosted);
+    }
   }
 
   // Update access tracking for returned results
