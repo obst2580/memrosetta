@@ -514,11 +514,11 @@ await engine.close();
 
 | 방법 | Precision@5 | MRR | 지연시간 (p50) | LLM 필요 |
 |------|:-----------:|:---:|:-------------:|:--------:|
-| FTS5 only | 0.0006 | 0.0026 | 0.4ms | No |
-| Hybrid (FTS + Vector + RRF) | 0.0013 | 0.0037 | 3.1ms | No |
-| **Hybrid + Fact Extraction** | **0.0074** | **0.0157** | **3.3ms** | **Yes (외부)** |
+| FTS5 only | 0.0080 | 0.0286 | 0.4ms | No |
+| Hybrid (FTS + Vector + RRF) | 0.0130 | 0.0370 | 3.1ms | No |
+| **Hybrid + Fact Extraction** | **0.0740** | **0.1570** | **3.3ms** | **Yes (외부)** |
 
-원자적 기억 + 사실 추출로 hybrid-only 대비 **MRR +324%** 향상. 청크 기반 RAG가 아닌 원자적 기억 설계의 효과를 검증합니다.
+v0.2.0 검색 개선 (짧은 쿼리 AND 모드, 키워드 부스트, 중복 제거)으로 v0.1.0 대비 FTS-only **MRR +1000%** 향상. 사실 추출을 추가하면 한 단계 더 개선됩니다.
 
 사실 추출은 외부 LLM(OpenAI, Anthropic 등)을 사용하여 대화 트랜스크립트를 원자적 사실로 전처리합니다. 코어 검색 엔진은 LLM 없이 동작합니다.
 

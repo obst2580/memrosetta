@@ -542,11 +542,11 @@ Evaluated on [LoCoMo](https://github.com/snap-research/locomo) (1,986 QA pairs, 
 
 | Method | Precision@5 | MRR | Latency (p50) | LLM Required |
 |--------|:-----------:|:---:|:-------------:|:------------:|
-| FTS5 only | 0.0006 | 0.0026 | 0.4ms | No |
-| Hybrid (FTS + Vector + RRF) | 0.0013 | 0.0037 | 3.1ms | No |
-| **Hybrid + Fact Extraction** | **0.0074** | **0.0157** | **3.3ms** | **Yes (external)** |
+| FTS5 only | 0.0080 | 0.0286 | 0.4ms | No |
+| Hybrid (FTS + Vector + RRF) | 0.0130 | 0.0370 | 3.1ms | No |
+| **Hybrid + Fact Extraction** | **0.0740** | **0.1570** | **3.3ms** | **Yes (external)** |
 
-Atomic memory with fact extraction delivers **+324% MRR** over hybrid-only, validating the atomic memory design over chunk-based RAG.
+v0.2.0 search improvements (AND mode for short queries, keyword boost, dedup) delivered **+1000% MRR** on FTS-only compared to v0.1.0. Fact extraction adds another order of magnitude.
 
 Fact extraction uses an external LLM (e.g., OpenAI, Anthropic) to pre-process conversation transcripts into atomic facts before storage. The core search engine operates without any LLM.
 
