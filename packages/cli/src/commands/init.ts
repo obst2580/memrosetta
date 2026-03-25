@@ -1,7 +1,11 @@
 import { existsSync } from 'node:fs';
 import { getEngine, getDefaultDbPath } from '../engine.js';
 import { output, type OutputFormat } from '../output.js';
-import { hasFlag } from '../parser.js';
+import { hasFlag, optionalOption } from '../parser.js';
+import {
+  getConfig,
+  writeConfig,
+} from '../hooks/config.js';
 import {
   isClaudeCodeInstalled,
   registerClaudeCodeHooks,
@@ -12,6 +16,14 @@ import {
   getCursorMcpConfigPath,
   getCursorRulesPath,
 } from '../integrations/index.js';
+
+type EmbeddingPresetFlag = 'en' | 'multi' | 'ko';
+
+const LANG_FLAG_TO_PRESET: Record<EmbeddingPresetFlag, 'en' | 'multilingual' | 'ko'> = {
+  en: 'en',
+  multi: 'multilingual',
+  ko: 'ko',
+};
 
 interface InitOptions {
   readonly args: readonly string[];
@@ -49,6 +61,24 @@ export async function run(options: InitOptions): Promise<void> {
 
   const wantClaudeCode = hasFlag(args, '--claude-code');
   const wantCursor = hasFlag(args, '--cursor');
+
+  // Parse --lang flag for embedding preset
+  const langFlag = optionalOption(args, '--lang') as EmbeddingPresetFlag | undefined;
+  const embeddingPreset = langFlag ? LANG_FLAG_TO_PRESET[langFlag] : undefined;
+
+  if (langFlag && !LANG_FLAG_TO_PRESET[langFlag]) {
+    process.stderr.write(
+      `Unknown --lang value: "${langFlag}". Supported: en, multi, ko\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  // Save embedding preset to config if specified
+  if (embeddingPreset) {
+    const config = getConfig();
+    writeConfig({ ...config, embeddingPreset });
+  }
 
   // 1. Always: init DB
   const dbPath = db ?? getDefaultDbPath();
@@ -118,6 +148,15 @@ function printTextOutput(
   w(`  Database:   ${result.database.path}`);
   w(result.database.created ? ' (created)\n' : ' (already exists)\n');
   w(`  MCP Server: ${result.integrations.mcp!.path} (always included)\n`);
+
+  const currentConfig = getConfig();
+  if (currentConfig.embeddingPreset && currentConfig.embeddingPreset !== 'en') {
+    const presetLabels: Record<string, string> = {
+      multilingual: 'multilingual (multilingual-e5-small)',
+      ko: 'Korean (ko-sroberta-multitask)',
+    };
+    w(`  Embeddings: ${presetLabels[currentConfig.embeddingPreset] ?? currentConfig.embeddingPreset}\n`);
+  }
 
   if (claudeCode) {
     const cc = result.integrations.claudeCode!;

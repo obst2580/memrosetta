@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { getDefaultDbPath } from '../engine.js';
 import { output, type OutputFormat } from '../output.js';
+import { getConfig } from '../hooks/config.js';
 import {
   isClaudeCodeConfigured,
   isGenericMCPConfigured,
@@ -72,8 +73,9 @@ export async function run(options: StatusOptions): Promise<void> {
     } else {
       process.stdout.write('Users: 0\n');
     }
+    const embeddingModelLabel = getEmbeddingModelLabel();
     process.stdout.write(
-      `Embeddings: ${embeddingsEnabled ? 'enabled (bge-small-en-v1.5)' : 'disabled'}\n`,
+      `Embeddings: ${embeddingsEnabled ? `enabled (${embeddingModelLabel})` : 'disabled'}\n`,
     );
 
     process.stdout.write('\nIntegrations:\n');
@@ -101,6 +103,8 @@ export async function run(options: StatusOptions): Promise<void> {
       memories: memoryCount,
       users: userList,
       embeddings: embeddingsEnabled,
+      embeddingModel: getEmbeddingModelLabel(),
+      embeddingPreset: getConfig().embeddingPreset ?? 'en',
       integrations: {
         claudeCode: claudeCodeStatus,
         cursor: cursorStatus,
@@ -115,4 +119,16 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+const PRESET_MODEL_LABELS: Record<string, string> = {
+  en: 'bge-small-en-v1.5',
+  multilingual: 'multilingual-e5-small',
+  ko: 'ko-sroberta-multitask',
+};
+
+function getEmbeddingModelLabel(): string {
+  const config = getConfig();
+  const preset = config.embeddingPreset ?? 'en';
+  return PRESET_MODEL_LABELS[preset] ?? preset;
 }

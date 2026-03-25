@@ -494,6 +494,36 @@ await engine.maintain('alice');
 await engine.close();
 ```
 
+## Language Support
+
+MemRosetta supports multiple embedding models for different languages:
+
+| Language | Flag | Model | Dimension |
+|----------|------|-------|-----------|
+| English (default) | -- | bge-small-en-v1.5 (33MB) | 384 |
+| Multilingual (94 langs) | `--lang multi` | multilingual-e5-small (100MB) | 384 |
+| Korean | `--lang ko` | ko-sroberta-multitask (110MB) | 768* |
+
+*Korean model uses 768 dimensions. Requires a fresh database if switching from English/multilingual (384 dim).
+
+```bash
+memrosetta init --claude-code                # English (default)
+memrosetta init --claude-code --lang multi   # Multilingual
+memrosetta init --claude-code --lang ko      # Korean
+```
+
+As a library:
+
+```typescript
+import { HuggingFaceEmbedder } from '@memrosetta/embeddings';
+
+// Preset
+const embedder = new HuggingFaceEmbedder({ preset: 'multilingual' });
+
+// Custom model
+const custom = new HuggingFaceEmbedder({ modelId: 'Xenova/some-model' });
+```
+
 ## Packages
 
 | Package | Description |
@@ -572,7 +602,7 @@ pnpm bench:mock        # Quick benchmark (no LLM needed)
 - [x] CLI + REST API + MCP server
 - [x] Claude Code integration
 - [x] LoCoMo benchmarks
-- [ ] Multilingual embeddings (Korean, Japanese, etc.)
+- [x] Multilingual embeddings (Korean, multilingual, configurable presets)
 - [ ] PostgreSQL adapter (team/server use)
 - [ ] Profile builder (stable + dynamic user profiles)
 

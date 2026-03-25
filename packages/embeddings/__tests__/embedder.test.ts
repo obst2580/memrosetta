@@ -1,5 +1,61 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { HuggingFaceEmbedder } from '../src/embedder.js';
+import { HuggingFaceEmbedder, EMBEDDING_PRESETS } from '../src/embedder.js';
+import type { EmbeddingPreset } from '../src/embedder.js';
+
+describe('HuggingFaceEmbedder presets (no model download)', () => {
+  it('default constructor uses en preset with dimension 384', () => {
+    const embedder = new HuggingFaceEmbedder();
+    expect(embedder.dimension).toBe(384);
+  });
+
+  it('preset "en" has dimension 384', () => {
+    const embedder = new HuggingFaceEmbedder({ preset: 'en' });
+    expect(embedder.dimension).toBe(384);
+  });
+
+  it('preset "multilingual" has dimension 384', () => {
+    const embedder = new HuggingFaceEmbedder({ preset: 'multilingual' });
+    expect(embedder.dimension).toBe(384);
+  });
+
+  it('preset "ko" has dimension 768', () => {
+    const embedder = new HuggingFaceEmbedder({ preset: 'ko' });
+    expect(embedder.dimension).toBe(768);
+  });
+
+  it('custom modelId defaults to dimension 384', () => {
+    const embedder = new HuggingFaceEmbedder({ modelId: 'some/custom-model' });
+    expect(embedder.dimension).toBe(384);
+  });
+
+  it('EMBEDDING_PRESETS contains all expected presets', () => {
+    const keys = Object.keys(EMBEDDING_PRESETS) as readonly EmbeddingPreset[];
+    expect(keys).toContain('en');
+    expect(keys).toContain('multilingual');
+    expect(keys).toContain('ko');
+    expect(keys).toHaveLength(3);
+  });
+
+  it('EMBEDDING_PRESETS.en has correct modelId', () => {
+    expect(EMBEDDING_PRESETS.en.modelId).toBe('Xenova/bge-small-en-v1.5');
+    expect(EMBEDDING_PRESETS.en.dimension).toBe(384);
+  });
+
+  it('EMBEDDING_PRESETS.multilingual has correct modelId', () => {
+    expect(EMBEDDING_PRESETS.multilingual.modelId).toBe('Xenova/multilingual-e5-small');
+    expect(EMBEDDING_PRESETS.multilingual.dimension).toBe(384);
+  });
+
+  it('EMBEDDING_PRESETS.ko has correct modelId', () => {
+    expect(EMBEDDING_PRESETS.ko.modelId).toBe('Xenova/ko-sroberta-nli-multitask');
+    expect(EMBEDDING_PRESETS.ko.dimension).toBe(768);
+  });
+
+  it('throws if not initialized (preset constructor)', async () => {
+    const embedder = new HuggingFaceEmbedder({ preset: 'multilingual' });
+    await expect(embedder.embed('test')).rejects.toThrow('not initialized');
+  });
+});
 
 describe('HuggingFaceEmbedder', () => {
   let embedder: HuggingFaceEmbedder;

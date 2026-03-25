@@ -15,6 +15,7 @@ export interface MemRosettaConfig {
   readonly llmProvider?: 'openai' | 'anthropic';
   readonly llmApiKey?: string;
   readonly llmModel?: string;
+  readonly embeddingPreset?: 'en' | 'multilingual' | 'ko';
 }
 
 const DEFAULT_CONFIG: MemRosettaConfig = {

@@ -13,7 +13,8 @@ export async function getEngine(): Promise<SqliteMemoryEngine> {
   if (config.enableEmbeddings) {
     try {
       const { HuggingFaceEmbedder } = await import('@memrosetta/embeddings');
-      embedder = new HuggingFaceEmbedder();
+      const preset = config.embeddingPreset ?? 'en';
+      embedder = new HuggingFaceEmbedder({ preset });
       await embedder.initialize();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

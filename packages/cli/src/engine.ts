@@ -11,6 +11,7 @@ let cachedDbPath: string | null = null;
 interface EngineOptions {
   readonly db?: string;
   readonly noEmbeddings?: boolean;
+  readonly embeddingPreset?: 'en' | 'multilingual' | 'ko';
 }
 
 async function createEngineInstance(options: EngineOptions) {
@@ -27,7 +28,8 @@ async function createEngineInstance(options: EngineOptions) {
   if (!options.noEmbeddings) {
     try {
       const { HuggingFaceEmbedder } = await import('@memrosetta/embeddings');
-      embedder = new HuggingFaceEmbedder();
+      const preset = options.embeddingPreset ?? 'en';
+      embedder = new HuggingFaceEmbedder({ preset });
       await embedder.initialize();
     } catch {
       // Embeddings not available, proceed with FTS-only
