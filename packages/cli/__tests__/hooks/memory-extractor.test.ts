@@ -133,6 +133,133 @@ describe('memory-extractor', () => {
 
       expect(memories).toHaveLength(0);
     });
+
+    it('should filter out assistant messages with 2+ code blocks', () => {
+      const data: TranscriptData = {
+        turns: [
+          {
+            role: 'assistant',
+            content:
+              'Here is the implementation:\n\n```typescript\nfunction add(a: number, b: number) {\n  return a + b;\n}\n```\n\nAnd the test:\n\n```typescript\ntest("add", () => {\n  expect(add(1, 2)).toBe(3);\n});\n```',
+          },
+        ],
+        cwd: '/home/user/project',
+        sessionId: 'abcdefgh-1234',
+      };
+
+      const memories = extractMemories(data, 'testuser');
+
+      expect(memories).toHaveLength(0);
+    });
+
+    it('should filter out tool-use messages from assistant', () => {
+      const toolMessages = [
+        'Reading file packages/core/src/engine.ts to understand the structure...',
+        'Let me check the current implementation of the search function.',
+        "I'll create a new file for the test suite.",
+        'Here is the updated configuration for your project.',
+        'Done. All 15 tests pass.',
+        'Installing dependencies for the project.',
+        '5 files found matching the pattern.',
+      ];
+
+      for (const msg of toolMessages) {
+        const data: TranscriptData = {
+          turns: [{ role: 'assistant', content: msg }],
+          cwd: '/home/user/project',
+          sessionId: 'abcdefgh-1234',
+        };
+
+        const memories = extractMemories(data, 'testuser');
+        expect(memories).toHaveLength(0);
+      }
+    });
+
+    it('should filter out very long messages (>2000 chars)', () => {
+      const longContent = 'A '.repeat(1100); // >2000 chars
+
+      const data: TranscriptData = {
+        turns: [{ role: 'assistant', content: longContent }],
+        cwd: '/home/user/project',
+        sessionId: 'abcdefgh-1234',
+      };
+
+      const memories = extractMemories(data, 'testuser');
+
+      expect(memories).toHaveLength(0);
+    });
+
+    it('should filter out code-heavy messages', () => {
+      const data: TranscriptData = {
+        turns: [
+          {
+            role: 'assistant',
+            content:
+              'const result = fn({ key: value }); if (x < y) { return (a + b); } export default fn();',
+          },
+        ],
+        cwd: '/home/user/project',
+        sessionId: 'abcdefgh-1234',
+      };
+
+      const memories = extractMemories(data, 'testuser');
+
+      expect(memories).toHaveLength(0);
+    });
+
+    it('should keep meaningful decisions and facts', () => {
+      const data: TranscriptData = {
+        turns: [
+          {
+            role: 'assistant',
+            content:
+              'We decided to use OAuth2 with PKCE for the authentication system because it provides better security for SPAs.',
+          },
+          {
+            role: 'user',
+            content:
+              'I prefer using functional programming patterns over object-oriented in this codebase',
+          },
+        ],
+        cwd: '/home/user/project',
+        sessionId: 'abcdefgh-1234',
+      };
+
+      const memories = extractMemories(data, 'testuser');
+
+      expect(memories.length).toBe(2);
+      expect(memories[0].content).toContain('OAuth2');
+      expect(memories[1].content).toContain('functional programming');
+    });
+
+    it('should filter Korean confirmations from user', () => {
+      const confirmations = ['네', '아니', '진행', '계속', '좋아', '해봐', 'ㅇㅇ', 'ㅋㅋ', 'ㄱㄱ'];
+
+      for (const msg of confirmations) {
+        const data: TranscriptData = {
+          turns: [{ role: 'user', content: msg }],
+          cwd: '/home/user/project',
+          sessionId: 'abcdefgh-1234',
+        };
+
+        const memories = extractMemories(data, 'testuser');
+        expect(memories).toHaveLength(0);
+      }
+    });
+
+    it('should skip user messages shorter than 20 chars', () => {
+      const data: TranscriptData = {
+        turns: [
+          { role: 'user', content: 'do that now please' },
+        ],
+        cwd: '/home/user/project',
+        sessionId: 'abcdefgh-1234',
+      };
+
+      const memories = extractMemories(data, 'testuser');
+
+      expect(memories).toHaveLength(0);
+    });
   });
 
   describe('classifyTurn', () => {

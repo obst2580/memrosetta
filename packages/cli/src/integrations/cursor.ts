@@ -18,15 +18,26 @@ When you need information not in the current context, search past memories.
 No need to specify userId -- it defaults to the system username.
 
 ### When to store (memrosetta_store)
-When you encounter important information, store it immediately.
-No need to specify userId -- it defaults to the system username.
-- **decision**: technical choices, architecture decisions
-- **fact**: key facts about projects or systems
-- **preference**: user preferences and coding style
-- **event**: completed work, deployments, incidents
+You MUST store the following immediately when encountered:
+- **Decisions**: Any technical choice ("We decided to use X", "Going with approach B")
+- **Facts**: Key project facts ("API runs on port 8080", "Database is PostgreSQL")
+- **Preferences**: User preferences ("I prefer functional style", "Always use TypeScript")
+- **Events**: Completed milestones ("Auth system deployed", "Migration completed")
 
-Do NOT store: code itself, debugging steps, simple confirmations.
-Always include keywords for better search quality.
+Always include 2-3 keywords. Example:
+  content: "Decided to use OAuth2 with PKCE for auth"
+  type: "decision"
+  keywords: "auth, oauth2, pkce"
+
+Do NOT store:
+- Code itself (belongs in git)
+- File operations ("Created file X", "Modified Y")
+- Debugging steps and attempts
+- Simple confirmations or acknowledgments
+- Implementation details (HOW you did it)
+
+Focus on WHAT was decided, learned, or achieved -- not HOW.
+No need to specify userId -- it defaults to the system username.
 
 ### When to relate (memrosetta_relate)
 When new information updates or contradicts existing memories, create a relation.

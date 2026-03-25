@@ -171,20 +171,26 @@ When you need information not in the current context, search past memories.
 No need to specify userId -- it defaults to the system username.
 
 ### Store (mcp__memory-service__memrosetta_store)
-Every response, check if there is something worth storing. If yes, store immediately.
-No need to specify userId -- it defaults to the system username.
-- **decision**: tech choices, architecture decisions
-- **fact**: key facts about projects or systems
-- **preference**: user preferences
-- **event**: completed work, incidents
+You MUST store the following immediately when encountered:
+- **Decisions**: Any technical choice ("We decided to use X", "Going with approach B")
+- **Facts**: Key project facts ("API runs on port 8080", "Database is PostgreSQL")
+- **Preferences**: User preferences ("I prefer functional style", "Always use TypeScript")
+- **Events**: Completed milestones ("Auth system deployed", "Migration completed")
+
+Always include 2-3 keywords. Example:
+  content: "Decided to use OAuth2 with PKCE for auth"
+  type: "decision"
+  keywords: "auth, oauth2, pkce"
 
 Do NOT store:
-- Code itself (that belongs in git)
-- Intermediate steps, debugging attempts
-- Simple confirmations ("yes", "go ahead")
-- Content already in CLAUDE.md
+- Code itself (belongs in git)
+- File operations ("Created file X", "Modified Y")
+- Debugging steps and attempts
+- Simple confirmations or acknowledgments
+- Implementation details (HOW you did it)
 
-Always include keywords -- they directly affect search quality.
+Focus on WHAT was decided, learned, or achieved -- not HOW.
+No need to specify userId -- it defaults to the system username.
 `;
 
   writeFileSync(CLAUDE_MD_PATH, existing + memorySection, 'utf-8');

@@ -20,7 +20,7 @@ export interface MemRosettaConfig {
 
 const DEFAULT_CONFIG: MemRosettaConfig = {
   dbPath: DB_PATH,
-  enableEmbeddings: false,
+  enableEmbeddings: true,
   maxRecallResults: 5,
   minQueryLength: 5,
   maxContextChars: 2000,

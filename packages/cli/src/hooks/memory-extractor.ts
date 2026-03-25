@@ -82,15 +82,24 @@ export function resolveUserId(_cwd: string): string {
 
 /**
  * Extract the first meaningful sentence or line from text.
- * Skips code blocks, markdown headers, and formatting.
+ * Skips code blocks, markdown headers, formatting, file paths, and commands.
  */
 function extractFirstSentence(text: string, maxLen: number = 200): string {
   const lines = text.split('\n');
   for (const line of lines) {
     const trimmed = line.trim();
+
+    // Skip empty, code, tables, lists, markdown formatting
     if (!trimmed) continue;
     if (trimmed.startsWith('```')) continue;
     if (trimmed.startsWith('|')) continue;
+    if (trimmed.startsWith('- [')) continue;
+    if (trimmed.startsWith('> ')) continue;
+    if (trimmed.startsWith('import ') || trimmed.startsWith('export ') || trimmed.startsWith('const ') || trimmed.startsWith('function ')) continue;
+    if (trimmed.startsWith('{') || trimmed.startsWith('}')) continue;
+    if (/^[\s\-=*#]+$/.test(trimmed)) continue;
+
+    // Headers are good summaries
     if (trimmed.startsWith('#')) {
       const headerText = trimmed.replace(/^#+\s*/, '');
       if (headerText.length > 10) {
@@ -100,42 +109,70 @@ function extractFirstSentence(text: string, maxLen: number = 200): string {
       }
       continue;
     }
-    if (trimmed.startsWith('- [') || trimmed.startsWith('> ')) continue;
-    if (trimmed.length < 10) continue;
+
+    // Skip lines that look like file paths or commands
+    if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('$')) continue;
+
+    // Must have actual words (not just symbols/numbers)
+    if (trimmed.length < 15) continue;
+    if (!/[a-zA-Z\uAC00-\uD7AF]{3,}/.test(trimmed)) continue;
 
     return trimmed.length > maxLen
       ? trimmed.slice(0, maxLen - 3) + '...'
       : trimmed;
   }
+
+  // Fallback: first 200 chars
   const clean = text.replace(/\s+/g, ' ').trim();
   return clean.length > maxLen ? clean.slice(0, maxLen - 3) + '...' : clean;
 }
 
 /**
  * Determine if a turn contains meaningful content worth storing.
+ * Aggressively filters out code, tool-use messages, and noise.
  */
 function isWorthStoring(turn: ConversationTurn): boolean {
   const content = turn.content;
 
+  // Too short
   if (content.length < 30) return false;
 
+  // User: skip confirmations, commands, short questions
   if (turn.role === 'user') {
     const lower = content.toLowerCase().trim();
-    if (lower.length < 15) return false;
+    if (lower.length < 20) return false;
     if (lower.startsWith('/')) return false;
-    if (/^(y|n|yes|no|ok)$/i.test(lower)) return false;
+    if (/^(y|n|yes|no|ok|ㅇㅇ|ㅋㅋ|ㄱㄱ|네|아니|진행|계속|좋아|해봐)$/i.test(lower)) return false;
     return true;
   }
 
+  // Assistant: AGGRESSIVE filtering
+  // Skip tool-use heavy responses (they're about HOW, not WHAT was decided)
   const codeBlockCount = (content.match(/```/g) || []).length / 2;
-  const textLines = content.split('\n').filter((l) => {
-    const t = l.trim();
-    return (
-      t && !t.startsWith('```') && !t.startsWith('|') && !t.startsWith('- [')
-    );
-  });
+  if (codeBlockCount >= 2) return false;
 
-  if (codeBlockCount > 3 && textLines.length < 5) return false;
+  // Skip file operations and tool results
+  const toolPatterns = [
+    /^(reading|writing|creating|editing|deleting|running|checking|searching|looking)/i,
+    /^(file|directory|folder) (created|modified|deleted|found)/i,
+    /^(let me|i'll|i will) (read|check|look|search|find|create|write|edit)/i,
+    /^(here('s| is| are) (the|a|an))/i,
+    /^\d+ (files?|tests?|errors?|warnings?) (found|passed|failed|created)/i,
+    /^(done|completed|finished|success|failed|error)/i,
+    /^(installing|building|compiling|running tests)/i,
+  ];
+
+  for (const pattern of toolPatterns) {
+    if (pattern.test(content.trim())) return false;
+  }
+
+  // Skip very long messages (likely code dumps or detailed outputs)
+  if (content.length > 2000) return false;
+
+  // Skip messages that are mostly code (more backticks than words)
+  const wordCount = content.split(/\s+/).length;
+  const codeChars = (content.match(/[{}();=<>]/g) || []).length;
+  if (codeChars > wordCount * 0.3) return false;
 
   return true;
 }
