@@ -90,9 +90,6 @@ function mcpServerEntry(): Record<string, unknown> {
   return {
     command: 'npx',
     args: ['-y', '@memrosetta/mcp'],
-    env: {
-      MEMROSETTA_EMBEDDINGS: 'false',
-    },
   };
 }
 
