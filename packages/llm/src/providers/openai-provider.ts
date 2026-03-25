@@ -1,8 +1,9 @@
 import type { LLMProvider, LLMProviderConfig, CompletionOptions } from '../types.js';
 import type { z } from 'zod';
+import type OpenAIClient from 'openai';
 
 export class OpenAIProvider implements LLMProvider {
-  private client: any = null;
+  private client: OpenAIClient | null = null;
   private readonly config: LLMProviderConfig;
 
   constructor(config: Partial<LLMProviderConfig> & { readonly model?: string } = {}) {
@@ -14,7 +15,7 @@ export class OpenAIProvider implements LLMProvider {
     };
   }
 
-  private async getClient(): Promise<any> {
+  private async getClient(): Promise<OpenAIClient> {
     if (this.client) return this.client;
     try {
       const { default: OpenAI } = await import('openai');

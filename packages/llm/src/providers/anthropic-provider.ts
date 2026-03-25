@@ -1,8 +1,18 @@
 import type { LLMProvider, LLMProviderConfig, CompletionOptions } from '../types.js';
 import type { z } from 'zod';
+import type AnthropicClient from '@anthropic-ai/sdk';
+
+interface AnthropicContentBlock {
+  readonly type: string;
+  readonly text?: string;
+}
+
+interface AnthropicMessage {
+  readonly content: readonly AnthropicContentBlock[];
+}
 
 export class AnthropicProvider implements LLMProvider {
-  private client: any = null;
+  private client: AnthropicClient | null = null;
   private readonly config: LLMProviderConfig;
 
   constructor(config: Partial<LLMProviderConfig> & { readonly model?: string } = {}) {
@@ -14,7 +24,7 @@ export class AnthropicProvider implements LLMProvider {
     };
   }
 
-  private async getClient(): Promise<any> {
+  private async getClient(): Promise<AnthropicClient> {
     if (this.client) return this.client;
     try {
       const { default: Anthropic } = await import('@anthropic-ai/sdk');
@@ -85,11 +95,12 @@ export class AnthropicProvider implements LLMProvider {
   }
 }
 
-function extractText(response: any): string {
-  const blocks: readonly any[] = response.content ?? [];
+function extractText(response: AnthropicMessage): string {
+  const blocks: readonly AnthropicContentBlock[] = response.content ?? [];
   const textParts = blocks
-    .filter((b: any) => b.type === 'text')
-    .map((b: any) => b.text as string);
+    .filter((b): b is AnthropicContentBlock & { readonly text: string } =>
+      b.type === 'text' && typeof b.text === 'string')
+    .map(b => b.text);
   return textParts.join('');
 }
 

@@ -47,9 +47,14 @@ export const EMBEDDING_PRESETS: Readonly<
  * Uses q8 quantized model for fast CPU inference.
  * Model is downloaded on first use and cached locally.
  */
+interface FeatureExtractionPipeline {
+  (text: string, options?: Record<string, unknown>): Promise<{ readonly data: Float32Array; readonly dims: readonly number[] }>;
+  dispose?: () => Promise<void>;
+}
+
 export class HuggingFaceEmbedder implements Embedder {
   readonly dimension: number;
-  private pipeline: any = null;
+  private pipeline: FeatureExtractionPipeline | null = null;
   private readonly modelId: string;
 
   constructor(options?: { readonly modelId?: string; readonly preset?: EmbeddingPreset }) {
@@ -72,7 +77,7 @@ export class HuggingFaceEmbedder implements Embedder {
 
     this.pipeline = await pipeline('feature-extraction', this.modelId, {
       dtype: 'q8',
-    });
+    }) as unknown as FeatureExtractionPipeline;
   }
 
   async close(): Promise<void> {
@@ -84,7 +89,7 @@ export class HuggingFaceEmbedder implements Embedder {
 
   async embed(text: string): Promise<Float32Array> {
     this.ensureInitialized();
-    const result = await this.pipeline(text, {
+    const result = await this.pipeline!(text, {
       pooling: 'mean',
       normalize: true,
     });

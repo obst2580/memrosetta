@@ -20,8 +20,18 @@ export interface ContradictionDetector {
   ): Promise<readonly ContradictionResult[]>;
 }
 
+interface ClassificationResult {
+  readonly label: string;
+  readonly score: number;
+}
+
+interface ClassificationPipeline {
+  (text: string, options?: Record<string, unknown>): Promise<readonly ClassificationResult[] | readonly (readonly ClassificationResult[])[]>;
+  dispose?: () => Promise<void>;
+}
+
 export class NLIContradictionDetector implements ContradictionDetector {
-  private pipeline: any = null;
+  private pipeline: ClassificationPipeline | null = null;
   private readonly modelId: string;
 
   constructor(options?: { readonly modelId?: string }) {
@@ -36,7 +46,7 @@ export class NLIContradictionDetector implements ContradictionDetector {
 
     this.pipeline = await pipeline('text-classification', this.modelId, {
       dtype: 'q8',
-    });
+    }) as unknown as ClassificationPipeline;
   }
 
   async close(): Promise<void> {
@@ -49,7 +59,7 @@ export class NLIContradictionDetector implements ContradictionDetector {
   async detect(textA: string, textB: string): Promise<ContradictionResult> {
     this.ensureInitialized();
 
-    const result = await this.pipeline(textA, {
+    const result = await this.pipeline!(textA, {
       text_pair: textB,
       top_k: null,
     });
@@ -67,15 +77,17 @@ export class NLIContradictionDetector implements ContradictionDetector {
     return results;
   }
 
-  private parseResult(result: any): ContradictionResult {
+  private parseResult(result: readonly ClassificationResult[] | readonly (readonly ClassificationResult[])[]): ContradictionResult {
     // @huggingface/transformers text-classification with top_k: null returns
     // an array of { label, score } sorted by score descending.
-    // With top_k not set, returns just the top result.
-    const classifications: readonly { label: string; score: number }[] =
-      Array.isArray(result) ? result : [result];
+    // May return nested arrays for batched input.
+    const flat: readonly ClassificationResult[] =
+      result.length > 0 && Array.isArray(result[0])
+        ? (result as readonly (readonly ClassificationResult[])[])[0]
+        : result as readonly ClassificationResult[];
 
     // Find the highest-scoring classification
-    const top = classifications.reduce((best, current) =>
+    const top = flat.reduce((best, current) =>
       current.score > best.score ? current : best,
     );
 
