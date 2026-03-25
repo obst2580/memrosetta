@@ -1,3 +1,4 @@
+import { userInfo } from 'node:os';
 import type { MemoryInput, MemoryType } from '@memrosetta/types';
 import type { ConversationTurn, TranscriptData } from './transcript-parser.js';
 
@@ -75,18 +76,8 @@ export function extractKeywords(text: string): readonly string[] {
   return [...keywords];
 }
 
-export function resolveUserId(cwd: string): string {
-  const parts = cwd.split('/');
-  const dirname = parts[parts.length - 1] || 'unknown';
-
-  if (cwd.includes('com_project') || cwd.includes('work')) {
-    return `work/${dirname}`;
-  }
-  if (cwd.includes('personal_project') || cwd.includes('personal')) {
-    return `personal/${dirname}`;
-  }
-
-  return dirname;
+export function resolveUserId(_cwd: string): string {
+  return userInfo().username;
 }
 
 /**

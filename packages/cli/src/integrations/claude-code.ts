@@ -164,16 +164,15 @@ export function updateClaudeMd(): boolean {
 ${marker}
 
 MCP server \`memory-service\` provides long-term memory across sessions.
-
-### userId
-Use your system username (run \`whoami\` if unsure). All projects share one memory pool.
-Use keywords to distinguish projects when storing.
+userId defaults to the system username -- no need to specify it.
 
 ### Search (mcp__memory-service__memrosetta_search)
 When you need information not in the current context, search past memories.
+No need to specify userId -- it defaults to the system username.
 
 ### Store (mcp__memory-service__memrosetta_store)
 Every response, check if there is something worth storing. If yes, store immediately.
+No need to specify userId -- it defaults to the system username.
 - **decision**: tech choices, architecture decisions
 - **fact**: key facts about projects or systems
 - **preference**: user preferences

@@ -1,6 +1,7 @@
 import { getEngine } from '../engine.js';
 import { output, type OutputFormat } from '../output.js';
-import { requireOption } from '../parser.js';
+import { optionalOption } from '../parser.js';
+import { getDefaultUserId } from '../hooks/config.js';
 
 interface CompressOptions {
   readonly args: readonly string[];
@@ -12,7 +13,7 @@ interface CompressOptions {
 export async function run(options: CompressOptions): Promise<void> {
   const { args, format, db, noEmbeddings } = options;
 
-  const userId = requireOption(args, '--user', 'user');
+  const userId = optionalOption(args, '--user') ?? getDefaultUserId();
 
   const engine = await getEngine({ db, noEmbeddings });
   const result = await engine.compress(userId);

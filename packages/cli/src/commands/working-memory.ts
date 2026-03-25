@@ -1,6 +1,7 @@
 import { getEngine } from '../engine.js';
 import { output, type OutputFormat } from '../output.js';
-import { requireOption, optionalOption } from '../parser.js';
+import { optionalOption } from '../parser.js';
+import { getDefaultUserId } from '../hooks/config.js';
 
 interface WorkingMemoryOptions {
   readonly args: readonly string[];
@@ -12,7 +13,7 @@ interface WorkingMemoryOptions {
 export async function run(options: WorkingMemoryOptions): Promise<void> {
   const { args, format, db, noEmbeddings } = options;
 
-  const userId = requireOption(args, '--user', 'user');
+  const userId = optionalOption(args, '--user') ?? getDefaultUserId();
   const maxTokensStr = optionalOption(args, '--max-tokens');
   const maxTokens = maxTokensStr ? parseInt(maxTokensStr, 10) : undefined;
 

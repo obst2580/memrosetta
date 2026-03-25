@@ -121,7 +121,7 @@ Store an atomic memory.
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--user` | string | Yes | - | User identifier |
+| `--user` | string | No | system username | User identifier |
 | `--content` | string | Yes* | - | Memory content text |
 | `--type` | enum | Yes* | - | `fact`, `preference`, `decision`, `event` |
 | `--namespace` | string | No | - | Category or grouping label |
@@ -210,7 +210,7 @@ Search across memories using hybrid retrieval (FTS5 + vector + RRF).
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--user` | string | Yes | - | User identifier |
+| `--user` | string | No | system username | User identifier |
 | `--query` | string | Yes | - | Search query text |
 | `--limit` | number | No | `5` | Maximum number of results |
 | `--namespace` | string | No | - | Filter by namespace |
@@ -356,7 +356,7 @@ Count the number of memories for a user.
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--user` | string | Yes | - | User identifier |
+| `--user` | string | No | system username | User identifier |
 
 **Examples:**
 
@@ -395,7 +395,7 @@ Delete all memories for a user. Requires `--confirm` flag as a safety measure.
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--user` | string | Yes | - | User identifier |
+| `--user` | string | No | system username | User identifier |
 | `--confirm` | flag | Yes | - | Safety confirmation flag |
 
 **Examples:**
@@ -541,7 +541,7 @@ Ingest a Claude Code conversation transcript (JSONL format) and extract memories
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--user` | string | Yes | - | User identifier |
+| `--user` | string | No | system username | User identifier |
 | `--file` | string | No | - | Path to JSONL transcript file |
 | `--namespace` | string | No | `session-<id>` | Namespace for ingested memories |
 
@@ -600,7 +600,7 @@ Retrieve the working memory context for a user -- the highest-activation memorie
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--user` | string | Yes | - | User identifier |
+| `--user` | string | No | system username | User identifier |
 | `--max-tokens` | number | No | `3000` | Maximum token budget |
 
 **Examples:**
@@ -672,7 +672,7 @@ Run full maintenance for a user: recompute activation scores, update tiers, and 
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--user` | string | Yes | - | User identifier |
+| `--user` | string | No | system username | User identifier |
 
 **Behavior:**
 1. Recomputes activation scores for all memories using the ACT-R base-level learning equation.
@@ -736,7 +736,7 @@ Run compression only (without recomputing activation scores or updating tiers).
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--user` | string | Yes | - | User identifier |
+| `--user` | string | No | system username | User identifier |
 
 **Behavior:**
 - Groups cold memories with low activation by namespace.
@@ -1023,8 +1023,8 @@ memrosetta status --format text
 ### Store and retrieve memories
 
 ```bash
-memrosetta store --user alice --content "Uses PostgreSQL for all projects" --type fact --keywords "postgresql,database"
-memrosetta search --user alice --query "database choice" --format text
+memrosetta store --content "Uses PostgreSQL for all projects" --type fact --keywords "postgresql,database"
+memrosetta search --query "database choice" --format text
 ```
 
 ### Link related memories

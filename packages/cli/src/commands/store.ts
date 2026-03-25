@@ -2,6 +2,7 @@ import type { MemoryInput, MemoryType } from '@memrosetta/types';
 import { getEngine } from '../engine.js';
 import { output, outputError, type OutputFormat } from '../output.js';
 import { requireOption, optionalOption, hasFlag } from '../parser.js';
+import { getDefaultUserId } from '../hooks/config.js';
 
 const VALID_TYPES = new Set(['fact', 'preference', 'decision', 'event']);
 
@@ -29,16 +30,16 @@ export async function run(options: StoreOptions): Promise<void> {
     const raw = await readStdin();
     try {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (!parsed.userId || !parsed.content || !parsed.memoryType) {
+      if (!parsed.content || !parsed.memoryType) {
         outputError(
-          'stdin JSON must have userId, content, and memoryType',
+          'stdin JSON must have content and memoryType',
           format,
         );
         process.exitCode = 1;
         return;
       }
       input = {
-        userId: String(parsed.userId),
+        userId: parsed.userId ? String(parsed.userId) : getDefaultUserId(),
         content: String(parsed.content),
         memoryType: String(parsed.memoryType) as MemoryType,
         namespace: parsed.namespace ? String(parsed.namespace) : undefined,
@@ -57,7 +58,7 @@ export async function run(options: StoreOptions): Promise<void> {
       return;
     }
   } else {
-    const userId = requireOption(args, '--user', 'user');
+    const userId = optionalOption(args, '--user') ?? getDefaultUserId();
     const content = requireOption(args, '--content', 'content');
     const memoryType = requireOption(args, '--type', 'type');
 

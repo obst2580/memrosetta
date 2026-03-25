@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import type { MemoryInput, MemoryType } from '@memrosetta/types';
 import { getEngine } from '../engine.js';
 import { output, outputError, type OutputFormat } from '../output.js';
-import { requireOption, optionalOption } from '../parser.js';
+import { optionalOption } from '../parser.js';
+import { getDefaultUserId } from '../hooks/config.js';
 import { parseTranscriptContent } from '../hooks/transcript-parser.js';
 import { classifyTurn } from '../hooks/memory-extractor.js';
 import type { ConversationTurn } from '../hooks/transcript-parser.js';
@@ -58,7 +59,7 @@ async function readStdin(): Promise<string> {
 export async function run(options: IngestOptions): Promise<void> {
   const { args, format, db, noEmbeddings } = options;
 
-  const userId = requireOption(args, '--user', 'user');
+  const userId = optionalOption(args, '--user') ?? getDefaultUserId();
   const file = optionalOption(args, '--file');
   const namespace = optionalOption(args, '--namespace');
 

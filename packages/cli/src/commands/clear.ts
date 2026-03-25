@@ -1,6 +1,7 @@
 import { getEngine } from '../engine.js';
 import { output, outputError, type OutputFormat } from '../output.js';
-import { requireOption, hasFlag } from '../parser.js';
+import { optionalOption, hasFlag } from '../parser.js';
+import { getDefaultUserId } from '../hooks/config.js';
 
 interface ClearOptions {
   readonly args: readonly string[];
@@ -12,7 +13,7 @@ interface ClearOptions {
 export async function run(options: ClearOptions): Promise<void> {
   const { args, format, db, noEmbeddings } = options;
 
-  const userId = requireOption(args, '--user', 'user');
+  const userId = optionalOption(args, '--user') ?? getDefaultUserId();
   const confirm = hasFlag(args, '--confirm');
 
   if (!confirm) {

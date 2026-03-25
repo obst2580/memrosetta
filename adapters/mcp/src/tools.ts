@@ -1,3 +1,4 @@
+import { userInfo } from 'node:os';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
@@ -6,12 +7,16 @@ import {
 import type { IMemoryEngine, RelationType } from '@memrosetta/types';
 import { z } from 'zod';
 
+function getDefaultUserId(): string {
+  return userInfo().username;
+}
+
 // ---------------------------------------------------------------------------
 // Input validation schemas
 // ---------------------------------------------------------------------------
 
 const storeSchema = z.object({
-  userId: z.string().min(1).max(256),
+  userId: z.string().min(1).max(256).optional(),
   content: z.string().min(1).max(10_000),
   memoryType: z.enum(['fact', 'preference', 'decision', 'event']),
   keywords: z.array(z.string().max(100)).max(50).optional(),
@@ -20,7 +25,7 @@ const storeSchema = z.object({
 });
 
 const searchSchema = z.object({
-  userId: z.string().min(1).max(256),
+  userId: z.string().min(1).max(256).optional(),
   query: z.string().min(1).max(1_000),
   limit: z.number().int().min(1).max(100).optional(),
 });
@@ -33,12 +38,12 @@ const relateSchema = z.object({
 });
 
 const workingMemorySchema = z.object({
-  userId: z.string().min(1).max(256),
+  userId: z.string().min(1).max(256).optional(),
   maxTokens: z.number().int().min(100).max(100_000).optional(),
 });
 
 const countSchema = z.object({
-  userId: z.string().min(1).max(256),
+  userId: z.string().min(1).max(256).optional(),
 });
 
 const invalidateSchema = z.object({
@@ -72,7 +77,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        userId: { type: 'string', description: 'User identifier' },
+        userId: { type: 'string', description: 'User identifier (defaults to system username)' },
         content: {
           type: 'string',
           description: 'The memory content (one atomic fact)',
@@ -93,7 +98,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         },
         confidence: { type: 'number', description: 'Confidence 0-1' },
       },
-      required: ['userId', 'content', 'memoryType'],
+      required: ['content', 'memoryType'],
     },
   },
   {
@@ -102,11 +107,11 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        userId: { type: 'string', description: 'User identifier' },
+        userId: { type: 'string', description: 'User identifier (defaults to system username)' },
         query: { type: 'string', description: 'Search query' },
         limit: { type: 'number', description: 'Max results (default 5)' },
       },
-      required: ['userId', 'query'],
+      required: ['query'],
     },
   },
   {
@@ -137,13 +142,13 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        userId: { type: 'string', description: 'User identifier' },
+        userId: { type: 'string', description: 'User identifier (defaults to system username)' },
         maxTokens: {
           type: 'number',
           description: 'Max tokens (default 3000)',
         },
       },
-      required: ['userId'],
+      required: [],
     },
   },
   {
@@ -152,9 +157,9 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        userId: { type: 'string', description: 'User identifier' },
+        userId: { type: 'string', description: 'User identifier (defaults to system username)' },
       },
-      required: ['userId'],
+      required: [],
     },
   },
   {
@@ -222,7 +227,7 @@ export async function handleToolCall(
     case 'memrosetta_store': {
       const validated = storeSchema.parse(args);
       const memory = await engine.store({
-        userId: validated.userId,
+        userId: validated.userId ?? getDefaultUserId(),
         content: validated.content,
         memoryType: validated.memoryType,
         keywords: validated.keywords,
@@ -237,7 +242,7 @@ export async function handleToolCall(
     case 'memrosetta_search': {
       const validated = searchSchema.parse(args);
       const response = await engine.search({
-        userId: validated.userId,
+        userId: validated.userId ?? getDefaultUserId(),
         query: validated.query,
         limit: validated.limit ?? 5,
         filters: { onlyLatest: true },
@@ -269,7 +274,7 @@ export async function handleToolCall(
     case 'memrosetta_working_memory': {
       const validated = workingMemorySchema.parse(args);
       const memories = await engine.workingMemory(
-        validated.userId,
+        validated.userId ?? getDefaultUserId(),
         validated.maxTokens,
       );
       const text = memories
@@ -285,12 +290,13 @@ export async function handleToolCall(
 
     case 'memrosetta_count': {
       const validated = countSchema.parse(args);
-      const count = await engine.count(validated.userId);
+      const userId = validated.userId ?? getDefaultUserId();
+      const count = await engine.count(userId);
       return {
         content: [
           {
             type: 'text',
-            text: `${count} memories stored for ${validated.userId}`,
+            text: `${count} memories stored for ${userId}`,
           },
         ],
       };

@@ -106,21 +106,20 @@ describe('MCP tools', () => {
       }
     });
 
-    it('store tool requires userId, content, memoryType', () => {
+    it('store tool requires content and memoryType (userId optional)', () => {
       const storeTool = TOOL_DEFINITIONS.find((t) => t.name === 'memrosetta_store');
       expect(storeTool).toBeDefined();
       expect(storeTool!.inputSchema.required).toEqual([
-        'userId',
         'content',
         'memoryType',
       ]);
     });
 
-    it('search tool requires userId and query', () => {
+    it('search tool requires query (userId optional)', () => {
       const searchTool = TOOL_DEFINITIONS.find(
         (t) => t.name === 'memrosetta_search',
       );
-      expect(searchTool!.inputSchema.required).toEqual(['userId', 'query']);
+      expect(searchTool!.inputSchema.required).toEqual(['query']);
     });
 
     it('relate tool requires srcMemoryId, dstMemoryId, relationType', () => {
@@ -134,18 +133,18 @@ describe('MCP tools', () => {
       ]);
     });
 
-    it('working_memory tool requires userId', () => {
+    it('working_memory tool has no required fields (userId optional)', () => {
       const wmTool = TOOL_DEFINITIONS.find(
         (t) => t.name === 'memrosetta_working_memory',
       );
-      expect(wmTool!.inputSchema.required).toEqual(['userId']);
+      expect(wmTool!.inputSchema.required).toEqual([]);
     });
 
-    it('count tool requires userId', () => {
+    it('count tool has no required fields (userId optional)', () => {
       const countTool = TOOL_DEFINITIONS.find(
         (t) => t.name === 'memrosetta_count',
       );
-      expect(countTool!.inputSchema.required).toEqual(['userId']);
+      expect(countTool!.inputSchema.required).toEqual([]);
     });
 
     it('invalidate tool requires memoryId', () => {

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, userInfo } from 'node:os';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 
 const MEMROSETTA_DIR = join(homedir(), '.memrosetta');
@@ -67,4 +67,8 @@ export function writeConfig(config: MemRosettaConfig): void {
 
 export function writeDefaultConfig(): void {
   writeConfig(DEFAULT_CONFIG);
+}
+
+export function getDefaultUserId(): string {
+  return userInfo().username;
 }

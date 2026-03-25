@@ -11,12 +11,15 @@ const MEMROSETTA_CURSOR_RULES = `
 ${MEMROSETTA_CURSOR_RULES_MARKER}
 
 MCP server \`memory-service\` provides persistent memory across sessions.
+userId defaults to the system username -- no need to specify it.
 
 ### When to search (memrosetta_search)
 When you need information not in the current context, search past memories.
+No need to specify userId -- it defaults to the system username.
 
 ### When to store (memrosetta_store)
-When you encounter important information, store it immediately:
+When you encounter important information, store it immediately.
+No need to specify userId -- it defaults to the system username.
 - **decision**: technical choices, architecture decisions
 - **fact**: key facts about projects or systems
 - **preference**: user preferences and coding style
@@ -30,6 +33,7 @@ When new information updates or contradicts existing memories, create a relation
 
 ### Working memory (memrosetta_working_memory)
 Call this at the start of complex tasks to load relevant context.
+No need to specify userId -- it defaults to the system username.
 `;
 
 // ---------------------------------------------------------------------------
