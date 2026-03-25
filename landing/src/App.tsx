@@ -3,6 +3,7 @@ import type { Lang } from './i18n'
 import { Header } from './components/Header'
 import { Hero } from './components/Hero'
 import { Problem } from './components/Problem'
+import { Demo } from './components/Demo'
 import { QuickStart } from './components/QuickStart'
 import { Compatibility } from './components/Compatibility'
 import { HowItWorks } from './components/HowItWorks'
@@ -20,6 +21,7 @@ function App() {
       <Header lang={lang} onLangChange={setLang} />
       <Hero lang={lang} />
       <Problem lang={lang} />
+      <Demo lang={lang} />
       <QuickStart lang={lang} />
       <Compatibility lang={lang} />
       <HowItWorks lang={lang} />
