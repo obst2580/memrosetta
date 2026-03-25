@@ -484,7 +484,6 @@ await engine.close();
 | `@memrosetta/api` | REST API (Hono) |
 | `@memrosetta/claude-code` | Claude Code integration (hooks + init) |
 | `@memrosetta/llm` | LLM-based fact extraction (OpenAI/Anthropic) -- optional |
-| `@memrosetta/obsidian` | Obsidian vault sync |
 
 ## Benchmarks
 
@@ -539,7 +538,6 @@ pnpm bench:mock        # Quick benchmark (no LLM needed)
 - [x] Working memory endpoint
 - [x] CLI + REST API + MCP server
 - [x] Claude Code integration
-- [x] Obsidian sync
 - [x] LoCoMo benchmarks
 - [ ] Multilingual embeddings (Korean, Japanese, etc.)
 - [ ] PostgreSQL adapter (team/server use)

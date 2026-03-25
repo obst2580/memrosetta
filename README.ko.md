@@ -486,7 +486,6 @@ await engine.close();
 | `@memrosetta/api` | REST API (Hono) |
 | `@memrosetta/claude-code` | Claude Code 연동 (hooks + init) |
 | `@memrosetta/llm` | LLM 기반 사실 추출 (OpenAI/Anthropic) -- 선택사항 |
-| `@memrosetta/obsidian` | Obsidian 볼트 동기화 |
 
 ## 벤치마크
 
@@ -541,7 +540,6 @@ pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 - [x] 작업 기억 엔드포인트
 - [x] CLI + REST API + MCP 서버
 - [x] Claude Code 연동
-- [x] Obsidian 동기화
 - [x] LoCoMo 벤치마크
 - [ ] 다국어 임베딩 (한국어, 일본어 등)
 - [ ] PostgreSQL 어댑터 (팀/서버 용도)
