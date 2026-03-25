@@ -4,27 +4,64 @@
 </p>
 
 ```bash
-npm install -g @memrosetta/cli
-memrosetta init --claude-code
-# Done. Your AI remembers everything now.
+npm install -g @memrosetta/cli && memrosetta init --claude-code
 ```
+
+---
+
+## What Actually Happens
+
+```
+Monday morning — Claude Code session:
+
+  You: "Let's use OAuth2 with PKCE for auth. JWT refresh tokens rotate on every use."
+  Claude: (stores decision via MCP → ~/.memrosetta/memories.db)
+
+  You: "API rate limit should be 100 req/min per user."
+  Claude: (stores fact via MCP)
+
+  Session ends. You close the terminal.
+
+---
+
+Tuesday — new Claude Code session, completely fresh context:
+
+  You: "What did we decide about auth?"
+  Claude: (searches MemRosetta via MCP)
+  Claude: "We decided on OAuth2 with PKCE. JWT refresh tokens rotate on every use."
+         → Found from Monday's session, automatically.
+
+---
+
+Tuesday afternoon — switch to Cursor for frontend work:
+
+  You: "What's the auth setup for the API?"
+  Cursor AI: (searches same MemRosetta DB)
+  Cursor AI: "OAuth2 with PKCE, rate limit 100 req/min."
+             → Same memories. Same DB. Different tool.
+```
+
+**One SQLite file. All your AI tools share it. No cloud. No config. It just works.**
 
 ---
 
 ## The Problem
 
+Every AI tool forgets everything between sessions:
+
 ```
-Session 1: "Our API uses Spring Boot on Azure. Auth is OAuth2 with PKCE."
-Session 2: "What's our tech stack?" -- AI has no idea
+Without MemRosetta:
+  Session 1: "Our API uses Spring Boot on Azure. Auth is OAuth2 with PKCE."
+  Session 2: "What's our tech stack?"  →  AI has no idea
 
-Session 1: "Let's go with approach B for the auth refactor."
-Session 2: "What did we decide?" -- gone
+  Session 1: "Let's go with approach B for the auth refactor."
+  Session 2: "What did we decide?"     →  Gone
 
-Session 1: (3 hours debugging) "The fix: set batch size to 4."
-Session 2: (same bug) starts from scratch
+  Session 1: (3 hours debugging) "The fix: set batch size to 4."
+  Session 2: (same bug)               →  Starts from scratch
 ```
 
-Every AI tool forgets everything between sessions. You re-explain, re-decide, re-debug. MemRosetta is a local memory engine that gives any AI tool persistent, searchable long-term memory -- stored in a single SQLite file on your machine.
+You re-explain, re-decide, re-debug. MemRosetta gives any AI tool persistent, searchable long-term memory.
 
 ## Quick Start
 

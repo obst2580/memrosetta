@@ -6,27 +6,64 @@
 > English version: [README.md](README.md)
 
 ```bash
-npm install -g @memrosetta/cli
-memrosetta init --claude-code
-# 끝. AI가 모든 것을 기억합니다.
+npm install -g @memrosetta/cli && memrosetta init --claude-code
 ```
+
+---
+
+## 실제로 이런 일이 일어납니다
+
+```
+월요일 오전 — Claude Code 세션:
+
+  나: "인증은 OAuth2 + PKCE로 가자. JWT refresh token은 매번 갱신."
+  Claude: (MCP로 결정 사항 저장 → ~/.memrosetta/memories.db)
+
+  나: "API rate limit은 사용자당 분당 100회로."
+  Claude: (MCP로 사실 저장)
+
+  세션 종료. 터미널을 닫음.
+
+---
+
+화요일 — 새 Claude Code 세션, 컨텍스트 완전 초기화:
+
+  나: "인증 어떻게 하기로 했지?"
+  Claude: (MemRosetta에서 MCP로 검색)
+  Claude: "OAuth2 + PKCE로 결정했고, JWT refresh token은 매번 갱신합니다."
+         → 월요일 세션에서 자동으로 찾아옴.
+
+---
+
+화요일 오후 — 프론트엔드 작업을 위해 Cursor로 전환:
+
+  나: "API 인증 설정이 어떻게 돼?"
+  Cursor AI: (같은 MemRosetta DB에서 검색)
+  Cursor AI: "OAuth2 + PKCE, rate limit 분당 100회."
+             → 같은 기억. 같은 DB. 다른 도구.
+```
+
+**SQLite 파일 하나. 모든 AI 도구가 공유. 클라우드 없음. 설정 없음. 그냥 됩니다.**
 
 ---
 
 ## 문제
 
+모든 AI 도구는 세션이 끝나면 모든 것을 잊습니다:
+
 ```
-세션 1: "우리 API는 Spring Boot + Azure. 인증은 OAuth2 PKCE."
-세션 2: "기술 스택이 뭐였죠?" -- AI는 모름
+MemRosetta 없이:
+  세션 1: "우리 API는 Spring Boot + Azure. 인증은 OAuth2 PKCE."
+  세션 2: "기술 스택이 뭐였죠?"    →  AI는 모름
 
-세션 1: "인증 리팩토링은 B안으로 가자."
-세션 2: "뭘로 결정했더라?" -- 사라짐
+  세션 1: "인증 리팩토링은 B안으로 가자."
+  세션 2: "뭘로 결정했더라?"       →  사라짐
 
-세션 1: (3시간 디버깅) "배치 사이즈를 4로 바꾸면 해결됨."
-세션 2: (같은 버그) 처음부터 다시 시작
+  세션 1: (3시간 디버깅) "배치 사이즈를 4로 바꾸면 해결됨."
+  세션 2: (같은 버그)              →  처음부터 다시 시작
 ```
 
-모든 AI 도구는 세션이 끝나면 모든 것을 잊습니다. 같은 설명을 반복하고, 같은 결정을 다시 내리고, 같은 버그를 다시 잡습니다. MemRosetta는 AI 도구에 영구적이고 검색 가능한 장기 기억을 부여하는 로컬 메모리 엔진입니다. 내 컴퓨터의 SQLite 파일 하나에 저장됩니다.
+같은 설명을 반복하고, 같은 결정을 다시 내리고, 같은 버그를 다시 잡습니다. MemRosetta가 해결합니다.
 
 ## 시작하기
 

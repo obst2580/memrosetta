@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Lang } from './i18n'
 import { Header } from './components/Header'
 import { Hero } from './components/Hero'
+import { Usage } from './components/Usage'
 import { Problem } from './components/Problem'
 import { Demo } from './components/Demo'
 import { QuickStart } from './components/QuickStart'
@@ -20,6 +21,7 @@ function App() {
     <div className="min-h-screen bg-white">
       <Header lang={lang} onLangChange={setLang} />
       <Hero lang={lang} />
+      <Usage lang={lang} />
       <Problem lang={lang} />
       <Demo lang={lang} />
       <QuickStart lang={lang} />
