@@ -10,7 +10,7 @@ export const content = {
       badge: 'Open source -- MIT License',
       title: 'MemRosetta',
       subtitle: 'One persistent memory for all your AI tools. Local SQLite. Zero cloud.',
-      install: 'npm install -g @memrosetta/cli',
+      install: 'npm install -g memrosetta',
       stats: {
         mrr: { value: '+324%', label: 'MRR improvement' },
         cost: { value: '1 DB', label: 'shared by all AI tools' },
@@ -56,7 +56,7 @@ export const content = {
         'claude-code': {
           language: 'bash',
           code: `# Install CLI and set up everything
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 memrosetta init --claude-code
 
 # That's it. Restart Claude Code.
@@ -93,7 +93,7 @@ memrosetta reset --claude-code`,
         cli: {
           language: 'bash',
           code: `# Install globally
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 
 # Store memories (userId defaults to system username)
 memrosetta store \\
@@ -296,7 +296,7 @@ memrosetta maintain`,
         },
         {
           name: '@memrosetta/claude-code',
-          description: 'DEPRECATED: Use @memrosetta/cli instead. Run: npm install -g @memrosetta/cli && memrosetta init --claude-code',
+          description: 'DEPRECATED: Use @memrosetta/cli instead. Run: npm install -g memrosetta && memrosetta init --claude-code',
         },
         {
           name: '@memrosetta/cli',
@@ -405,7 +405,7 @@ memrosetta maintain`,
       badge: '오픈소스 -- MIT 라이선스',
       title: 'MemRosetta',
       subtitle: '모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 SQLite. 클라우드 없음.',
-      install: 'npm install -g @memrosetta/cli',
+      install: 'npm install -g memrosetta',
       stats: {
         mrr: { value: '+324%', label: 'MRR 향상' },
         cost: { value: '1 DB', label: '모든 AI 도구 공유' },
@@ -451,7 +451,7 @@ memrosetta maintain`,
         'claude-code': {
           language: 'bash',
           code: `# CLI 설치 후 모든 설정 완료
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 memrosetta init --claude-code
 
 # 끝. Claude Code를 재시작하세요.
@@ -488,7 +488,7 @@ memrosetta reset --claude-code`,
         cli: {
           language: 'bash',
           code: `# 전역 설치
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 
 # 기억 저장 (userId는 시스템 사용자명으로 자동 설정)
 memrosetta store \\
@@ -691,7 +691,7 @@ memrosetta maintain`,
         },
         {
           name: '@memrosetta/claude-code',
-          description: 'DEPRECATED: @memrosetta/cli를 사용하세요. 실행: npm install -g @memrosetta/cli && memrosetta init --claude-code',
+          description: 'DEPRECATED: @memrosetta/cli를 사용하세요. 실행: npm install -g memrosetta && memrosetta init --claude-code',
         },
         {
           name: '@memrosetta/cli',

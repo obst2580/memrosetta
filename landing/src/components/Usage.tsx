@@ -59,7 +59,7 @@ const CONTENT = {
     footer: 'One SQLite file on your machine. All your AI tools read and write to it. No cloud. No server. No configuration beyond the initial setup.',
     setup: {
       title: 'Setup takes 10 seconds:',
-      command: 'npm install -g @memrosetta/cli && memrosetta init --claude-code',
+      command: 'npm install -g memrosetta && memrosetta init --claude-code',
     },
   },
   ko: {
@@ -115,7 +115,7 @@ const CONTENT = {
     footer: '내 컴퓨터의 SQLite 파일 하나. 모든 AI 도구가 읽고 씁니다. 클라우드 없음. 서버 없음. 초기 설정 외에 설정할 것 없음.',
     setup: {
       title: '설정은 10초면 끝:',
-      command: 'npm install -g @memrosetta/cli && memrosetta init --claude-code',
+      command: 'npm install -g memrosetta && memrosetta init --claude-code',
     },
   },
 } as const

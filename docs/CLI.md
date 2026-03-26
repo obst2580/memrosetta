@@ -5,7 +5,7 @@ Complete reference for all 14 CLI commands.
 ## Installation
 
 ```bash
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 ```
 
 ## Global Options
@@ -1015,7 +1015,7 @@ Errors are written to stderr in text mode and to stdout as JSON in json mode.
 ### First-time setup
 
 ```bash
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 memrosetta init --claude-code
 memrosetta status --format text
 ```
@@ -1054,5 +1054,5 @@ memrosetta status --format text
 ```bash
 memrosetta reset --all
 rm -rf ~/.memrosetta
-npm uninstall -g @memrosetta/cli
+npm uninstall -g memrosetta
 ```

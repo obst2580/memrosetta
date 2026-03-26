@@ -5,7 +5,7 @@
 ## 설치
 
 ```bash
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 ```
 
 ## 글로벌 옵션
@@ -1010,7 +1010,7 @@ text 모드에서 오류는 stderr에, json 모드에서 오류는 stdout에 JSO
 ### 최초 설정
 
 ```bash
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 memrosetta init --claude-code
 memrosetta status --format text
 ```
@@ -1049,5 +1049,5 @@ memrosetta status --format text
 ```bash
 memrosetta reset --all
 rm -rf ~/.memrosetta
-npm uninstall -g @memrosetta/cli
+npm uninstall -g memrosetta
 ```

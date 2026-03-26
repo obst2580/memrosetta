@@ -6,7 +6,7 @@
 > 한국어 버전: [README.ko.md](README.ko.md)
 
 ```bash
-npm install -g @memrosetta/cli && memrosetta init --claude-code
+npm install -g memrosetta && memrosetta init --claude-code
 ```
 
 ---
@@ -68,7 +68,7 @@ You re-explain, re-decide, re-debug. MemRosetta gives any AI tool persistent, se
 ## Quick Start
 
 ```bash
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 ```
 
 ```bash

@@ -6,7 +6,7 @@
 > English version: [README.md](README.md)
 
 ```bash
-npm install -g @memrosetta/cli && memrosetta init --claude-code
+npm install -g memrosetta && memrosetta init --claude-code
 ```
 
 ---
@@ -68,7 +68,7 @@ MemRosetta 없이:
 ## 시작하기
 
 ```bash
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 ```
 
 ```bash

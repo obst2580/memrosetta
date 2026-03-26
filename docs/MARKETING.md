@@ -17,7 +17,7 @@ Every AI coding tool forgets everything between sessions. You explain your tech 
 
 The core engine has zero LLM dependencies. Your AI tool decides what to store; MemRosetta handles storage and retrieval. Search is hybrid: FTS5 (BM25) for keywords + local vector embeddings (bge-small-en-v1.5, 33MB) + Reciprocal Rank Fusion. Contradiction detection uses a local NLI model (nli-deberta-v3-xsmall, 71MB) -- when you store "hourly rate is $40" and you already have "hourly rate is $50," it auto-creates a `contradicts` relation. Memories aren't deleted; they're versioned with five relation types (updates, extends, derives, contradicts, supports) and ranked by an ACT-R activation formula so frequently accessed memories surface first, while stale ones fade.
 
-Compared to Mem0, Zep, and Letta: those require cloud infrastructure and an LLM in the core loop. MemRosetta is a single SQLite file on your disk. No server, no API keys, no cloud. Install is `npm install -g @memrosetta/cli && memrosetta init --claude-code`.
+Compared to Mem0, Zep, and Letta: those require cloud infrastructure and an LLM in the core loop. MemRosetta is a single SQLite file on your disk. No server, no API keys, no cloud. Install is `npm install -g memrosetta && memrosetta init --claude-code`.
 
 726 tests. MIT license. v0.2.4 on npm.
 
@@ -63,7 +63,7 @@ What makes it different from a notes file or a README:
 - **Atomic memories**: One fact = one record. Not text chunks.
 
 ```bash
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 memrosetta init --claude-code   # or --cursor
 ```
 
@@ -85,7 +85,7 @@ If you use Claude Code daily, you know the pain: every session starts from zero.
 MemRosetta gives Claude Code actual persistent memory. One command:
 
 ```bash
-npm install -g @memrosetta/cli && memrosetta init --claude-code
+npm install -g memrosetta && memrosetta init --claude-code
 ```
 
 This sets up: MCP server (6 memory tools), Stop Hook (auto-capture on session end), CLAUDE.md instructions (tells Claude when to store).
@@ -110,7 +110,7 @@ Give Cursor persistent memory across sessions -- one local SQLite file shared wi
 **Body:**
 
 ```bash
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 memrosetta init --cursor
 ```
 
@@ -151,7 +151,7 @@ MemRosetta: a local SQLite memory engine for AI tools.
 One file: ~/.memrosetta/memories.db
 All tools share it: Claude Code, Cursor, Windsurf, Cline
 
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 memrosetta init --claude-code
 
 That's it. Your AI now remembers across sessions.
@@ -214,7 +214,7 @@ solution: your AI stores facts via MCP, retrieves them in future sessions.
 
 hybrid search, contradiction detection (local NLI, no API), ACT-R forgetting model.
 
-npm install -g @memrosetta/cli && memrosetta init --claude-code
+npm install -g memrosetta && memrosetta init --claude-code
 
 726 tests, MIT, v0.2.4
 github.com/obst2580/memrosetta
@@ -248,7 +248,7 @@ MemRosetta는 하나의 SQLite 파일(`~/.memrosetta/memories.db`)에 모든 AI 
 Mem0/Zep과의 차이: 클라우드 불필요, 코어에 LLM 의존성 없음, 로컬 NLI 모델로 모순 자동 감지, ACT-R 기반 적응형 망각, 하이브리드 검색(FTS5 + 벡터 + RRF).
 
 ```bash
-npm install -g @memrosetta/cli && memrosetta init --claude-code
+npm install -g memrosetta && memrosetta init --claude-code
 ```
 
 726개 테스트, MIT 라이선스, v0.2.4.
@@ -272,7 +272,7 @@ GitHub: https://github.com/obst2580/memrosetta
 ```
 MemRosetta: AI 도구를 위한 로컬 장기 기억 엔진.
 하나의 파일. 모든 도구가 공유.
-npm install -g @memrosetta/cli
+npm install -g memrosetta
 memrosetta init --claude-code
 끝.
 ```
