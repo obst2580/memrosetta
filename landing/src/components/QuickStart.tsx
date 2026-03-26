@@ -4,9 +4,9 @@ import { content } from '../i18n'
 import { Section, SectionTitle } from './Section'
 import { CodeBlock } from './CodeBlock'
 
-type Tab = 'claude-code' | 'cursor' | 'cli'
+type Tab = 'claude-code' | 'cursor' | 'codex' | 'cli'
 
-const TAB_ORDER: readonly Tab[] = ['claude-code', 'cursor', 'cli']
+const TAB_ORDER: readonly Tab[] = ['claude-code', 'cursor', 'codex', 'cli']
 
 interface QuickStartProps {
   readonly lang: Lang

@@ -80,6 +80,9 @@ memrosetta init --claude-code
 
 # Cursor: + MCP config
 memrosetta init --cursor
+
+# Codex: + config.toml + AGENTS.md instructions
+memrosetta init --codex
 ```
 
 That's it. Restart your tool and it has memory.
@@ -144,7 +147,7 @@ All tools share the same local database. Memories stored from one tool are insta
 Claude Code ----+
 Claude Desktop --+--> ~/.memrosetta/memories.db <--+-- Cursor
 Windsurf -------+     (one local SQLite file)      +-- Cline
-                                                   +-- Continue
+Codex ----------+                                  +-- Continue
 ```
 
 | Tool | MCP | Setup |
@@ -154,6 +157,7 @@ Windsurf -------+     (one local SQLite file)      +-- Cline
 | Cursor | Yes | `memrosetta init --cursor` |
 | Windsurf | Yes | `memrosetta init --mcp` |
 | Cline | Yes | `memrosetta init --mcp` |
+| Codex | Yes | `memrosetta init --codex` |
 | Continue | Yes | `memrosetta init --mcp` |
 | ChatGPT / Copilot | -- | No MCP support. Use CLI or REST API. |
 
@@ -162,7 +166,7 @@ Windsurf -------+     (one local SQLite file)      +-- Cline
 ```
 Morning   Claude Code: debug auth system         --> memories saved
 Afternoon Cursor: build login UI                  --> searches "auth" --> finds morning's decisions
-Evening   Claude Desktop: write architecture doc  --> has full context from both sessions
+Evening   Codex: refactor auth middleware          --> has full context from both sessions
 ```
 
 No sync. No cloud. No config. One local file.

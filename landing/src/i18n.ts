@@ -50,6 +50,7 @@ export const content = {
       tabs: {
         'claude-code': 'Claude Code',
         cursor: 'Cursor / MCP',
+        codex: 'Codex',
         cli: 'CLI',
       },
       code: {
@@ -90,6 +91,23 @@ memrosetta reset --claude-code`,
 //   memrosetta_relate  -- link related memories
 //   memrosetta_invalidate -- mark outdated`,
         },
+        codex: {
+          language: 'bash',
+          code: `# Install CLI and set up everything
+npm install -g memrosetta
+memrosetta init --codex
+
+# That's it. Restart Codex.
+# Registers MCP server in ~/.codex/config.toml
+# Adds memory instructions to AGENTS.md
+# Shares the same ~/.memrosetta/memories.db
+
+# Check status
+memrosetta status
+
+# Remove integration
+memrosetta reset --codex`,
+        },
         cli: {
           language: 'bash',
           code: `# Install globally
@@ -126,7 +144,7 @@ memrosetta maintain`,
       sharing: {
         title: 'Cross-tool memory sharing',
         description:
-          'Morning: Claude Code session about auth system -- memories saved. Afternoon: Open Cursor for frontend -- search "auth" -- finds morning\'s decisions. No sync, no cloud. Same local file.',
+          'Morning: Claude Code session about auth system -- memories saved. Afternoon: Open Cursor for frontend -- search "auth" -- finds morning\'s decisions. Evening: Codex refactors middleware -- same memories, same DB. No sync, no cloud.',
       },
       table: {
         headers: { tool: 'Tool', mcp: 'MCP', setup: 'Setup', note: 'Note' },
@@ -445,6 +463,7 @@ memrosetta maintain`,
       tabs: {
         'claude-code': 'Claude Code',
         cursor: 'Cursor / MCP',
+        codex: 'Codex',
         cli: 'CLI',
       },
       code: {
@@ -485,6 +504,23 @@ memrosetta reset --claude-code`,
 //   memrosetta_relate  -- 관련 기억 연결
 //   memrosetta_invalidate -- 무효화 표시`,
         },
+        codex: {
+          language: 'bash',
+          code: `# CLI 설치 후 모든 설정 완료
+npm install -g memrosetta
+memrosetta init --codex
+
+# 끝. Codex를 재시작하세요.
+# ~/.codex/config.toml에 MCP 서버 등록
+# AGENTS.md에 메모리 사용 지침 추가
+# 동일한 ~/.memrosetta/memories.db 공유
+
+# 상태 확인
+memrosetta status
+
+# 통합 제거
+memrosetta reset --codex`,
+        },
         cli: {
           language: 'bash',
           code: `# 전역 설치
@@ -521,7 +557,7 @@ memrosetta maintain`,
       sharing: {
         title: '도구 간 기억 공유',
         description:
-          '오전: Claude Code로 인증 시스템 작업 -- 기억 저장. 오후: Cursor로 프론트엔드 작업 -- "auth" 검색 -- 오전의 결정 사항 발견. 동기화 없음. 클라우드 없음. 같은 로컬 파일.',
+          '오전: Claude Code로 인증 시스템 작업 -- 기억 저장. 오후: Cursor로 프론트엔드 작업 -- "auth" 검색 -- 오전의 결정 사항 발견. 저녁: Codex로 미들웨어 리팩토링 -- 같은 기억, 같은 DB. 동기화 없음. 클라우드 없음.',
       },
       table: {
         headers: { tool: '도구', mcp: 'MCP', setup: '설정', note: '비고' },
