@@ -156,8 +156,22 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
     db.prepare('UPDATE schema_version SET version = ?').run(4);
   }
 
-  // Ensure embedding_dimension column exists and handle dimension mismatch
+  // Ensure vec_memories exists when vector is enabled (handles DB created without vectors)
   if (options?.vectorEnabled) {
+    const hasVecTable = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='vec_memories'"
+    ).get();
+
+    if (!hasVecTable) {
+      try {
+        db.exec(schemaV2(dim));
+      } catch {
+        // sqlite-vec module not available -- fall back to no vector search
+        process.stderr.write('[memrosetta] sqlite-vec not available, vector search disabled\n');
+      }
+    }
+
+    // Ensure embedding_dimension column exists and handle dimension mismatch
     const hasDimCol = (db.prepare('PRAGMA table_info(schema_version)').all() as readonly { name: string }[])
       .some((col) => col.name === 'embedding_dimension');
 
@@ -173,8 +187,12 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
         `[memrosetta] Embedding dimension changed (${storedDim} -> ${dim}). Recreating vector index...\n`,
       );
       try { db.exec('DROP TABLE IF EXISTS vec_memories'); } catch { /* ignore */ }
-      db.exec(schemaV2(dim));
-      db.prepare('UPDATE schema_version SET embedding_dimension = ?').run(dim);
+      try {
+        db.exec(schemaV2(dim));
+        db.prepare('UPDATE schema_version SET embedding_dimension = ?').run(dim);
+      } catch {
+        process.stderr.write('[memrosetta] sqlite-vec not available, vector search disabled\n');
+      }
     }
   }
 }
