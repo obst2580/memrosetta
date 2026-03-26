@@ -1,6 +1,6 @@
 {
   "name": "@memrosetta/mcp",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -10,7 +10,8 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
