@@ -95,7 +95,7 @@ export function isClaudeCodeConfigured(): boolean {
 
 /**
  * Register Stop hook in ~/.claude/settings.json.
- * The hook script is invoked via `npx -y @memrosetta/cli memrosetta-on-stop`.
+ * The hook script is invoked via the globally installed `memrosetta-on-stop` binary.
  *
  * Returns true if hooks were written, false if ~/.claude does not exist.
  */
@@ -119,7 +119,7 @@ export function registerClaudeCodeHooks(): boolean {
       hooks: [
         {
           type: 'command',
-          command: 'npx -y @memrosetta/cli memrosetta-on-stop',
+          command: 'memrosetta-on-stop',
           timeout: 15,
         },
       ],
