@@ -91,7 +91,7 @@ describe('claude-code integration', () => {
               hooks: [
                 {
                   type: 'command',
-                  command: 'npx -y @memrosetta/cli memrosetta-on-stop',
+                  command: 'memrosetta-on-stop',
                 },
               ],
             },
@@ -154,7 +154,7 @@ describe('claude-code integration', () => {
         (hc: { hooks: { command: string }[] }) =>
           hc.hooks.some((h: { command: string }) => h.command.includes('memrosetta')),
       );
-      expect(memHook.hooks[0].command).toContain('@memrosetta/cli');
+      expect(memHook.hooks[0].command).toContain('memrosetta-on-stop');
     });
 
     it('preserves existing non-memrosetta hooks', () => {
@@ -192,7 +192,7 @@ describe('claude-code integration', () => {
               hooks: [
                 {
                   type: 'command',
-                  command: 'npx -y @memrosetta/cli memrosetta-on-stop',
+                  command: 'memrosetta-on-stop',
                 },
               ],
             },

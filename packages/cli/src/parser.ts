@@ -48,7 +48,7 @@ export function parseGlobalArgs(args: readonly string[]): ParsedArgs {
   const db = findOption(args, '--db');
   const formatRaw = findOption(args, '--format');
   const format =
-    formatRaw === 'text' ? 'text' : ('json' as const);
+    formatRaw === 'json' ? 'json' : ('text' as const);
   const noEmbeddings = findFlag(args, '--no-embeddings');
   const help = findFlag(args, '--help') || findFlag(args, '-h');
   const version = findFlag(args, '--version') || findFlag(args, '-v');
