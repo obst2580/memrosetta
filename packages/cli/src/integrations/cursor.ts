@@ -87,10 +87,9 @@ function writeCursorConfig(path: string, config: CursorMcpConfig): void {
 }
 
 function mcpServerEntry(): Record<string, unknown> {
-  const isWindows = process.platform === 'win32';
   return {
-    command: isWindows ? 'npx.cmd' : 'npx',
-    args: ['-y', '@memrosetta/mcp'],
+    command: 'memrosetta-mcp',
+    args: [],
   };
 }
 

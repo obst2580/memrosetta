@@ -31,11 +31,9 @@ function writeMcpConfig(path: string, config: McpConfig): void {
 }
 
 function mcpServerEntry(): Record<string, unknown> {
-  // Windows requires npx.cmd for MCP server spawning
-  const isWindows = process.platform === 'win32';
   return {
-    command: isWindows ? 'npx.cmd' : 'npx',
-    args: ['-y', '@memrosetta/mcp'],
+    command: 'memrosetta-mcp',
+    args: [],
   };
 }
 
