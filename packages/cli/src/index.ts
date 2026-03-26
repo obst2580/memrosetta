@@ -23,6 +23,7 @@ Commands:
   working-memory   Show working memory for a user
   maintain         Run maintenance (recompute scores, update tiers, compress)
   compress         Run compression only
+  update           Update to latest version
 
 Init Options:
   (no flag)           Initialize DB + MCP server (base setup)
@@ -149,6 +150,11 @@ async function main(): Promise<void> {
       case 'reset': {
         const mod = await import('./commands/reset.js');
         await mod.run(commandOptions);
+        break;
+      }
+      case 'update': {
+        const mod = await import('./commands/update.js');
+        await mod.run();
         break;
       }
       default:
