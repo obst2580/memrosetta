@@ -29,10 +29,12 @@ Init Options:
   (no flag)           Initialize DB + MCP server (base setup)
   --claude-code       Additionally: Claude Code hooks + CLAUDE.md
   --cursor            Additionally: Cursor MCP config (~/.cursor/mcp.json)
+  --codex             Additionally: Codex MCP config (~/.codex/config.toml) + AGENTS.md
 
 Reset Options:
   --claude-code       Remove Claude Code hooks + CLAUDE.md section
   --cursor            Remove Cursor MCP config
+  --codex             Remove Codex MCP config + AGENTS.md section
   --all               Remove all integrations
 
 Global Options:
@@ -46,6 +48,7 @@ Examples:
   memrosetta init                          # DB + MCP server
   memrosetta init --claude-code            # DB + MCP + Claude Code hooks
   memrosetta init --cursor                 # DB + MCP + Cursor config
+  memrosetta init --codex                  # DB + MCP + Codex config
   memrosetta status --format text          # Show all status
   memrosetta reset --claude-code           # Remove Claude Code integration
   memrosetta reset --all                   # Remove all integrations

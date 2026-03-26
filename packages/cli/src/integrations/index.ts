@@ -23,3 +23,14 @@ export {
   updateCursorRules,
   removeCursorRulesSection,
 } from './cursor.js';
+
+export {
+  isCodexInstalled,
+  isCodexConfigured,
+  registerCodexMCP,
+  removeCodexMCP,
+  getCodexConfigFilePath,
+  getAgentsMdPath,
+  updateAgentsMd,
+  removeAgentsMdSection,
+} from './codex.js';

@@ -6,6 +6,8 @@ import {
   removeGenericMCP,
   removeCursorMCP,
   removeCursorRulesSection,
+  removeCodexMCP,
+  removeAgentsMdSection,
 } from '../integrations/index.js';
 
 interface ResetOptions {
@@ -22,6 +24,8 @@ interface ResetResult {
     readonly mcp: boolean;
     readonly cursor: boolean;
     readonly cursorRules: boolean;
+    readonly codex: boolean;
+    readonly agentsMd: boolean;
   };
 }
 
@@ -30,18 +34,20 @@ export async function run(options: ResetOptions): Promise<void> {
 
   const wantClaudeCode = hasFlag(args, '--claude-code');
   const wantCursor = hasFlag(args, '--cursor');
+  const wantCodex = hasFlag(args, '--codex');
   const wantMCP = hasFlag(args, '--mcp');
   const wantAll = hasFlag(args, '--all');
 
-  const noFlags = !wantClaudeCode && !wantCursor && !wantMCP && !wantAll;
+  const noFlags = !wantClaudeCode && !wantCursor && !wantCodex && !wantMCP && !wantAll;
 
   if (noFlags) {
     const msg =
-      'Usage: memrosetta reset [--claude-code] [--cursor] [--mcp] [--all]\n' +
+      'Usage: memrosetta reset [--claude-code] [--cursor] [--codex] [--mcp] [--all]\n' +
       '\n' +
       'Flags:\n' +
       '  --claude-code  Remove Claude Code hooks, MCP, and CLAUDE.md section\n' +
       '  --cursor       Remove Cursor MCP configuration\n' +
+      '  --codex        Remove Codex MCP configuration and AGENTS.md section\n' +
       '  --mcp          Remove generic MCP configuration (~/.mcp.json)\n' +
       '  --all          Remove all integrations\n';
 
@@ -60,6 +66,8 @@ export async function run(options: ResetOptions): Promise<void> {
       mcp: false,
       cursor: false,
       cursorRules: false,
+      codex: false,
+      agentsMd: false,
     },
   };
 
@@ -84,6 +92,14 @@ export async function run(options: ResetOptions): Promise<void> {
     (result.removed as Record<string, boolean>).cursor = removed;
     const rulesRemoved = removeCursorRulesSection();
     (result.removed as Record<string, boolean>).cursorRules = rulesRemoved;
+  }
+
+  // Codex
+  if (wantCodex || wantAll) {
+    const removed = removeCodexMCP();
+    (result.removed as Record<string, boolean>).codex = removed;
+    const mdRemoved = removeAgentsMdSection();
+    (result.removed as Record<string, boolean>).agentsMd = mdRemoved;
   }
 
   // Generic MCP
@@ -119,13 +135,21 @@ function printTextOutput(result: ResetResult): void {
   if (removed.cursorRules) {
     w('Removed MemRosetta section from ~/.cursorrules\n');
   }
+  if (removed.codex) {
+    w('Removed Codex MCP from ~/.codex/config.toml\n');
+  }
+  if (removed.agentsMd) {
+    w('Removed MemRosetta section from AGENTS.md\n');
+  }
 
   const anyRemoved =
     removed.claudeCodeHooks ||
     removed.claudeMd ||
     removed.mcp ||
     removed.cursor ||
-    removed.cursorRules;
+    removed.cursorRules ||
+    removed.codex ||
+    removed.agentsMd;
 
   if (!anyRemoved) {
     w('Nothing to remove (no integrations were configured).\n');

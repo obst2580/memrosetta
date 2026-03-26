@@ -12,9 +12,13 @@ import {
   updateClaudeMd,
   registerGenericMCP,
   registerCursorMCP,
+  registerCodexMCP,
+  isCodexInstalled,
   getGenericMCPPath,
   getCursorMcpConfigPath,
   getCursorRulesPath,
+  getCodexConfigFilePath,
+  getAgentsMdPath,
 } from '../integrations/index.js';
 
 type EmbeddingPresetFlag = 'en' | 'multi' | 'ko';
@@ -49,6 +53,12 @@ interface InitResult {
       readonly cursorRules: boolean;
       readonly cursorRulesPath: string;
     };
+    readonly codex?: {
+      readonly mcp: boolean;
+      readonly path: string;
+      readonly agentsMd: boolean;
+      readonly agentsMdPath: string;
+    };
     readonly mcp?: {
       readonly registered: boolean;
       readonly path: string;
@@ -61,6 +71,7 @@ export async function run(options: InitOptions): Promise<void> {
 
   const wantClaudeCode = hasFlag(args, '--claude-code');
   const wantCursor = hasFlag(args, '--cursor');
+  const wantCodex = hasFlag(args, '--codex');
 
   // Parse --lang flag for embedding preset
   const langFlag = optionalOption(args, '--lang') as EmbeddingPresetFlag | undefined;
@@ -126,9 +137,21 @@ export async function run(options: InitOptions): Promise<void> {
     };
   }
 
-  // 5. Output
+  // 5. --codex: register MCP in ~/.codex/config.toml + AGENTS.md
+  if (wantCodex) {
+    registerCodexMCP();
+
+    (result.integrations as Record<string, unknown>).codex = {
+      mcp: true,
+      path: getCodexConfigFilePath(),
+      agentsMd: true,
+      agentsMdPath: getAgentsMdPath(),
+    };
+  }
+
+  // 6. Output
   if (format === 'text') {
-    printTextOutput(result, wantClaudeCode, wantCursor);
+    printTextOutput(result, wantClaudeCode, wantCursor, wantCodex);
     return;
   }
 
@@ -139,6 +162,7 @@ function printTextOutput(
   result: InitResult,
   claudeCode: boolean,
   cursor: boolean,
+  codex: boolean = false,
 ): void {
   const w = (s: string) => process.stdout.write(s);
 
@@ -182,10 +206,19 @@ function printTextOutput(
     }
   }
 
+  if (codex) {
+    w(`  Codex MCP:  ${result.integrations.codex!.path}\n`);
+    if (result.integrations.codex!.agentsMd) {
+      w(`  AGENTS.md:  ${result.integrations.codex!.agentsMdPath} (memory instructions added)\n`);
+    } else {
+      w('  AGENTS.md:  already configured\n');
+    }
+  }
+
   w('\n');
 
-  if (!claudeCode && !cursor) {
-    w('  MCP is ready. Add --claude-code or --cursor for tool-specific setup.\n');
+  if (!claudeCode && !cursor && !codex) {
+    w('  MCP is ready. Add --claude-code, --cursor, or --codex for tool-specific setup.\n');
     w('  Example: memrosetta init --claude-code\n');
     w('\n');
   }
