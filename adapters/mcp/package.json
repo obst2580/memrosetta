@@ -1,6 +1,6 @@
 {
   "name": "@memrosetta/mcp",
-  "version": "0.2.19",
+  "version": "0.2.20",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
