@@ -1,6 +1,6 @@
 {
   "name": "@memrosetta/embeddings",
-  "version": "0.2.11",
+  "version": "0.2.15",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

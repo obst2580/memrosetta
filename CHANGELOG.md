@@ -2,6 +2,22 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.2.15] - 2026-03-27
+
+### Fixed
+- **Config propagation**: `--db`, `--lang`, `--no-embeddings` now persist to `config.json` and are read by ALL runtime paths (CLI, hooks, MCP server)
+- **Smart binary resolution**: `init` checks PATH first, falls back to `node` + absolute path for source checkouts and local installs
+- **MCP server reads config**: `dbPath`, `enableEmbeddings`, `embeddingPreset` from `~/.memrosetta/config.json`
+- **Status shows Codex**: `memrosetta status` now displays Codex integration state
+- **Cursor/Codex register returns actual boolean**: no more hardcoded `true` for cursorrules/AGENTS.md status
+
+### Added
+- `resolve-command.ts`: shared binary resolver for all integrations (cross-platform)
+- `--codex` added to `docs/CLI.md` and `docs/CLI.ko.md` init options table
+
+### Removed
+- Phantom `--mcp` flag from README (MCP is always included in base init)
+
 ## [0.2.14] - 2026-03-27
 
 ### Added
