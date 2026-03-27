@@ -2,6 +2,14 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.2.16] - 2026-03-27
+
+### Fixed
+- **status --format json crash**: version lookup fallback when `../../package.json` path breaks in bundled builds
+- **Path spaces safety**: hook commands now quote absolute paths (`node "${path}"`) to prevent shell splitting
+- **Windows TOML escaping**: Codex config backslash paths escaped correctly (`C:\` → `C:\\`)
+- **Source checkout binary resolution**: `findUpwards` walks up to `pnpm-workspace.yaml` and resolves `adapters/mcp/dist/index.js` directly
+
 ## [0.2.15] - 2026-03-27
 
 ### Fixed
