@@ -84,6 +84,21 @@ function hasMcpServer(content: string): boolean {
   return content.includes(`[mcp_servers.${SERVER_NAME}]`);
 }
 
+function removeMcpServerSection(content: string): string {
+  const marker = `[mcp_servers.${SERVER_NAME}]`;
+  const idx = content.indexOf(marker);
+  if (idx === -1) return content;
+
+  // Find the end: next [section] or end of file
+  const afterMarker = content.slice(idx + marker.length);
+  const nextSectionMatch = afterMarker.match(/\n\[(?!mcp_servers\.memrosetta)/);
+  const endIdx = nextSectionMatch
+    ? idx + marker.length + (nextSectionMatch.index ?? afterMarker.length)
+    : content.length;
+
+  return (content.slice(0, idx).trimEnd() + '\n' + content.slice(endIdx)).trim() + '\n';
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -115,11 +130,13 @@ export function registerCodexMCP(): boolean {
     mkdirSync(dir, { recursive: true });
   }
 
-  const content = readCodexConfig(configPath);
+  let content = readCodexConfig(configPath);
 
-  if (!hasMcpServer(content)) {
-    writeFileSync(configPath, content + buildMcpServerToml(), 'utf-8');
+  // Remove stale entry if exists, then add fresh one
+  if (hasMcpServer(content)) {
+    content = removeMcpServerSection(content);
   }
+  writeFileSync(configPath, content + buildMcpServerToml(), 'utf-8');
 
   return updateAgentsMd();
 }

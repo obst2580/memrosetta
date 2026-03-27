@@ -1,5 +1,6 @@
 
 
+
 ## MemRosetta (Long-term Memory)
 
 MCP server `memrosetta` provides persistent memory across sessions.
