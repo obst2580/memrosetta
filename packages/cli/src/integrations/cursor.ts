@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { resolveMcpCommand } from './resolve-command.js';
 
 const SERVER_NAME = 'memory-service';
 const CURSOR_RULES_PATH_GETTER = () => join(homedir(), '.cursorrules');
@@ -87,10 +88,8 @@ function writeCursorConfig(path: string, config: CursorMcpConfig): void {
 }
 
 function mcpServerEntry(): Record<string, unknown> {
-  return {
-    command: 'memrosetta-mcp',
-    args: [],
-  };
+  const { command, args } = resolveMcpCommand();
+  return { command, args };
 }
 
 // ---------------------------------------------------------------------------

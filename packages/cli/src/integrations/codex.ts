@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { resolveMcpCommand } from './resolve-command.js';
 
 const SERVER_NAME = 'memrosetta';
 const CODEX_CONFIG_PATH_GETTER = () => join(homedir(), '.codex', 'config.toml');
@@ -65,7 +66,12 @@ function readCodexConfig(path: string): string {
 }
 
 function buildMcpServerToml(): string {
-  return `\n[mcp_servers.${SERVER_NAME}]\ncommand = "memrosetta-mcp"\n`;
+  const { command, args } = resolveMcpCommand();
+  const argsLine =
+    args.length > 0
+      ? `\nargs = [${args.map((a) => `"${a}"`).join(', ')}]`
+      : '';
+  return `\n[mcp_servers.${SERVER_NAME}]\ncommand = "${command}"${argsLine}\n`;
 }
 
 function hasMcpServer(content: string): boolean {

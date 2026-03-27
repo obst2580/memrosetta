@@ -22,6 +22,11 @@ vi.mock('node:fs', () => ({
   mkdirSync: () => undefined,
 }));
 
+vi.mock('../../src/integrations/resolve-command.js', () => ({
+  resolveMcpCommand: () => ({ command: 'memrosetta-mcp', args: [] }),
+  resolveHookCommand: (name: string) => name,
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
@@ -86,10 +91,8 @@ describe('cursor integration', () => {
 
       const config = JSON.parse(mockFs[CURSOR_MCP_PATH]);
       expect(config.mcpServers['memory-service']).toBeDefined();
-      expect(config.mcpServers['memory-service'].command).toBe('npx');
-      expect(config.mcpServers['memory-service'].args).toContain(
-        '@memrosetta/mcp',
-      );
+      expect(config.mcpServers['memory-service'].command).toBe('memrosetta-mcp');
+      expect(config.mcpServers['memory-service'].args).toEqual([]);
     });
 
     it('adds to existing mcp.json preserving other servers', () => {

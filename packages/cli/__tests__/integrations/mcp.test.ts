@@ -21,6 +21,11 @@ vi.mock('node:fs', () => ({
   },
 }));
 
+vi.mock('../../src/integrations/resolve-command.js', () => ({
+  resolveMcpCommand: () => ({ command: 'memrosetta-mcp', args: [] }),
+  resolveHookCommand: (name: string) => name,
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
@@ -75,7 +80,7 @@ describe('mcp integration', () => {
 
       const config = JSON.parse(mockFs[MCP_PATH]);
       expect(config.mcpServers['memory-service']).toBeDefined();
-      expect(config.mcpServers['memory-service'].command).toBe('npx');
+      expect(config.mcpServers['memory-service'].command).toBe('memrosetta-mcp');
     });
 
     it('adds to existing .mcp.json', () => {

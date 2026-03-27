@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolveMcpCommand } from './resolve-command.js';
 
 const MCP_CONFIG_PATH = join(homedir(), '.mcp.json');
 const SERVER_NAME = 'memory-service';
@@ -31,10 +32,8 @@ function writeMcpConfig(path: string, config: McpConfig): void {
 }
 
 function mcpServerEntry(): Record<string, unknown> {
-  return {
-    command: 'memrosetta-mcp',
-    args: [],
-  };
+  const { command, args } = resolveMcpCommand();
+  return { command, args };
 }
 
 // ---------------------------------------------------------------------------

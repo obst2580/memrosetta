@@ -9,6 +9,8 @@ const mockRemoveClaudeMdSection = vi.fn().mockReturnValue(true);
 const mockRemoveGenericMCP = vi.fn().mockReturnValue(true);
 const mockRemoveCursorMCP = vi.fn().mockReturnValue(true);
 const mockRemoveCursorRulesSection = vi.fn().mockReturnValue(true);
+const mockRemoveCodexMCP = vi.fn().mockReturnValue(true);
+const mockRemoveAgentsMdSection = vi.fn().mockReturnValue(true);
 
 vi.mock('../../src/integrations/index.js', () => ({
   removeClaudeCodeHooks: (...args: unknown[]) => mockRemoveClaudeCodeHooks(...args),
@@ -16,6 +18,8 @@ vi.mock('../../src/integrations/index.js', () => ({
   removeGenericMCP: (...args: unknown[]) => mockRemoveGenericMCP(...args),
   removeCursorMCP: (...args: unknown[]) => mockRemoveCursorMCP(...args),
   removeCursorRulesSection: (...args: unknown[]) => mockRemoveCursorRulesSection(...args),
+  removeCodexMCP: (...args: unknown[]) => mockRemoveCodexMCP(...args),
+  removeAgentsMdSection: (...args: unknown[]) => mockRemoveAgentsMdSection(...args),
 }));
 
 import { run } from '../../src/commands/reset.js';

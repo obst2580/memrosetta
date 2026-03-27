@@ -23,6 +23,11 @@ vi.mock('node:fs', () => ({
   mkdirSync: () => undefined,
 }));
 
+vi.mock('../../src/integrations/resolve-command.js', () => ({
+  resolveMcpCommand: () => ({ command: 'memrosetta-mcp', args: [] }),
+  resolveHookCommand: (name: string) => name,
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------

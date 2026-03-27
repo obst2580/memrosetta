@@ -34,3 +34,5 @@ export {
   updateAgentsMd,
   removeAgentsMdSection,
 } from './codex.js';
+
+export { resolveMcpCommand, resolveHookCommand } from './resolve-command.js';

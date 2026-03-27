@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolveHookCommand } from './resolve-command.js';
 
 const CLAUDE_DIR = join(homedir(), '.claude');
 const CLAUDE_SETTINGS_PATH = join(CLAUDE_DIR, 'settings.json');
@@ -119,7 +120,7 @@ export function registerClaudeCodeHooks(): boolean {
       hooks: [
         {
           type: 'command',
-          command: 'memrosetta-on-stop',
+          command: resolveHookCommand('memrosetta-on-stop'),
           timeout: 15,
         },
       ],
