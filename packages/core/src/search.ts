@@ -746,6 +746,7 @@ export function searchMemories(
   query: SearchQuery,
   queryVec?: Float32Array,
   useVecTable: boolean = true,
+  skipAccessTracking: boolean = false,
 ): SearchResponse {
   const startTime = performance.now();
 
@@ -764,7 +765,9 @@ export function searchMemories(
     finalResults = deduplicateResults(boosted);
 
     // Update access tracking for returned results
-    updateAccessTracking(db, finalResults.map(r => r.memory.memoryId));
+    if (!skipAccessTracking) {
+      updateAccessTracking(db, finalResults.map(r => r.memory.memoryId));
+    }
 
     return {
       results: finalResults,

@@ -21,7 +21,7 @@ import {
   storeBatchAsync,
   type PreparedStatements,
 } from './store.js';
-import { searchMemories } from './search.js';
+import { searchMemories, bruteForceVectorSearch } from './search.js';
 import {
   createRelationStatements,
   createRelation,
@@ -33,22 +33,6 @@ import { generateMemoryId, nowIso, keywordsToString } from './utils.js';
 import { computeActivation, computeEbbinghaus } from './activation.js';
 import { determineTier, estimateTokens } from './tiers.js';
 
-/**
- * Cosine similarity between two vectors. Used for duplicate detection.
- */
-function cosineSim(a: Float32Array, b: Float32Array): number {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  const len = Math.min(a.length, b.length);
-  for (let i = 0; i < len; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  const denom = Math.sqrt(normA) * Math.sqrt(normB);
-  return denom === 0 ? 0 : dot / denom;
-}
 
 export interface SqliteEngineOptions {
   readonly dbPath: string; // ':memory:' for in-memory, or file path
@@ -490,6 +474,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       const queryVec = await this.options.embedder.embed(newMemory.content);
 
       // Search for similar existing memories (top 5, same user, only latest)
+      // skipAccessTracking=true: internal check should not inflate access counts
       const similar = searchMemories(
         this.db!,
         {
@@ -500,6 +485,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
         },
         queryVec,
         this.vectorEnabled,
+        true, // skipAccessTracking
       );
 
       for (const result of similar.results) {
@@ -545,33 +531,28 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     try {
       const queryVec = await this.options.embedder.embed(newMemory.content);
 
-      const similar = searchMemories(
+      // Use raw vector search (not reranked searchMemories) to find candidates
+      // by pure cosine similarity, avoiding recency/salience bias
+      const candidates = bruteForceVectorSearch(
         this.db!,
-        {
-          userId: newMemory.userId,
-          query: newMemory.content,
-          limit: 5,
-          filters: { onlyLatest: true },
-        },
         queryVec,
-        this.vectorEnabled,
+        newMemory.userId,
+        10,
+        { onlyLatest: true },
       );
 
-      for (const result of similar.results) {
-        if (result.memory.memoryId === newMemory.memoryId) continue;
+      for (const candidate of candidates) {
+        if (candidate.memory.memoryId === newMemory.memoryId) continue;
 
-        // Compute direct cosine similarity for duplicate detection
-        // instead of relying on the combined search score
-        if (!result.memory.embedding || result.memory.embedding.length === 0) continue;
-        const embB = new Float32Array(result.memory.embedding);
-        const similarity = cosineSim(queryVec, embB);
+        // distance is 1 - cosine_similarity for brute force
+        const similarity = 1 - candidate.distance;
 
         if (similarity > 0.95) {
           // Very high cosine similarity: likely an update
           try {
             await this.relate(
               newMemory.memoryId,
-              result.memory.memoryId,
+              candidate.memory.memoryId,
               'updates',
               `Auto-detected duplicate: cosine similarity ${similarity.toFixed(3)}`,
             );
