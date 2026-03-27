@@ -1,6 +1,6 @@
 {
   "name": "memrosetta",
-  "version": "0.2.15",
+  "version": "0.2.16",
   "description": "Persistent long-term memory for AI tools. One local SQLite file shared across Claude Code, Cursor, and other AI tools.",
   "type": "module",
   "bin": {
@@ -10,8 +10,8 @@
     "memrosetta-on-prompt": "./bin-on-prompt.js"
   },
   "dependencies": {
-    "@memrosetta/cli": "0.2.15",
-    "@memrosetta/mcp": "0.2.15"
+    "@memrosetta/cli": "0.2.16",
+    "@memrosetta/mcp": "0.2.16"
   },
   "keywords": ["ai", "memory", "llm", "claude", "cursor", "mcp", "sqlite", "local-first"],
   "license": "MIT",

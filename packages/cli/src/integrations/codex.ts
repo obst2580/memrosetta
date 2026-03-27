@@ -65,13 +65,19 @@ function readCodexConfig(path: string): string {
   }
 }
 
+function escapeTomlString(s: string): string {
+  // Escape backslashes for TOML (Windows paths: C:\Users\... → C:\\Users\\...)
+  return s.replace(/\\/g, '\\\\');
+}
+
 function buildMcpServerToml(): string {
   const { command, args } = resolveMcpCommand();
+  const escapedCommand = escapeTomlString(command);
   const argsLine =
     args.length > 0
-      ? `\nargs = [${args.map((a) => `"${a}"`).join(', ')}]`
+      ? `\nargs = [${args.map((a) => `"${escapeTomlString(a)}"`).join(', ')}]`
       : '';
-  return `\n[mcp_servers.${SERVER_NAME}]\ncommand = "${command}"${argsLine}\n`;
+  return `\n[mcp_servers.${SERVER_NAME}]\ncommand = "${escapedCommand}"${argsLine}\n`;
 }
 
 function hasMcpServer(content: string): boolean {

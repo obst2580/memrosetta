@@ -5,9 +5,20 @@ import { output, type OutputFormat } from '../output.js';
 import { getConfig } from '../hooks/config.js';
 
 function getVersion(): string {
-  const require = createRequire(import.meta.url);
-  const pkg = require('../../package.json') as { version: string };
-  return pkg.version;
+  try {
+    const require = createRequire(import.meta.url);
+    const pkg = require('../../package.json') as { version: string };
+    return pkg.version;
+  } catch {
+    // Fallback: try resolving from @memrosetta/cli
+    try {
+      const require = createRequire(import.meta.url);
+      const pkg = require('@memrosetta/cli/package.json') as { version: string };
+      return pkg.version;
+    } catch {
+      return 'unknown';
+    }
+  }
 }
 import {
   isClaudeCodeConfigured,

@@ -115,7 +115,7 @@ export function resolveHookCommand(
     );
     const entryPoint = join(cliPkgPath, 'dist', hookFile);
     if (existsSync(entryPoint)) {
-      return `node ${entryPoint}`;
+      return `node "${entryPoint}"`;
     }
   } catch {
     // Not resolvable -- try workspace
@@ -125,7 +125,7 @@ export function resolveHookCommand(
   // From packages/cli/src/integrations/ the dist hooks are at ../../dist/hooks/
   const distHook = resolve(__dirname, '..', '..', 'dist', hookFile);
   if (existsSync(distHook)) {
-    return `node ${distHook}`;
+    return `node "${distHook}"`;
   }
 
   // Also check workspace root layout
@@ -134,7 +134,7 @@ export function resolveHookCommand(
     const rootDir = dirname(workspaceRoot);
     const hookEntry = join(rootDir, 'packages', 'cli', 'dist', hookFile);
     if (existsSync(hookEntry)) {
-      return `node ${hookEntry}`;
+      return `node "${hookEntry}"`;
     }
   }
 
