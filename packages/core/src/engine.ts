@@ -129,14 +129,23 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       memories = storeBatchInTransaction(this.db!, this.stmts!, inputs);
     }
 
-    // Run contradiction check on each memory if detector is available
-    // Only for small batches (<=50) to avoid excessive slowdown
-    if (this.options.contradictionDetector && this.options.embedder && memories.length <= 50) {
+    // Run contradiction + duplicate checks for small batches (<=50)
+    if (this.options.embedder && memories.length <= 50) {
       for (const memory of memories) {
+        // Contradiction detection
+        if (this.options.contradictionDetector) {
+          try {
+            await this.checkContradictions(memory);
+          } catch {
+            // Failure should not block storage
+          }
+        }
+
+        // Duplicate detection
         try {
-          await this.checkContradictions(memory);
+          await this.checkDuplicates(memory);
         } catch {
-          // Contradiction check failure should not block storage
+          // Failure should not block storage
         }
       }
     }
