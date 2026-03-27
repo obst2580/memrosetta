@@ -13,6 +13,7 @@ import {
   isClaudeCodeConfigured,
   isGenericMCPConfigured,
   isCursorConfigured,
+  isCodexConfigured,
 } from '../integrations/index.js';
 
 interface StatusOptions {
@@ -25,14 +26,15 @@ interface StatusOptions {
 export async function run(options: StatusOptions): Promise<void> {
   const { format, db, noEmbeddings } = options;
 
-  const dbPath = db ?? getDefaultDbPath();
+  const config = getConfig();
+  const dbPath = db ?? config.dbPath ?? getDefaultDbPath();
   const exists = existsSync(dbPath);
 
   let sizeBytes = 0;
   let sizeFormatted = '0B';
   let memoryCount = 0;
   let userList: readonly string[] = [];
-  const embeddingsEnabled = !noEmbeddings;
+  const embeddingsEnabled = !noEmbeddings && config.enableEmbeddings !== false;
 
   if (exists) {
     const stat = statSync(dbPath);
@@ -63,6 +65,7 @@ export async function run(options: StatusOptions): Promise<void> {
   // Integration status
   const claudeCodeStatus = isClaudeCodeConfigured();
   const cursorStatus = isCursorConfigured();
+  const codexStatus = isCodexConfigured();
   const mcpStatus = isGenericMCPConfigured();
 
   if (format === 'text') {
@@ -93,6 +96,9 @@ export async function run(options: StatusOptions): Promise<void> {
       `  Cursor:        ${cursorStatus ? 'configured (MCP)' : 'not configured'}\n`,
     );
     process.stdout.write(
+      `  Codex:         ${codexStatus ? 'configured (MCP)' : 'not configured'}\n`,
+    );
+    process.stdout.write(
       `  MCP (generic): ${mcpStatus ? 'configured' : 'not configured'}\n`,
     );
     return;
@@ -115,6 +121,7 @@ export async function run(options: StatusOptions): Promise<void> {
       integrations: {
         claudeCode: claudeCodeStatus,
         cursor: cursorStatus,
+        codex: codexStatus,
         mcp: mcpStatus,
       },
     },

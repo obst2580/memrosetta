@@ -1,6 +1,7 @@
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { mkdirSync, existsSync } from 'node:fs';
+import { getConfig } from './hooks/config.js';
 
 const DEFAULT_DB = join(homedir(), '.memrosetta', 'memories.db');
 
@@ -15,7 +16,8 @@ interface EngineOptions {
 }
 
 async function createEngineInstance(options: EngineOptions) {
-  const dbPath = options.db ?? DEFAULT_DB;
+  const config = getConfig();
+  const dbPath = options.db ?? config.dbPath ?? DEFAULT_DB;
 
   const dir = dirname(dbPath);
   if (!existsSync(dir)) {
@@ -25,10 +27,10 @@ async function createEngineInstance(options: EngineOptions) {
   const { SqliteMemoryEngine } = await import('@memrosetta/core');
 
   let embedder;
-  if (!options.noEmbeddings) {
+  if (!options.noEmbeddings && config.enableEmbeddings !== false) {
     try {
       const { HuggingFaceEmbedder } = await import('@memrosetta/embeddings');
-      const preset = options.embeddingPreset ?? 'en';
+      const preset = options.embeddingPreset ?? config.embeddingPreset ?? 'en';
       embedder = new HuggingFaceEmbedder({ preset });
       await embedder.initialize();
     } catch {
@@ -42,7 +44,8 @@ async function createEngineInstance(options: EngineOptions) {
 }
 
 export async function getEngine(options: EngineOptions) {
-  const dbPath = options.db ?? DEFAULT_DB;
+  const config = getConfig();
+  const dbPath = options.db ?? config.dbPath ?? DEFAULT_DB;
 
   if (cachedEngine && cachedDbPath === dbPath) {
     return cachedEngine;

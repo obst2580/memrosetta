@@ -107,8 +107,9 @@ export function isCursorConfigured(): boolean {
 
 /**
  * Register MCP server in ~/.cursor/mcp.json and update .cursorrules.
+ * Returns true if .cursorrules was updated (new), false if already present.
  */
-export function registerCursorMCP(): void {
+export function registerCursorMCP(): boolean {
   const path = getCursorMcpPath();
   const config = readCursorConfig(path);
   const servers = config.mcpServers ?? {};
@@ -116,7 +117,7 @@ export function registerCursorMCP(): void {
     ...config,
     mcpServers: { ...servers, [SERVER_NAME]: mcpServerEntry() },
   });
-  updateCursorRules();
+  return updateCursorRules();
 }
 
 /**

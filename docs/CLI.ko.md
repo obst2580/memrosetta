@@ -39,13 +39,15 @@ npm install -g memrosetta
 |------|------|------|--------|------|
 | `--claude-code` | flag | 아니오 | - | Claude Code hooks + CLAUDE.md 지침 설정 |
 | `--cursor` | flag | 아니오 | - | Cursor MCP 설정 (~/.cursor/mcp.json) |
+| `--codex` | flag | 아니오 | - | Codex MCP 설정 (~/.codex/config.toml) + AGENTS.md |
 
 **동작:**
 - SQLite 데이터베이스가 없으면 항상 생성합니다.
 - `~/.mcp.json`에 MCP 서버를 항상 등록합니다 (기본 설정).
 - `--claude-code`는 추가로 `~/.claude/settings.json`에 Stop Hook을 설치하고 `~/.claude/CLAUDE.md`에 기억 지침을 추가합니다.
 - `--cursor`는 추가로 `~/.cursor/mcp.json`에 MCP 설정을 작성합니다.
-- 두 플래그를 함께 사용할 수 있습니다.
+- `--codex`는 추가로 `~/.codex/config.toml`에 MCP 설정을 작성하고 `AGENTS.md`에 기억 지침을 추가합니다.
+- 모든 플래그를 함께 사용할 수 있습니다.
 
 **예제:**
 

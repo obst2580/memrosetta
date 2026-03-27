@@ -39,13 +39,15 @@ Initialize the database and configure tool integrations.
 |--------|------|----------|---------|-------------|
 | `--claude-code` | flag | No | - | Set up Claude Code hooks + CLAUDE.md instructions |
 | `--cursor` | flag | No | - | Set up Cursor MCP configuration (~/.cursor/mcp.json) |
+| `--codex` | flag | No | - | Set up Codex MCP configuration (~/.codex/config.toml) + AGENTS.md |
 
 **Behavior:**
 - Always creates the SQLite database if it does not exist.
 - Always registers the MCP server in `~/.mcp.json` (base setup).
 - `--claude-code` additionally installs a Stop Hook in `~/.claude/settings.json` and adds memory instructions to `~/.claude/CLAUDE.md`.
 - `--cursor` additionally writes MCP config to `~/.cursor/mcp.json`.
-- Both flags can be combined.
+- `--codex` additionally writes MCP config to `~/.codex/config.toml` and adds memory instructions to `AGENTS.md`.
+- All flags can be combined.
 
 **Examples:**
 

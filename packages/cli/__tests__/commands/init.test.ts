@@ -7,18 +7,35 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const mockRegisterClaudeCodeHooks = vi.fn().mockReturnValue(true);
 const mockUpdateClaudeMd = vi.fn().mockReturnValue(true);
 const mockRegisterGenericMCP = vi.fn();
-const mockRegisterCursorMCP = vi.fn();
+const mockRegisterCursorMCP = vi.fn().mockReturnValue(true);
+const mockRegisterCodexMCP = vi.fn().mockReturnValue(true);
 const mockIsClaudeCodeInstalled = vi.fn().mockReturnValue(true);
+const mockIsCodexInstalled = vi.fn().mockReturnValue(true);
 
 vi.mock('../../src/integrations/index.js', () => ({
   isClaudeCodeInstalled: (...args: unknown[]) => mockIsClaudeCodeInstalled(...args),
+  isCodexInstalled: (...args: unknown[]) => mockIsCodexInstalled(...args),
   registerClaudeCodeHooks: (...args: unknown[]) => mockRegisterClaudeCodeHooks(...args),
   updateClaudeMd: (...args: unknown[]) => mockUpdateClaudeMd(...args),
   registerGenericMCP: (...args: unknown[]) => mockRegisterGenericMCP(...args),
   registerCursorMCP: (...args: unknown[]) => mockRegisterCursorMCP(...args),
+  registerCodexMCP: (...args: unknown[]) => mockRegisterCodexMCP(...args),
   getGenericMCPPath: () => '/mock-home/.mcp.json',
   getCursorMcpConfigPath: () => '/mock-home/.cursor/mcp.json',
   getCursorRulesPath: () => '/mock-home/.cursorrules',
+  getCodexConfigFilePath: () => '/mock-home/.codex/config.toml',
+  getAgentsMdPath: () => '/mock-home/AGENTS.md',
+}));
+
+vi.mock('../../src/hooks/config.js', () => ({
+  getConfig: vi.fn().mockReturnValue({
+    dbPath: '/tmp/test-init.db',
+    enableEmbeddings: true,
+    maxRecallResults: 5,
+    minQueryLength: 5,
+    maxContextChars: 2000,
+  }),
+  writeConfig: vi.fn(),
 }));
 
 vi.mock('../../src/engine.js', () => ({

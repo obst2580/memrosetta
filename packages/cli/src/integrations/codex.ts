@@ -99,8 +99,9 @@ export function isCodexConfigured(): boolean {
 
 /**
  * Register MCP server in ~/.codex/config.toml and update AGENTS.md.
+ * Returns true if AGENTS.md was updated (new), false if already present.
  */
-export function registerCodexMCP(): void {
+export function registerCodexMCP(): boolean {
   const configPath = getCodexConfigPath();
   const dir = getCodexConfigDir();
 
@@ -114,7 +115,7 @@ export function registerCodexMCP(): void {
     writeFileSync(configPath, content + buildMcpServerToml(), 'utf-8');
   }
 
-  updateAgentsMd();
+  return updateAgentsMd();
 }
 
 /**

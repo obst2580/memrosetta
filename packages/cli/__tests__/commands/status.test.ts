@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('../../src/integrations/index.js', () => ({
   isClaudeCodeConfigured: vi.fn().mockReturnValue(true),
   isCursorConfigured: vi.fn().mockReturnValue(false),
+  isCodexConfigured: vi.fn().mockReturnValue(false),
   isGenericMCPConfigured: vi.fn().mockReturnValue(true),
 }));
 
@@ -51,6 +52,7 @@ describe('status command', () => {
     expect(allOutput).toContain('Integrations:');
     expect(allOutput).toContain('Claude Code:   configured');
     expect(allOutput).toContain('Cursor:        not configured');
+    expect(allOutput).toContain('Codex:         not configured');
     expect(allOutput).toContain('MCP (generic): configured');
   });
 
@@ -66,6 +68,7 @@ describe('status command', () => {
     expect(parsed.integrations).toBeDefined();
     expect(parsed.integrations.claudeCode).toBe(true);
     expect(parsed.integrations.cursor).toBe(false);
+    expect(parsed.integrations.codex).toBe(false);
     expect(parsed.integrations.mcp).toBe(true);
   });
 });

@@ -85,14 +85,27 @@ export async function run(options: InitOptions): Promise<void> {
     return;
   }
 
-  // Save embedding preset to config if specified
-  if (embeddingPreset) {
+  // Persist init options to config
+  {
     const config = getConfig();
-    writeConfig({ ...config, embeddingPreset });
+    const updates: Partial<typeof config> = {};
+    if (db) {
+      updates.dbPath = db;
+    }
+    if (noEmbeddings) {
+      updates.enableEmbeddings = false;
+    }
+    if (embeddingPreset) {
+      updates.embeddingPreset = embeddingPreset;
+    }
+    if (Object.keys(updates).length > 0) {
+      writeConfig({ ...config, ...updates });
+    }
   }
 
   // 1. Always: init DB
-  const dbPath = db ?? getDefaultDbPath();
+  const config = getConfig();
+  const dbPath = db ?? config.dbPath ?? getDefaultDbPath();
   const existed = existsSync(dbPath);
 
   const engine = await getEngine({ db: dbPath, noEmbeddings });
@@ -127,24 +140,24 @@ export async function run(options: InitOptions): Promise<void> {
 
   // 4. --cursor: additionally register MCP in .cursor/ + .cursorrules
   if (wantCursor) {
-    registerCursorMCP();
+    const cursorRulesUpdated = registerCursorMCP();
 
     (result.integrations as Record<string, unknown>).cursor = {
       mcp: true,
       path: getCursorMcpConfigPath(),
-      cursorRules: true,
+      cursorRules: cursorRulesUpdated,
       cursorRulesPath: getCursorRulesPath(),
     };
   }
 
   // 5. --codex: register MCP in ~/.codex/config.toml + AGENTS.md
   if (wantCodex) {
-    registerCodexMCP();
+    const agentsMdUpdated = registerCodexMCP();
 
     (result.integrations as Record<string, unknown>).codex = {
       mcp: true,
       path: getCodexConfigFilePath(),
-      agentsMd: true,
+      agentsMd: agentsMdUpdated,
       agentsMdPath: getAgentsMdPath(),
     };
   }

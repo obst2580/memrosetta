@@ -9,15 +9,31 @@ const require = createRequire(import.meta.url);
 const pkg = require('../package.json') as { version: string };
 import { HuggingFaceEmbedder } from '@memrosetta/embeddings';
 import { registerTools } from './tools.js';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
+
+function readConfig(): Record<string, unknown> {
+  const configPath = join(homedir(), '.memrosetta', 'config.json');
+  if (!existsSync(configPath)) return {};
+  try {
+    return JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+  } catch { return {}; }
+}
+
+const config = readConfig();
 
 const DB_PATH =
   process.env.MEMROSETTA_DB ??
-  `${homedir()}/.memrosetta/memories.db`;
+  (config.dbPath as string | undefined) ??
+  join(homedir(), '.memrosetta', 'memories.db');
 
-const ENABLE_EMBEDDINGS = process.env.MEMROSETTA_EMBEDDINGS !== 'false';
+const ENABLE_EMBEDDINGS =
+  process.env.MEMROSETTA_EMBEDDINGS !== 'false' &&
+  config.enableEmbeddings !== false;
+
+const EMBEDDING_PRESET =
+  (config.embeddingPreset as string | undefined) ?? 'en';
 
 async function main(): Promise<void> {
   // Ensure DB directory exists
@@ -26,7 +42,7 @@ async function main(): Promise<void> {
   // Initialize embedder (optional)
   let embedder: HuggingFaceEmbedder | undefined;
   if (ENABLE_EMBEDDINGS) {
-    embedder = new HuggingFaceEmbedder();
+    embedder = new HuggingFaceEmbedder({ preset: EMBEDDING_PRESET as 'en' | 'multilingual' | 'ko' });
     await embedder.initialize();
   }
 

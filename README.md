@@ -153,12 +153,12 @@ Codex ----------+                                  +-- Continue
 | Tool | MCP | Setup |
 |------|:---:|-------|
 | Claude Code | Yes | `memrosetta init --claude-code` |
-| Claude Desktop | Yes | `memrosetta init --mcp` |
+| Claude Desktop | Yes | `memrosetta init` |
 | Cursor | Yes | `memrosetta init --cursor` |
-| Windsurf | Yes | `memrosetta init --mcp` |
-| Cline | Yes | `memrosetta init --mcp` |
+| Windsurf | Yes | `memrosetta init` |
+| Cline | Yes | `memrosetta init` |
 | Codex | Yes | `memrosetta init --codex` |
-| Continue | Yes | `memrosetta init --mcp` |
+| Continue | Yes | `memrosetta init` |
 | ChatGPT / Copilot | -- | No MCP support. Use CLI or REST API. |
 
 ### Cross-Tool Memory Sharing
