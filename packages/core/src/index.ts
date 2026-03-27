@@ -1,6 +1,6 @@
 export { ensureSchema } from './schema.js';
 export type { SchemaOptions } from './schema.js';
-export { generateMemoryId, nowIso, keywordsToString, stringToKeywords } from './utils.js';
+export { generateMemoryId, nowIso, keywordsToString, stringToKeywords, deriveMemoryState } from './utils.js';
 export { rowToMemory, serializeEmbedding } from './mapper.js';
 export type { MemoryRow } from './mapper.js';
 export { createPreparedStatements, storeMemory, storeBatchInTransaction, storeMemoryAsync, storeBatchAsync } from './store.js';

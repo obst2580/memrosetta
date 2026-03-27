@@ -4,6 +4,7 @@ import type {
   Memory,
   MemoryInput,
   MemoryTier,
+  MemoryQuality,
   SearchQuery,
   SearchResponse,
   MemoryRelation,
@@ -110,6 +111,9 @@ export class SqliteMemoryEngine implements IMemoryEngine {
 
     // Check for duplicates and auto-create 'updates' relation for very high similarity
     await this.checkDuplicates(memory);
+
+    // Auto-create 'extends' relations for memories with overlapping keywords
+    await this.autoRelate(memory);
 
     return memory;
   }
@@ -453,6 +457,60 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       .run(tier, memoryId);
   }
 
+  async quality(userId: string): Promise<MemoryQuality> {
+    this.ensureInitialized();
+    const db = this.db!;
+
+    const total = (
+      db.prepare('SELECT COUNT(*) as c FROM memories WHERE user_id = ?').get(userId) as { c: number }
+    ).c;
+
+    const fresh = (
+      db.prepare(
+        'SELECT COUNT(*) as c FROM memories WHERE user_id = ? AND is_latest = 1 AND invalidated_at IS NULL',
+      ).get(userId) as { c: number }
+    ).c;
+
+    const invalidated = (
+      db.prepare(
+        'SELECT COUNT(*) as c FROM memories WHERE user_id = ? AND invalidated_at IS NOT NULL',
+      ).get(userId) as { c: number }
+    ).c;
+
+    const superseded = (
+      db.prepare(
+        'SELECT COUNT(*) as c FROM memories WHERE user_id = ? AND is_latest = 0',
+      ).get(userId) as { c: number }
+    ).c;
+
+    const withRelations = (
+      db.prepare(`
+        SELECT COUNT(DISTINCT mid) as c FROM (
+          SELECT src_memory_id as mid FROM memory_relations
+            WHERE src_memory_id IN (SELECT memory_id FROM memories WHERE user_id = ?)
+          UNION
+          SELECT dst_memory_id as mid FROM memory_relations
+            WHERE dst_memory_id IN (SELECT memory_id FROM memories WHERE user_id = ?)
+        )
+      `).get(userId, userId) as { c: number }
+    ).c;
+
+    const avgRow = db.prepare(
+      'SELECT AVG(activation_score) as avg FROM memories WHERE user_id = ? AND is_latest = 1',
+    ).get(userId) as { avg: number | null };
+
+    const avgActivation = avgRow.avg ?? 0;
+
+    return {
+      total,
+      fresh,
+      invalidated,
+      superseded,
+      withRelations,
+      avgActivation,
+    };
+  }
+
   /**
    * Check the newly stored memory against existing similar memories
    * for contradictions using the NLI model.
@@ -563,6 +621,67 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       }
     } catch {
       // Duplicate check failure should not block storage
+    }
+  }
+
+  /**
+   * Auto-create 'extends' relations when a new memory shares keywords
+   * with existing memories. Builds graph density for future graph-based retrieval.
+   *
+   * Only runs for individual store() calls, not storeBatch().
+   * Requires at least 2 overlapping keywords to create a relation.
+   * Graceful: errors are silently swallowed.
+   */
+  private async autoRelate(newMemory: Memory): Promise<void> {
+    if (!newMemory.keywords || newMemory.keywords.length === 0) return;
+
+    try {
+      const keywordList = newMemory.keywords;
+
+      const existing = this.db!.prepare(`
+        SELECT memory_id, keywords FROM memories
+        WHERE user_id = ? AND is_latest = 1 AND memory_id != ?
+        AND invalidated_at IS NULL
+        ORDER BY learned_at DESC LIMIT 10
+      `).all(newMemory.userId, newMemory.memoryId) as readonly {
+        memory_id: string;
+        keywords: string | null;
+      }[];
+
+      for (const row of existing) {
+        if (!row.keywords) continue;
+        const existingKeywords = row.keywords.split(' ').map(k => k.trim().toLowerCase());
+        const overlap = keywordList.filter(k => existingKeywords.includes(k.toLowerCase()));
+
+        if (overlap.length >= 3) {
+          // Check if any relation already exists between these memories
+          // (e.g., from checkDuplicates creating an 'updates' relation)
+          const existingRelation = this.db!.prepare(
+            `SELECT 1 FROM memory_relations
+             WHERE (src_memory_id = ? AND dst_memory_id = ?)
+                OR (src_memory_id = ? AND dst_memory_id = ?)
+             LIMIT 1`,
+          ).get(
+            newMemory.memoryId, row.memory_id,
+            row.memory_id, newMemory.memoryId,
+          );
+
+          if (existingRelation) continue;
+
+          try {
+            await this.relate(
+              newMemory.memoryId,
+              row.memory_id,
+              'extends',
+              `Auto: ${overlap.length} shared keywords (${overlap.join(', ')})`,
+            );
+          } catch {
+            // Relation may already exist
+          }
+        }
+      }
+    } catch {
+      // Auto-relate failure should not block storage
     }
   }
 

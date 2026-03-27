@@ -1,4 +1,4 @@
-import type { Memory, MemoryType } from './memory.js';
+import type { Memory, MemoryType, MemoryState } from './memory.js';
 
 export interface SearchQuery {
   readonly userId: string;
@@ -22,6 +22,12 @@ export interface SearchFilters {
   };
   /** When true (default), exclude memories that have been invalidated */
   readonly excludeInvalidated?: boolean;
+  /**
+   * Filter by derived memory state. When set, supersedes onlyLatest and excludeInvalidated.
+   * Possible values: 'current', 'superseded', 'invalidated'.
+   * Default (when not specified): falls back to onlyLatest + excludeInvalidated behavior.
+   */
+  readonly states?: readonly MemoryState[];
 }
 
 export type MatchType = 'fts' | 'vector' | 'hybrid';

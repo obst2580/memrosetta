@@ -67,6 +67,10 @@ export async function run(options: StatusOptions): Promise<void> {
   let sizeFormatted = '0B';
   let memoryCount = 0;
   let userList: readonly string[] = [];
+  let qualityFresh = 0;
+  let qualityInvalidated = 0;
+  let qualityWithRelations = 0;
+  let qualityAvgActivation = 0;
   const embeddingsEnabled = !noEmbeddings && config.enableEmbeddings !== false;
 
   if (exists) {
@@ -88,6 +92,27 @@ export async function run(options: StatusOptions): Promise<void> {
         .prepare('SELECT DISTINCT user_id FROM memories ORDER BY user_id')
         .all() as readonly { user_id: string }[];
       userList = userRows.map((r) => r.user_id);
+
+      // Quality stats
+      const freshRow = dbConn.prepare(
+        'SELECT COUNT(*) as c FROM memories WHERE is_latest = 1 AND invalidated_at IS NULL',
+      ).get() as { c: number };
+      qualityFresh = freshRow.c;
+
+      const invalidatedRow = dbConn.prepare(
+        'SELECT COUNT(*) as c FROM memories WHERE invalidated_at IS NOT NULL',
+      ).get() as { c: number };
+      qualityInvalidated = invalidatedRow.c;
+
+      const relationsRow = dbConn.prepare(
+        'SELECT COUNT(DISTINCT src_memory_id) + COUNT(DISTINCT dst_memory_id) as c FROM memory_relations',
+      ).get() as { c: number };
+      qualityWithRelations = relationsRow.c;
+
+      const avgRow = dbConn.prepare(
+        'SELECT AVG(activation_score) as avg FROM memories WHERE is_latest = 1',
+      ).get() as { avg: number | null };
+      qualityAvgActivation = avgRow.avg ?? 0;
 
       dbConn.close();
     } catch {
@@ -121,6 +146,18 @@ export async function run(options: StatusOptions): Promise<void> {
       `Embeddings: ${embeddingsEnabled ? `enabled (${embeddingModelLabel})` : 'disabled'}\n`,
     );
 
+    if (memoryCount > 0) {
+      process.stdout.write('\nQuality:\n');
+      process.stdout.write(
+        `  Fresh (is_latest=1):    ${qualityFresh} / ${memoryCount}\n`,
+      );
+      process.stdout.write(`  Invalidated:            ${qualityInvalidated}\n`);
+      process.stdout.write(`  With relations:         ${qualityWithRelations}\n`);
+      process.stdout.write(
+        `  Avg activation:         ${qualityAvgActivation.toFixed(2)}\n`,
+      );
+    }
+
     process.stdout.write('\nIntegrations:\n');
     process.stdout.write(
       `  Claude Code:   ${claudeCodeStatus ? 'configured (hooks + MCP)' : 'not configured'}\n`,
@@ -148,6 +185,12 @@ export async function run(options: StatusOptions): Promise<void> {
       },
       memories: memoryCount,
       users: userList,
+      quality: {
+        fresh: qualityFresh,
+        invalidated: qualityInvalidated,
+        withRelations: qualityWithRelations,
+        avgActivation: qualityAvgActivation,
+      },
       embeddings: embeddingsEnabled,
       embeddingModel: getEmbeddingModelLabel(),
       embeddingPreset: getConfig().embeddingPreset ?? 'en',

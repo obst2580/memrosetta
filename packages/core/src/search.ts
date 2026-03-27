@@ -116,10 +116,32 @@ export function buildSearchSql(query: SearchQuery): SearchSqlResult {
     params.push(filters.minConfidence);
   }
 
-  // Default onlyLatest to true
-  const onlyLatest = filters?.onlyLatest ?? true;
-  if (onlyLatest) {
-    whereClauses.push('m.is_latest = 1');
+  // State-based filtering: `states` supersedes onlyLatest + excludeInvalidated when present.
+  if (filters?.states && filters.states.length > 0) {
+    const stateConditions: string[] = [];
+    if (filters.states.includes('current')) {
+      stateConditions.push('(m.is_latest = 1 AND m.invalidated_at IS NULL)');
+    }
+    if (filters.states.includes('superseded')) {
+      stateConditions.push('(m.is_latest = 0)');
+    }
+    if (filters.states.includes('invalidated')) {
+      stateConditions.push('(m.invalidated_at IS NOT NULL)');
+    }
+    if (stateConditions.length > 0) {
+      whereClauses.push(`(${stateConditions.join(' OR ')})`);
+    }
+  } else {
+    // Legacy behavior: onlyLatest + excludeInvalidated
+    const onlyLatest = filters?.onlyLatest ?? true;
+    if (onlyLatest) {
+      whereClauses.push('m.is_latest = 1');
+    }
+
+    const excludeInvalidated = filters?.excludeInvalidated ?? true;
+    if (excludeInvalidated) {
+      whereClauses.push('m.invalidated_at IS NULL');
+    }
   }
 
   if (filters?.eventDateRange?.start) {
@@ -130,12 +152,6 @@ export function buildSearchSql(query: SearchQuery): SearchSqlResult {
   if (filters?.eventDateRange?.end) {
     whereClauses.push('m.event_date_end <= ?');
     params.push(filters.eventDateRange.end);
-  }
-
-  // Default excludeInvalidated to true
-  const excludeInvalidated = filters?.excludeInvalidated ?? true;
-  if (excludeInvalidated) {
-    whereClauses.push('m.invalidated_at IS NULL');
   }
 
   const limit = query.limit ?? DEFAULT_LIMIT;
@@ -248,9 +264,31 @@ export function bruteForceVectorSearch(
   const whereClauses: string[] = ['user_id = ?', 'embedding IS NOT NULL'];
   const params: unknown[] = [userId];
 
-  const onlyLatest = filters?.onlyLatest ?? true;
-  if (onlyLatest) {
-    whereClauses.push('is_latest = 1');
+  // State-based filtering: `states` supersedes onlyLatest + excludeInvalidated
+  if (filters?.states && filters.states.length > 0) {
+    const stateConditions: string[] = [];
+    if (filters.states.includes('current')) {
+      stateConditions.push('(is_latest = 1 AND invalidated_at IS NULL)');
+    }
+    if (filters.states.includes('superseded')) {
+      stateConditions.push('(is_latest = 0)');
+    }
+    if (filters.states.includes('invalidated')) {
+      stateConditions.push('(invalidated_at IS NOT NULL)');
+    }
+    if (stateConditions.length > 0) {
+      whereClauses.push(`(${stateConditions.join(' OR ')})`);
+    }
+  } else {
+    const onlyLatest = filters?.onlyLatest ?? true;
+    if (onlyLatest) {
+      whereClauses.push('is_latest = 1');
+    }
+
+    const excludeInvalidated = filters?.excludeInvalidated ?? true;
+    if (excludeInvalidated) {
+      whereClauses.push('invalidated_at IS NULL');
+    }
   }
 
   if (filters?.memoryTypes && filters.memoryTypes.length > 0) {
@@ -284,11 +322,6 @@ export function bruteForceVectorSearch(
   if (filters?.eventDateRange?.end) {
     whereClauses.push('event_date_end <= ?');
     params.push(filters.eventDateRange.end);
-  }
-
-  const excludeInvalidated = filters?.excludeInvalidated ?? true;
-  if (excludeInvalidated) {
-    whereClauses.push('invalidated_at IS NULL');
   }
 
   const sql = `SELECT * FROM memories WHERE ${whereClauses.join(' AND ')}`;
@@ -357,9 +390,31 @@ export function vectorSearch(
   let sql = `SELECT * FROM memories WHERE id IN (${placeholders}) AND user_id = ?`;
   const params: unknown[] = [...rowids, userId];
 
-  const onlyLatest = filters?.onlyLatest ?? true;
-  if (onlyLatest) {
-    sql += ' AND is_latest = 1';
+  // State-based filtering: `states` supersedes onlyLatest + excludeInvalidated
+  if (filters?.states && filters.states.length > 0) {
+    const stateConditions: string[] = [];
+    if (filters.states.includes('current')) {
+      stateConditions.push('(is_latest = 1 AND invalidated_at IS NULL)');
+    }
+    if (filters.states.includes('superseded')) {
+      stateConditions.push('(is_latest = 0)');
+    }
+    if (filters.states.includes('invalidated')) {
+      stateConditions.push('(invalidated_at IS NOT NULL)');
+    }
+    if (stateConditions.length > 0) {
+      sql += ` AND (${stateConditions.join(' OR ')})`;
+    }
+  } else {
+    const onlyLatest = filters?.onlyLatest ?? true;
+    if (onlyLatest) {
+      sql += ' AND is_latest = 1';
+    }
+
+    const excludeInvalidated = filters?.excludeInvalidated ?? true;
+    if (excludeInvalidated) {
+      sql += ' AND invalidated_at IS NULL';
+    }
   }
 
   if (filters?.memoryTypes && filters.memoryTypes.length > 0) {
@@ -393,11 +448,6 @@ export function vectorSearch(
   if (filters?.eventDateRange?.end) {
     sql += ' AND event_date_end <= ?';
     params.push(filters.eventDateRange.end);
-  }
-
-  const excludeInvalidated = filters?.excludeInvalidated ?? true;
-  if (excludeInvalidated) {
-    sql += ' AND invalidated_at IS NULL';
   }
 
   const rows = db.prepare(sql).all(...params) as readonly MemoryRow[];

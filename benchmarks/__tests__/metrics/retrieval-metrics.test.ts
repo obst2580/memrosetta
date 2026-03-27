@@ -4,6 +4,7 @@ import {
   recallAtK,
   ndcgAtK,
   mrr,
+  staleSuppression,
 } from '../../src/metrics/retrieval-metrics.js';
 
 describe('precisionAtK', () => {
@@ -198,5 +199,54 @@ describe('mrr', () => {
     const retrievedPerQuery = [['x', 'a']];
     const relevantPerQuery = [new Set(['a'])];
     expect(mrr(retrievedPerQuery, relevantPerQuery)).toBe(0.5);
+  });
+});
+
+describe('staleSuppression', () => {
+  it('returns 1.0 for empty results', () => {
+    expect(staleSuppression([])).toBe(1.0);
+  });
+
+  it('returns 1.0 when all results are fresh', () => {
+    const results = [
+      { memory: { isLatest: true } },
+      { memory: { isLatest: true } },
+    ];
+    expect(staleSuppression(results)).toBe(1.0);
+  });
+
+  it('returns 0.0 when all results are invalidated', () => {
+    const results = [
+      { memory: { isLatest: true, invalidatedAt: '2025-01-01' } },
+      { memory: { isLatest: true, invalidatedAt: '2025-01-02' } },
+    ];
+    expect(staleSuppression(results)).toBe(0.0);
+  });
+
+  it('returns 0.0 when all results are superseded', () => {
+    const results = [
+      { memory: { isLatest: false } },
+      { memory: { isLatest: false } },
+    ];
+    expect(staleSuppression(results)).toBe(0.0);
+  });
+
+  it('returns correct ratio for mixed results', () => {
+    const results = [
+      { memory: { isLatest: true } },
+      { memory: { isLatest: false } },
+      { memory: { isLatest: true, invalidatedAt: '2025-01-01' } },
+      { memory: { isLatest: true } },
+    ];
+    // 2 fresh out of 4
+    expect(staleSuppression(results)).toBe(0.5);
+  });
+
+  it('invalidatedAt takes precedence over isLatest', () => {
+    const results = [
+      { memory: { isLatest: true, invalidatedAt: '2025-01-01' } },
+    ];
+    // isLatest is true but invalidatedAt is set -> not fresh
+    expect(staleSuppression(results)).toBe(0.0);
   });
 });

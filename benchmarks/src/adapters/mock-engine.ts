@@ -3,6 +3,7 @@ import type {
   Memory,
   MemoryInput,
   MemoryTier,
+  MemoryQuality,
   MemoryRelation,
   RelationType,
   SearchQuery,
@@ -173,5 +174,34 @@ export class MockEngine implements IMemoryEngine {
     if (memory) {
       this.memories.set(memoryId, { ...memory, tier });
     }
+  }
+
+  async quality(userId: string): Promise<MemoryQuality> {
+    const userMemories = [...this.memories.values()].filter(m => m.userId === userId);
+    const total = userMemories.length;
+    const fresh = userMemories.filter(m => m.isLatest && !m.invalidatedAt).length;
+    const invalidated = userMemories.filter(m => m.invalidatedAt != null).length;
+    const superseded = userMemories.filter(m => !m.isLatest).length;
+
+    const memoryIds = new Set(userMemories.map(m => m.memoryId));
+    const withRelationsSet = new Set<string>();
+    for (const rel of this.relations) {
+      if (memoryIds.has(rel.srcMemoryId)) withRelationsSet.add(rel.srcMemoryId);
+      if (memoryIds.has(rel.dstMemoryId)) withRelationsSet.add(rel.dstMemoryId);
+    }
+
+    const latestMemories = userMemories.filter(m => m.isLatest);
+    const avgActivation = latestMemories.length > 0
+      ? latestMemories.reduce((sum, m) => sum + m.activationScore, 0) / latestMemories.length
+      : 0;
+
+    return {
+      total,
+      fresh,
+      invalidated,
+      superseded,
+      withRelations: withRelationsSet.size,
+      avgActivation,
+    };
   }
 }

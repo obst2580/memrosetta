@@ -94,6 +94,26 @@ export function ndcgAtK(
  * For each query, finds the rank of the first relevant result.
  * MRR = (1/|Q|) * sum(1/rank_i)
  */
+/**
+ * Stale Suppression Rate: fraction of returned results that are NOT invalidated/superseded.
+ * Higher is better. Measures how well search avoids returning outdated information.
+ *
+ * A result is considered "fresh" when isLatest is true AND invalidatedAt is absent.
+ * Returns 1.0 for empty result sets (no stale results were returned).
+ */
+export function staleSuppression(
+  results: readonly { readonly memory: { readonly invalidatedAt?: string; readonly isLatest: boolean } }[],
+): number {
+  if (results.length === 0) return 1.0;
+  const fresh = results.filter(r => !r.memory.invalidatedAt && r.memory.isLatest);
+  return fresh.length / results.length;
+}
+
+/**
+ * Calculate Mean Reciprocal Rank (MRR) across multiple queries.
+ * For each query, finds the rank of the first relevant result.
+ * MRR = (1/|Q|) * sum(1/rank_i)
+ */
 export function mrr(
   retrievedPerQuery: readonly (readonly string[])[],
   relevantPerQuery: readonly ReadonlySet<string>[],

@@ -1,5 +1,13 @@
 export type MemoryType = 'fact' | 'preference' | 'decision' | 'event';
 
+/**
+ * Derived state of a memory based on existing fields.
+ * - current: is_latest=1 AND invalidated_at IS NULL
+ * - superseded: is_latest=0
+ * - invalidated: invalidated_at IS NOT NULL
+ */
+export type MemoryState = 'current' | 'superseded' | 'invalidated';
+
 export type MemoryTier = 'hot' | 'warm' | 'cold';
 
 export interface MemoryInput {
