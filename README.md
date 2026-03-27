@@ -585,7 +585,7 @@ Evaluated on [LoCoMo](https://github.com/snap-research/locomo) (1,986 QA pairs, 
 
 | Method | Precision@5 | MRR | Latency (p50) | LLM Required |
 |--------|:-----------:|:---:|:-------------:|:------------:|
-| FTS5 only | 0.0080 | 0.0286 | 0.4ms | No |
+| FTS5 only | 0.0087 | 0.0298 | 0.4ms | No |
 | Hybrid (FTS + Vector) | 0.0030 | 0.0111 | 4.2ms | No |
 | **Hybrid + Fact Extraction** | **0.0311** | **0.0572** | **4.0ms** | **Yes (external)** |
 

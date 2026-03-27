@@ -2,6 +2,29 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.2.19] - 2026-03-27
+
+### Added
+- **3-Factor Search Reranking** (Generative Agents): `score = recency + importance + relevance`, min-max normalized
+- **Ebbinghaus Forgetting Curve** (MemoryBank): `R = e^(-t/S)` blended with salience in maintain()
+- **Heat-Based Tier Auto-Promotion** (MemoryOS): `accessCount >= 10` auto-promotes to hot tier
+- **Duplicate Detection**: store() checks cosine similarity > 0.95 and auto-creates `updates` relation
+- **storeBatch NLI**: contradiction detection now runs on storeBatch (<=50 items)
+
+### Improved
+- FTS benchmark: P@5 0.0080→0.0087 (+8.8%), MRR 0.0286→0.0298 (+4.2%), zero latency increase
+
+## [0.2.18] - 2026-03-27
+
+### Fixed
+- **Codex init replaces stale config**: init --codex now removes existing MCP section before adding fresh one
+- Global install must use `memrosetta` wrapper package (not `@memrosetta/cli`) to get `memrosetta-mcp` binary
+
+## [0.2.17] - 2026-03-27
+
+### Fixed
+- **status version**: walks up from `import.meta.url` to find package.json in any install context
+
 ## [0.2.16] - 2026-03-27
 
 ### Fixed
