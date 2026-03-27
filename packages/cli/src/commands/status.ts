@@ -1,24 +1,46 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, statSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { getDefaultDbPath } from '../engine.js';
 import { output, type OutputFormat } from '../output.js';
 import { getConfig } from '../hooks/config.js';
 
 function getVersion(): string {
-  try {
-    const require = createRequire(import.meta.url);
-    const pkg = require('../../package.json') as { version: string };
-    return pkg.version;
-  } catch {
-    // Fallback: try resolving from @memrosetta/cli
-    try {
+  // Try multiple strategies to find the version
+  const strategies = [
+    // 1. Relative to source (dev/source checkout via tsx)
+    () => {
       const require = createRequire(import.meta.url);
-      const pkg = require('@memrosetta/cli/package.json') as { version: string };
-      return pkg.version;
-    } catch {
-      return 'unknown';
-    }
+      return (require('../../package.json') as { version: string }).version;
+    },
+    // 2. Resolve from npm package
+    () => {
+      const require = createRequire(import.meta.url);
+      return (require('@memrosetta/cli/package.json') as { version: string }).version;
+    },
+    // 3. Walk up to find package.json from current file location
+    () => {
+      const dir = dirname(fileURLToPath(import.meta.url));
+      // From dist/commands/ -> dist/ -> package root
+      for (let d = dir, i = 0; i < 5; i++) {
+        const candidate = join(d, 'package.json');
+        if (existsSync(candidate)) {
+          const pkg = JSON.parse(readFileSync(candidate, 'utf-8')) as { name?: string; version?: string };
+          if (pkg.name?.includes('memrosetta') && pkg.version) return pkg.version;
+        }
+        d = dirname(d);
+      }
+      throw new Error('not found');
+    },
+  ];
+
+  for (const strategy of strategies) {
+    try {
+      return strategy();
+    } catch {}
   }
+  return 'unknown';
 }
 import {
   isClaudeCodeConfigured,
