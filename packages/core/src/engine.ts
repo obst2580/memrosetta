@@ -129,11 +129,11 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       memories = storeBatchInTransaction(this.db!, this.stmts!, inputs);
     }
 
-    // Run contradiction + duplicate checks for small batches (<=50)
-    if (this.options.embedder && memories.length <= 50) {
+    // Run post-store checks for small batches (<=50)
+    if (memories.length <= 50) {
       for (const memory of memories) {
-        // Contradiction detection
-        if (this.options.contradictionDetector) {
+        // Contradiction detection (requires embedder + detector)
+        if (this.options.embedder && this.options.contradictionDetector) {
           try {
             await this.checkContradictions(memory);
           } catch {
@@ -141,14 +141,16 @@ export class SqliteMemoryEngine implements IMemoryEngine {
           }
         }
 
-        // Duplicate detection
-        try {
-          await this.checkDuplicates(memory);
-        } catch {
-          // Failure should not block storage
+        // Duplicate detection (requires embedder)
+        if (this.options.embedder) {
+          try {
+            await this.checkDuplicates(memory);
+          } catch {
+            // Failure should not block storage
+          }
         }
 
-        // Auto-relate by shared keywords
+        // Auto-relate by shared keywords (no embedder needed)
         try {
           await this.autoRelate(memory);
         } catch {
