@@ -545,25 +545,21 @@ describe('Phase 4: Activation weighting in search', () => {
     await engine.close();
   });
 
-  it('low activation score reduces search score', async () => {
+  it('low salience (importance) reduces search score via 3-factor reranking', async () => {
     const m1 = await engine.store(
       makeInput({
-        content: 'High activation database query optimization',
+        content: 'High importance database query optimization',
         keywords: ['database', 'optimization'],
+        salience: 1.0,
       }),
     );
     const m2 = await engine.store(
       makeInput({
-        content: 'Low activation database query performance',
+        content: 'Low importance database query performance',
         keywords: ['database', 'performance'],
+        salience: 0.1,
       }),
     );
-
-    // Lower m2 activation
-    const testEngine = engine as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } };
-    testEngine.db.prepare(
-      'UPDATE memories SET activation_score = 0.1 WHERE memory_id = ?',
-    ).run(m2.memoryId);
 
     const response = await engine.search({
       userId: 'user-1',
@@ -578,7 +574,7 @@ describe('Phase 4: Activation weighting in search', () => {
 
     expect(m1Result).toBeDefined();
     expect(m2Result).toBeDefined();
-    // m1 (high activation) should have higher final score
+    // m1 (high salience/importance) should have higher final score
     expect(m1Result!.score).toBeGreaterThan(m2Result!.score);
   });
 });

@@ -53,6 +53,35 @@ export function computeActivation(
 }
 
 /**
+ * Ebbinghaus forgetting curve: R = e^(-t/S)
+ * R = retention (0-1)
+ * t = days since last access
+ * S = strength (access_count, minimum 1)
+ *
+ * Works with existing fields (access_count, last_accessed_at) without
+ * needing an access history table like ACT-R does.
+ */
+export function computeEbbinghaus(
+  accessCount: number,
+  lastAccessedAt: string | null,
+  now?: Date,
+): number {
+  const currentTime = now ?? new Date();
+
+  if (!lastAccessedAt) {
+    // Never accessed, very low retention
+    return 0.1;
+  }
+
+  const S = Math.max(1, accessCount); // Strength
+  const t = (currentTime.getTime() - new Date(lastAccessedAt).getTime()) / MS_PER_DAY; // Days
+
+  if (t <= 0) return 1.0; // Just accessed
+
+  return Math.exp(-t / S);
+}
+
+/**
  * Sigmoid function to normalize activation to [0, 1].
  */
 function sigmoid(x: number): number {

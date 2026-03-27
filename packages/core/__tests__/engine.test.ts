@@ -1189,3 +1189,184 @@ describe('SqliteMemoryEngine time model', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// storeBatch with contradiction detection
+// ---------------------------------------------------------------------------
+describe('SqliteMemoryEngine storeBatch with contradiction detection', () => {
+  let engine: SqliteMemoryEngine;
+  let mockDetector: MockContradictionDetector;
+  const embedder = new MockEmbedder();
+
+  beforeEach(async () => {
+    mockDetector = new MockContradictionDetector();
+    await mockDetector.initialize();
+
+    engine = new SqliteMemoryEngine({
+      dbPath: ':memory:',
+      embedder,
+      contradictionDetector: mockDetector,
+      contradictionThreshold: 0.7,
+    });
+    await engine.initialize();
+  });
+
+  afterEach(async () => {
+    await engine.close();
+    await mockDetector.close();
+  });
+
+  it('storeBatch runs contradiction checks on small batches', async () => {
+    // Store a base memory first
+    await engine.store(
+      makeInput({
+        content: 'The server runs on port 3000',
+        keywords: ['server', 'port'],
+      }),
+    );
+
+    // Configure detector for contradiction
+    mockDetector.responseMap.set(
+      'The server runs on port 3000|||The server runs on port 8080',
+      { label: 'contradiction', score: 0.9 },
+    );
+
+    // storeBatch with a contradicting memory
+    const batchResults = await engine.storeBatch([
+      makeInput({
+        content: 'The server runs on port 8080',
+        keywords: ['server', 'port'],
+      }),
+    ]);
+
+    expect(batchResults).toHaveLength(1);
+
+    // Verify contradiction was detected during storeBatch
+    const relations = await engine.getRelations(batchResults[0].memoryId);
+    const contradicts = relations.filter(r => r.relationType === 'contradicts');
+    expect(contradicts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('storeBatch does not block on contradiction check failure', async () => {
+    // Make detector throw
+    const failDetector = new MockContradictionDetector();
+    await failDetector.initialize();
+    failDetector.detect = async () => { throw new Error('NLI crash'); };
+
+    const failEngine = new SqliteMemoryEngine({
+      dbPath: ':memory:',
+      embedder,
+      contradictionDetector: failDetector,
+    });
+    await failEngine.initialize();
+
+    const results = await failEngine.storeBatch([
+      makeInput({ content: 'Batch item A', keywords: ['batch'] }),
+      makeInput({ content: 'Batch item B', keywords: ['batch'] }),
+    ]);
+
+    expect(results).toHaveLength(2);
+
+    await failEngine.close();
+    await failDetector.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Duplicate detection
+// ---------------------------------------------------------------------------
+describe('SqliteMemoryEngine duplicate detection', () => {
+  let engine: SqliteMemoryEngine;
+
+  /**
+   * A mock embedder that produces very similar vectors for similar content.
+   * Content starting with the same prefix produces nearly identical embeddings.
+   */
+  class SimilarContentEmbedder implements Embedder {
+    readonly dimension = 384;
+    async initialize(): Promise<void> { /* no-op */ }
+    async close(): Promise<void> { /* no-op */ }
+    async embed(text: string): Promise<Float32Array> {
+      const vec = new Float32Array(384);
+      // Use first 10 chars as seed so similar content produces similar vectors
+      const seed = text.slice(0, 10);
+      for (let i = 0; i < 384; i++) {
+        vec[i] = Math.sin(seed.charCodeAt(i % seed.length) + i * 0.01) * 0.1;
+      }
+      const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
+      if (norm > 0) {
+        for (let i = 0; i < 384; i++) vec[i] /= norm;
+      }
+      return vec;
+    }
+    async embedBatch(texts: readonly string[]): Promise<readonly Float32Array[]> {
+      const results: Float32Array[] = [];
+      for (const t of texts) {
+        results.push(await this.embed(t));
+      }
+      return results;
+    }
+  }
+
+  afterEach(async () => {
+    if (engine) await engine.close();
+  });
+
+  it('auto-creates updates relation for near-duplicate content', async () => {
+    const similarEmbedder = new SimilarContentEmbedder();
+    engine = new SqliteMemoryEngine({
+      dbPath: ':memory:',
+      embedder: similarEmbedder,
+    });
+    await engine.initialize();
+
+    // Store two memories with very similar content (same first 10 chars -> same embedding)
+    const m1 = await engine.store(
+      makeInput({
+        content: 'TypeScrip: is a typed superset of JavaScript version 1',
+        keywords: ['typescript'],
+      }),
+    );
+
+    const m2 = await engine.store(
+      makeInput({
+        content: 'TypeScrip: is a typed superset of JavaScript version 2',
+        keywords: ['typescript'],
+      }),
+    );
+
+    // Check for auto-created 'updates' relation
+    const relations = await engine.getRelations(m2.memoryId);
+    const updates = relations.filter(r => r.relationType === 'updates');
+
+    // Should have created an 'updates' relation since cosine similarity is > 0.95
+    expect(updates.length).toBeGreaterThanOrEqual(1);
+    expect(updates[0].dstMemoryId).toBe(m1.memoryId);
+  });
+
+  it('does not create updates relation for different content', async () => {
+    engine = new SqliteMemoryEngine({
+      dbPath: ':memory:',
+      embedder: new MockEmbedder(),
+    });
+    await engine.initialize();
+
+    const m1 = await engine.store(
+      makeInput({
+        content: 'TypeScript is a programming language',
+        keywords: ['typescript'],
+      }),
+    );
+
+    const m2 = await engine.store(
+      makeInput({
+        content: 'Python is used for machine learning',
+        keywords: ['python'],
+      }),
+    );
+
+    const relations = await engine.getRelations(m2.memoryId);
+    const updates = relations.filter(r => r.relationType === 'updates');
+    expect(updates).toHaveLength(0);
+  });
+});

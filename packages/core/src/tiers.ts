@@ -11,23 +11,28 @@ export const DEFAULT_TIER_CONFIG: TierConfig = {
 /**
  * Determine the appropriate tier for a memory based on its properties.
  *
- * - hot: manually promoted memories stay hot
- * - warm: memories within warmDays of creation
- * - cold: older than warmDays
+ * - hot: manually promoted memories stay hot, OR auto-promoted via high access count (>= 10)
+ * - warm: memories within warmDays of creation, OR old but with high activation
+ * - cold: older than warmDays AND low activation
  */
 export function determineTier(
   memory: {
     readonly learnedAt: string;
     readonly activationScore: number;
     readonly tier: string;
+    readonly accessCount?: number;
   },
   config?: TierConfig,
   now?: Date,
 ): MemoryTier {
   const cfg = config ?? DEFAULT_TIER_CONFIG;
 
-  // Hot tier is sticky: only manual promotion sets it, and only manual demotion clears it
+  // Hot tier is sticky: manually promoted memories stay hot
   if (memory.tier === 'hot') return 'hot';
+
+  // Auto-promote frequently accessed memories to hot
+  const accessCount = memory.accessCount ?? 0;
+  if (accessCount >= 10) return 'hot';
 
   const currentTime = now ?? new Date();
   const age = (currentTime.getTime() - new Date(memory.learnedAt).getTime()) / MS_PER_DAY;
@@ -35,7 +40,10 @@ export function determineTier(
   // Warm: within warmDays
   if (age <= cfg.warmDays) return 'warm';
 
-  // Cold: older than warmDays
+  // Old but still active stays warm instead of going cold
+  if (memory.activationScore >= cfg.coldActivationThreshold) return 'warm';
+
+  // Cold: old AND low activation
   return 'cold';
 }
 

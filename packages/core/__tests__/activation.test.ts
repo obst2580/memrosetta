@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeActivation } from '../src/activation.js';
+import { computeActivation, computeEbbinghaus } from '../src/activation.js';
 
 describe('computeActivation', () => {
   const now = new Date('2026-03-24T12:00:00Z');
@@ -102,5 +102,62 @@ describe('computeActivation', () => {
     // Should return a valid score
     expect(score).toBeGreaterThanOrEqual(0);
     expect(score).toBeLessThanOrEqual(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeEbbinghaus
+// ---------------------------------------------------------------------------
+describe('computeEbbinghaus', () => {
+  const now = new Date('2026-03-24T12:00:00Z');
+
+  it('high access_count = high retention after time passes', () => {
+    // 10 days ago, 20 accesses (strong memory)
+    const highAccess = computeEbbinghaus(20, '2026-03-14T12:00:00Z', now);
+    // 10 days ago, 1 access (weak memory)
+    const lowAccess = computeEbbinghaus(1, '2026-03-14T12:00:00Z', now);
+
+    expect(highAccess).toBeGreaterThan(lowAccess);
+  });
+
+  it('old last_accessed = low retention', () => {
+    // 60 days ago
+    const old = computeEbbinghaus(3, '2026-01-23T12:00:00Z', now);
+    // 1 day ago
+    const recent = computeEbbinghaus(3, '2026-03-23T12:00:00Z', now);
+
+    expect(recent).toBeGreaterThan(old);
+    expect(old).toBeLessThan(0.5);
+  });
+
+  it('null last_accessed = very low retention (0.1)', () => {
+    const score = computeEbbinghaus(5, null, now);
+    expect(score).toBe(0.1);
+  });
+
+  it('just accessed = 1.0', () => {
+    const score = computeEbbinghaus(5, '2026-03-24T12:00:00Z', now);
+    expect(score).toBe(1.0);
+  });
+
+  it('returns value in [0, 1] range', () => {
+    const score = computeEbbinghaus(1, '2026-01-01T12:00:00Z', now);
+    expect(score).toBeGreaterThanOrEqual(0);
+    expect(score).toBeLessThanOrEqual(1);
+  });
+
+  it('zero access_count uses minimum strength of 1', () => {
+    const zeroAccess = computeEbbinghaus(0, '2026-03-14T12:00:00Z', now);
+    const oneAccess = computeEbbinghaus(1, '2026-03-14T12:00:00Z', now);
+
+    // Both should use S=1, so same result
+    expect(zeroAccess).toBeCloseTo(oneAccess, 10);
+  });
+
+  it('defaults to current time when now is not provided', () => {
+    const justNow = new Date().toISOString();
+    const score = computeEbbinghaus(5, justNow);
+    // Should be very close to 1.0
+    expect(score).toBeGreaterThan(0.99);
   });
 });

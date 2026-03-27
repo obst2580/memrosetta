@@ -18,11 +18,11 @@ describe('determineTier', () => {
     expect(tier).toBe('warm');
   });
 
-  it('old memory (>30 days) becomes cold', () => {
+  it('old memory (>30 days) with low activation becomes cold', () => {
     const tier = determineTier(
       {
         learnedAt: '2026-01-01T12:00:00Z', // ~83 days ago
-        activationScore: 0.5,
+        activationScore: 0.1, // below coldActivationThreshold (0.3)
         tier: 'warm',
       },
       undefined,
@@ -63,14 +63,14 @@ describe('determineTier', () => {
     expect(tier).toBe('warm');
   });
 
-  it('memory just past warmDays boundary is cold', () => {
+  it('memory just past warmDays boundary with low activation is cold', () => {
     const pastBoundary = new Date(now);
     pastBoundary.setDate(pastBoundary.getDate() - 31);
 
     const tier = determineTier(
       {
         learnedAt: pastBoundary.toISOString(),
-        activationScore: 0.5,
+        activationScore: 0.1, // below coldActivationThreshold (0.3)
         tier: 'warm',
       },
       undefined,
@@ -83,11 +83,11 @@ describe('determineTier', () => {
   it('respects custom config warmDays', () => {
     const config = { ...DEFAULT_TIER_CONFIG, warmDays: 7 };
 
-    // 10 days ago - should be cold with 7-day warmDays
+    // 10 days ago - should be cold with 7-day warmDays and low activation
     const tier = determineTier(
       {
         learnedAt: '2026-03-14T12:00:00Z',
-        activationScore: 0.5,
+        activationScore: 0.1, // below coldActivationThreshold (0.3)
         tier: 'warm',
       },
       config,
@@ -106,6 +106,50 @@ describe('determineTier', () => {
       activationScore: 0.5,
       tier: 'warm',
     });
+
+    expect(tier).toBe('warm');
+  });
+
+  it('accessCount >= 10 auto-promotes to hot', () => {
+    const tier = determineTier(
+      {
+        learnedAt: '2026-01-01T12:00:00Z', // very old
+        activationScore: 0.1,
+        tier: 'warm',
+        accessCount: 10,
+      },
+      undefined,
+      now,
+    );
+
+    expect(tier).toBe('hot');
+  });
+
+  it('accessCount < 10 does not auto-promote', () => {
+    const tier = determineTier(
+      {
+        learnedAt: '2026-03-20T12:00:00Z', // recent
+        activationScore: 0.5,
+        tier: 'warm',
+        accessCount: 9,
+      },
+      undefined,
+      now,
+    );
+
+    expect(tier).toBe('warm');
+  });
+
+  it('old but high activation stays warm instead of cold', () => {
+    const tier = determineTier(
+      {
+        learnedAt: '2026-01-01T12:00:00Z', // ~83 days ago
+        activationScore: 0.5, // above coldActivationThreshold (0.3)
+        tier: 'warm',
+      },
+      undefined,
+      now,
+    );
 
     expect(tier).toBe('warm');
   });

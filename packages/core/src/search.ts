@@ -556,6 +556,8 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
  * activation_weight = 0.5 + 0.5 * activationScore
  *
  * Low activation halves the score; high activation keeps it intact.
+ *
+ * @deprecated Use applyThreeFactorReranking instead.
  */
 function applyActivationWeighting(
   results: readonly SearchResult[],
@@ -567,6 +569,71 @@ function applyActivationWeighting(
       score: r.score * activationWeight,
     };
   }).sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Generative Agents-inspired 3-factor reranking.
+ * final_score = w_recency * recency + w_importance * importance + w_relevance * relevance
+ *
+ * - recency: exponential decay from learnedAt (0.995^hours)
+ * - importance: memory.salience (0-1)
+ * - relevance: original search score (from FTS/vector/RRF)
+ *
+ * All three are min-max normalized before combining.
+ */
+export function applyThreeFactorReranking(
+  results: readonly SearchResult[],
+  weights?: { recency?: number; importance?: number; relevance?: number },
+): readonly SearchResult[] {
+  if (results.length === 0) return results;
+
+  const w = {
+    recency: weights?.recency ?? 1.0,
+    importance: weights?.importance ?? 1.0,
+    relevance: weights?.relevance ?? 1.0,
+  };
+
+  const now = Date.now();
+
+  const scored = results.map(r => {
+    // Recency: exponential decay, 0.995^hours_since_learned
+    const hoursSince = (now - new Date(r.memory.learnedAt).getTime()) / (1000 * 60 * 60);
+    const recency = Math.pow(0.995, Math.max(0, hoursSince));
+
+    // Importance: salience field (default 1.0)
+    const importance = r.memory.salience ?? 1.0;
+
+    // Relevance: original search score
+    const relevance = r.score;
+
+    return { ...r, recency, importance, relevance };
+  });
+
+  // Min-max normalize each factor using loop-based approach to avoid stack overflow.
+  // Uses a minimum range threshold (epsilon) to prevent amplifying noise when
+  // values are nearly identical (e.g., two memories stored milliseconds apart).
+  const NORM_EPSILON = 0.01;
+  const safeNormalize = (values: readonly number[]): readonly number[] => {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const v of values) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const range = max - min;
+    if (range < NORM_EPSILON) return values.map(() => 1.0);
+    return values.map(v => (v - min) / range);
+  };
+
+  const recencies = safeNormalize(scored.map(s => s.recency));
+  const importances = safeNormalize(scored.map(s => s.importance));
+  const relevances = safeNormalize(scored.map(s => s.relevance));
+
+  return scored.map((s, i) => ({
+    memory: s.memory,
+    score: w.recency * recencies[i] + w.importance * importances[i] + w.relevance * relevances[i],
+    matchType: s.matchType,
+  })).sort((a, b) => b.score - a.score);
 }
 
 // ---------------------------------------------------------------------------
@@ -692,7 +759,7 @@ export function searchMemories(
 
   // If no vector, return FTS-only results (backward compatible)
   if (!queryVec) {
-    const weighted = applyActivationWeighting(ftsResults);
+    const weighted = applyThreeFactorReranking(ftsResults);
     const boosted = applyKeywordBoost(weighted, queryTokens);
     finalResults = deduplicateResults(boosted);
 
@@ -722,12 +789,12 @@ export function searchMemories(
         matchType: 'vector' as const,
       }));
 
-    const weighted = applyActivationWeighting(vecOnly);
+    const weighted = applyThreeFactorReranking(vecOnly);
     const boosted = applyKeywordBoost(weighted, queryTokens);
     finalResults = deduplicateResults(boosted);
   } else if (vecResults.length === 0) {
     // If vector returned nothing, return FTS-only
-    const weighted = applyActivationWeighting(ftsResults);
+    const weighted = applyThreeFactorReranking(ftsResults);
     const boosted = applyKeywordBoost(weighted, queryTokens);
     finalResults = deduplicateResults(boosted);
   } else {
@@ -747,7 +814,7 @@ export function searchMemories(
       }));
       reranked.sort((a, b) => b.score - a.score);
 
-      const weighted = applyActivationWeighting(reranked);
+      const weighted = applyThreeFactorReranking(reranked);
       const boosted = applyKeywordBoost(weighted, queryTokens);
       finalResults = deduplicateResults(boosted);
     } else {
@@ -766,7 +833,7 @@ export function searchMemories(
         });
       }
 
-      const weighted = applyActivationWeighting(ftsItems);
+      const weighted = applyThreeFactorReranking(ftsItems);
       const boosted = applyKeywordBoost(weighted, queryTokens);
       finalResults = deduplicateResults(boosted);
     }

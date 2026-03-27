@@ -30,8 +30,25 @@ import {
 } from './relations.js';
 import { rowToMemory, type MemoryRow } from './mapper.js';
 import { generateMemoryId, nowIso, keywordsToString } from './utils.js';
-import { computeActivation } from './activation.js';
+import { computeActivation, computeEbbinghaus } from './activation.js';
 import { determineTier, estimateTokens } from './tiers.js';
+
+/**
+ * Cosine similarity between two vectors. Used for duplicate detection.
+ */
+function cosineSim(a: Float32Array, b: Float32Array): number {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
 
 export interface SqliteEngineOptions {
   readonly dbPath: string; // ':memory:' for in-memory, or file path
@@ -107,6 +124,9 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       await this.checkContradictions(memory);
     }
 
+    // Check for duplicates and auto-create 'updates' relation for very high similarity
+    await this.checkDuplicates(memory);
+
     return memory;
   }
 
@@ -114,10 +134,26 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     inputs: readonly MemoryInput[],
   ): Promise<readonly Memory[]> {
     this.ensureInitialized();
+    let memories: readonly Memory[];
     if (this.options.embedder) {
-      return storeBatchAsync(this.db!, this.stmts!, inputs, this.options.embedder);
+      memories = await storeBatchAsync(this.db!, this.stmts!, inputs, this.options.embedder);
+    } else {
+      memories = storeBatchInTransaction(this.db!, this.stmts!, inputs);
     }
-    return storeBatchInTransaction(this.db!, this.stmts!, inputs);
+
+    // Run contradiction check on each memory if detector is available
+    // Only for small batches (<=50) to avoid excessive slowdown
+    if (this.options.contradictionDetector && this.options.embedder && memories.length <= 50) {
+      for (const memory of memories) {
+        try {
+          await this.checkContradictions(memory);
+        } catch {
+          // Contradiction check failure should not block storage
+        }
+      }
+    }
+
+    return memories;
   }
 
   async getById(memoryId: string): Promise<Memory | null> {
@@ -372,10 +408,14 @@ export class SqliteMemoryEngine implements IMemoryEngine {
 
     const activationTransaction = db.transaction(() => {
       for (const mem of memories) {
-        const timestamps = [mem.learned_at, mem.last_accessed_at].filter(
-          (t): t is string => t != null,
+        // Use Ebbinghaus forgetting curve (works with existing fields)
+        const ebbinghaus = computeEbbinghaus(
+          mem.access_count ?? 0,
+          mem.last_accessed_at ?? null,
         );
-        const score = computeActivation(timestamps, mem.salience);
+        // Blend Ebbinghaus retention with salience for final activation score
+        // Ebbinghaus dominates (80%) so that old unused memories decay properly
+        const score = ebbinghaus * 0.8 + (mem.salience ?? 1.0) * 0.2;
         updateActivation.run(score, mem.memory_id);
         activationUpdated++;
       }
@@ -400,6 +440,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
           learnedAt: mem.learned_at,
           activationScore: mem.activation_score ?? 1.0,
           tier: mem.tier ?? 'warm',
+          accessCount: mem.access_count ?? 0,
         });
 
         if (newTier !== (mem.tier ?? 'warm')) {
@@ -488,6 +529,59 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       }
     } catch {
       // Entire contradiction check failed, memory is still stored
+    }
+  }
+
+  /**
+   * Check for near-duplicate memories after storing.
+   * Uses direct cosine similarity (not the combined search score) to avoid
+   * false positives from the multi-factor reranking.
+   * If cosine similarity > 0.95, auto-create an 'updates' relation (new supersedes old).
+   * Only runs for single store() calls, not storeBatch() (too slow for bulk).
+   */
+  private async checkDuplicates(newMemory: Memory): Promise<void> {
+    if (!this.options.embedder) return;
+
+    try {
+      const queryVec = await this.options.embedder.embed(newMemory.content);
+
+      const similar = searchMemories(
+        this.db!,
+        {
+          userId: newMemory.userId,
+          query: newMemory.content,
+          limit: 5,
+          filters: { onlyLatest: true },
+        },
+        queryVec,
+        this.vectorEnabled,
+      );
+
+      for (const result of similar.results) {
+        if (result.memory.memoryId === newMemory.memoryId) continue;
+
+        // Compute direct cosine similarity for duplicate detection
+        // instead of relying on the combined search score
+        if (!result.memory.embedding || result.memory.embedding.length === 0) continue;
+        const embB = new Float32Array(result.memory.embedding);
+        const similarity = cosineSim(queryVec, embB);
+
+        if (similarity > 0.95) {
+          // Very high cosine similarity: likely an update
+          try {
+            await this.relate(
+              newMemory.memoryId,
+              result.memory.memoryId,
+              'updates',
+              `Auto-detected duplicate: cosine similarity ${similarity.toFixed(3)}`,
+            );
+          } catch {
+            // Relation may already exist, ignore
+          }
+        }
+      }
+    } catch {
+      // Duplicate check failure should not block storage
     }
   }
 

@@ -12,9 +12,10 @@ import {
   deduplicateResults,
   applyKeywordBoost,
   extractQueryTokens,
+  applyThreeFactorReranking,
 } from '../src/search.js';
 import { serializeEmbedding, type MemoryRow } from '../src/mapper.js';
-import type { SearchQuery, Memory } from '@memrosetta/types';
+import type { SearchQuery, SearchResult, Memory } from '@memrosetta/types';
 
 function insertTestMemory(
   db: Database.Database,
@@ -597,10 +598,10 @@ describe('searchMemories', () => {
 
     for (const r of result.results) {
       expect(r.score).toBeGreaterThanOrEqual(0);
-      // Scores can exceed 1.0 due to keyword boost
-      expect(r.score).toBeLessThanOrEqual(2.0);
+      // 3-factor reranking: max 3.0 (recency + importance + relevance), with keyword boost up to 50% -> max ~4.5
+      expect(r.score).toBeLessThanOrEqual(5.0);
     }
-    // Best match should have a high score (at least 1.0 before boost)
+    // Best match should have a meaningful score
     expect(result.results.some(r => r.score >= 1.0)).toBe(true);
   });
 
@@ -1306,5 +1307,127 @@ describe('extractQueryTokens', () => {
 
   it('returns empty for empty query', () => {
     expect(extractQueryTokens('')).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyThreeFactorReranking
+// ---------------------------------------------------------------------------
+describe('applyThreeFactorReranking', () => {
+  function makeMockResult(
+    id: string,
+    learnedAt: string,
+    salience: number,
+    score: number,
+  ): SearchResult {
+    return {
+      memory: {
+        memoryId: id,
+        userId: 'user1',
+        memoryType: 'fact',
+        content: `content for ${id}`,
+        learnedAt,
+        confidence: 1.0,
+        salience,
+        isLatest: true,
+        keywords: [],
+        tier: 'warm',
+        activationScore: 1.0,
+        accessCount: 0,
+      },
+      score,
+      matchType: 'fts',
+    };
+  }
+
+  it('recent memory scores higher than old memory', () => {
+    const now = new Date();
+    const recentDate = new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString(); // 1 hour ago
+    const oldDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days ago
+
+    const results: readonly SearchResult[] = [
+      makeMockResult('mem-old', oldDate, 1.0, 0.8),
+      makeMockResult('mem-recent', recentDate, 1.0, 0.8),
+    ];
+
+    const reranked = applyThreeFactorReranking(results);
+
+    const recentResult = reranked.find(r => r.memory.memoryId === 'mem-recent');
+    const oldResult = reranked.find(r => r.memory.memoryId === 'mem-old');
+
+    expect(recentResult).toBeDefined();
+    expect(oldResult).toBeDefined();
+    expect(recentResult!.score).toBeGreaterThan(oldResult!.score);
+  });
+
+  it('high salience memory scores higher than low salience', () => {
+    const now = new Date().toISOString();
+
+    const results: readonly SearchResult[] = [
+      makeMockResult('mem-low', now, 0.1, 0.5),
+      makeMockResult('mem-high', now, 1.0, 0.5),
+    ];
+
+    const reranked = applyThreeFactorReranking(results);
+
+    const highResult = reranked.find(r => r.memory.memoryId === 'mem-high');
+    const lowResult = reranked.find(r => r.memory.memoryId === 'mem-low');
+
+    expect(highResult).toBeDefined();
+    expect(lowResult).toBeDefined();
+    expect(highResult!.score).toBeGreaterThan(lowResult!.score);
+  });
+
+  it('original relevance score still matters', () => {
+    const now = new Date().toISOString();
+
+    const results: readonly SearchResult[] = [
+      makeMockResult('mem-low-rel', now, 1.0, 0.1),
+      makeMockResult('mem-high-rel', now, 1.0, 0.9),
+    ];
+
+    const reranked = applyThreeFactorReranking(results);
+
+    const highRelResult = reranked.find(r => r.memory.memoryId === 'mem-high-rel');
+    const lowRelResult = reranked.find(r => r.memory.memoryId === 'mem-low-rel');
+
+    expect(highRelResult).toBeDefined();
+    expect(lowRelResult).toBeDefined();
+    expect(highRelResult!.score).toBeGreaterThan(lowRelResult!.score);
+  });
+
+  it('single result returns normalized score', () => {
+    const now = new Date().toISOString();
+    const results: readonly SearchResult[] = [
+      makeMockResult('mem-only', now, 0.8, 0.7),
+    ];
+
+    const reranked = applyThreeFactorReranking(results);
+
+    expect(reranked).toHaveLength(1);
+    // Single result: all factors normalize to 1.0
+    // score = 1.0 * 1.0 + 1.0 * 1.0 + 1.0 * 1.0 = 3.0
+    expect(reranked[0].score).toBeCloseTo(3.0, 1);
+  });
+
+  it('returns empty for empty input', () => {
+    expect(applyThreeFactorReranking([])).toEqual([]);
+  });
+
+  it('respects custom weights', () => {
+    const now = new Date();
+    const recentDate = new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString();
+    const oldDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const results: readonly SearchResult[] = [
+      makeMockResult('mem-old', oldDate, 1.0, 0.8),
+      makeMockResult('mem-recent', recentDate, 1.0, 0.8),
+    ];
+
+    // Zero out recency weight: recency should no longer affect ranking
+    const reranked = applyThreeFactorReranking(results, { recency: 0.0 });
+
+    // With recency=0 and same importance/relevance, scores should be equal
+    expect(reranked[0].score).toBeCloseTo(reranked[1].score, 1);
   });
 });
