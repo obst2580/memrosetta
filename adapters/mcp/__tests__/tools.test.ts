@@ -19,6 +19,8 @@ function createMockMemory(overrides: Partial<Memory> = {}): Memory {
     accessCount: 2,
     confidence: 0.9,
     salience: 0.7,
+    useCount: 0,
+    successCount: 0,
     keywords: ['typescript', 'javascript'],
     ...overrides,
   };
@@ -61,6 +63,15 @@ function createMockEngine(): IMemoryEngine {
       removed: 0,
     }),
     setTier: vi.fn(),
+    quality: vi.fn().mockResolvedValue({
+      total: 0,
+      fresh: 0,
+      invalidated: 0,
+      superseded: 0,
+      withRelations: 0,
+      avgActivation: 0,
+    }),
+    feedback: vi.fn(),
   };
 }
 
@@ -87,13 +98,14 @@ describe('MCP tools', () => {
       expect(TOOL_NAMES).toContain('memrosetta_working_memory');
       expect(TOOL_NAMES).toContain('memrosetta_count');
       expect(TOOL_NAMES).toContain('memrosetta_invalidate');
-      expect(TOOL_NAMES).toHaveLength(6);
+      expect(TOOL_NAMES).toContain('memrosetta_feedback');
+      expect(TOOL_NAMES).toHaveLength(7);
     });
   });
 
   describe('TOOL_DEFINITIONS', () => {
-    it('has 6 tool definitions', () => {
-      expect(TOOL_DEFINITIONS).toHaveLength(6);
+    it('has 7 tool definitions', () => {
+      expect(TOOL_DEFINITIONS).toHaveLength(7);
     });
 
     it('each definition has name, description, and inputSchema', () => {
@@ -152,6 +164,14 @@ describe('MCP tools', () => {
         (t) => t.name === 'memrosetta_invalidate',
       );
       expect(invalidTool!.inputSchema.required).toEqual(['memoryId']);
+    });
+
+    it('feedback tool requires memoryId and helpful', () => {
+      const feedbackTool = TOOL_DEFINITIONS.find(
+        (t) => t.name === 'memrosetta_feedback',
+      );
+      expect(feedbackTool).toBeDefined();
+      expect(feedbackTool!.inputSchema.required).toEqual(['memoryId', 'helpful']);
     });
   });
 
@@ -354,6 +374,32 @@ describe('MCP tools', () => {
         expect(engine.invalidate).toHaveBeenCalledWith(
           'mem-test-001',
           undefined,
+        );
+      });
+    });
+
+    describe('memrosetta_feedback', () => {
+      it('calls engine.feedback with helpful=true', async () => {
+        const result = await handleToolCall(engine, 'memrosetta_feedback', {
+          memoryId: 'mem-test-001',
+          helpful: true,
+        });
+
+        expect(engine.feedback).toHaveBeenCalledWith('mem-test-001', true);
+        expect(result.content[0].text).toBe(
+          'Feedback recorded for mem-test-001: helpful',
+        );
+      });
+
+      it('calls engine.feedback with helpful=false', async () => {
+        const result = await handleToolCall(engine, 'memrosetta_feedback', {
+          memoryId: 'mem-test-001',
+          helpful: false,
+        });
+
+        expect(engine.feedback).toHaveBeenCalledWith('mem-test-001', false);
+        expect(result.content[0].text).toBe(
+          'Feedback recorded for mem-test-001: not helpful',
         );
       });
     });

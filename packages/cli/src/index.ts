@@ -20,6 +20,7 @@ Commands:
   clear            Clear all memories for a user
   relate           Create a relation between memories
   invalidate       Mark a memory as invalidated
+  feedback         Record feedback on a memory (helpful/not helpful)
   working-memory   Show working memory for a user
   maintain         Run maintenance (recompute scores, update tiers, compress)
   compress         Run compression only
@@ -122,6 +123,11 @@ async function main(): Promise<void> {
       }
       case 'invalidate': {
         const mod = await import('./commands/invalidate.js');
+        await mod.run(commandOptions);
+        break;
+      }
+      case 'feedback': {
+        const mod = await import('./commands/feedback.js');
         await mod.run(commandOptions);
         break;
       }

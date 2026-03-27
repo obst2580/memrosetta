@@ -44,4 +44,8 @@ export interface Memory extends MemoryInput {
   readonly lastAccessedAt?: string;
   /** memory_id of the original memory, if this is a compressed summary. Engine-managed. */
   readonly compressedFrom?: string;
+  /** Number of times this memory was used (retrieved and acted upon). Engine-managed. */
+  readonly useCount: number;
+  /** Number of times this memory was reported as helpful. Engine-managed. */
+  readonly successCount: number;
 }

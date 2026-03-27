@@ -14,8 +14,8 @@ export interface PreparedStatements {
 export function createPreparedStatements(db: Database.Database): PreparedStatements {
   return {
     insertMemory: db.prepare(`
-      INSERT INTO memories (memory_id, user_id, namespace, memory_type, content, raw_text, document_date, learned_at, source_id, confidence, salience, is_latest, embedding, keywords, event_date_start, event_date_end, invalidated_at, tier, activation_score, access_count, last_accessed_at, compressed_from)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO memories (memory_id, user_id, namespace, memory_type, content, raw_text, document_date, learned_at, source_id, confidence, salience, is_latest, embedding, keywords, event_date_start, event_date_end, invalidated_at, tier, activation_score, access_count, last_accessed_at, compressed_from, use_count, success_count)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `),
     getById: db.prepare('SELECT * FROM memories WHERE id = ?'),
     getByMemoryId: db.prepare('SELECT * FROM memories WHERE memory_id = ?'),
@@ -59,6 +59,8 @@ export function storeMemory(
     0, // access_count
     null, // last_accessed_at
     null, // compressed_from
+    0, // use_count
+    0, // success_count
   );
 
   // Read back the stored row to get the canonical representation
@@ -112,6 +114,8 @@ export async function storeMemoryAsync(
     0, // access_count
     null, // last_accessed_at
     null, // compressed_from
+    0, // use_count
+    0, // success_count
   );
 
   // Insert into vec_memories if embedding was computed
@@ -200,6 +204,8 @@ export async function storeBatchAsync(
         0, // access_count
         null, // last_accessed_at
         null, // compressed_from
+        0, // use_count
+        0, // success_count
       );
 
       if (info.lastInsertRowid) {

@@ -25,7 +25,9 @@ CREATE TABLE memories (
   activation_score REAL DEFAULT 1.0,
   access_count     INTEGER DEFAULT 0,
   last_accessed_at TEXT,
-  compressed_from  TEXT
+  compressed_from  TEXT,
+  use_count        INTEGER DEFAULT 0,
+  success_count    INTEGER DEFAULT 0
 );
 
 CREATE INDEX idx_memories_user_id ON memories(user_id);
@@ -74,6 +76,11 @@ CREATE TRIGGER memories_au AFTER UPDATE ON memories BEGIN
 END;
 `;
 
+const SCHEMA_V5 = `
+ALTER TABLE memories ADD COLUMN use_count INTEGER DEFAULT 0;
+ALTER TABLE memories ADD COLUMN success_count INTEGER DEFAULT 0;
+`;
+
 export interface SchemaOptions {
   readonly vectorEnabled?: boolean;
   readonly embeddingDimension?: number;
@@ -119,8 +126,8 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
       db.exec(schemaV2(dim));
       version = 2;
     }
-    // Fresh databases already include v3 + v4 columns in SCHEMA_V1
-    version = 4;
+    // Fresh databases already include v3 + v4 + v5 columns in SCHEMA_V1
+    version = 5;
     db.prepare('INSERT INTO schema_version (version, embedding_dimension) VALUES (?, ?)').run(version, dim);
     return;
   }
@@ -154,6 +161,15 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
       db.exec(SCHEMA_V4);
     }
     db.prepare('UPDATE schema_version SET version = ?').run(4);
+  }
+
+  if (currentVersion < 5) {
+    // Only run ALTER TABLE for pre-v5 databases.
+    // Fresh databases already have these columns in SCHEMA_V1.
+    if (currentVersion >= 1) {
+      db.exec(SCHEMA_V5);
+    }
+    db.prepare('UPDATE schema_version SET version = ?').run(5);
   }
 
   // Ensure vec_memories exists when vector is enabled (handles DB created without vectors)

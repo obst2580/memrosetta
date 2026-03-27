@@ -79,4 +79,7 @@ export interface IMemoryEngine {
 
   /** Return quality statistics about a user's memory store. */
   quality(userId: string): Promise<MemoryQuality>;
+
+  /** Record feedback on a memory: was it helpful when used? Updates salience dynamically. */
+  feedback(memoryId: string, helpful: boolean): Promise<void>;
 }

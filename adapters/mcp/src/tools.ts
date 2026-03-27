@@ -51,6 +51,11 @@ const invalidateSchema = z.object({
   reason: z.string().max(2_000).optional(),
 });
 
+const feedbackSchema = z.object({
+  memoryId: z.string().min(1).max(256),
+  helpful: z.boolean(),
+});
+
 /** MCP tool response shape. */
 export interface ToolResponse {
   readonly content: ReadonlyArray<{ readonly type: 'text'; readonly text: string }>;
@@ -178,6 +183,25 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         },
       },
       required: ['memoryId'],
+    },
+  },
+  {
+    name: 'memrosetta_feedback',
+    description:
+      'Record whether a retrieved memory was helpful. Improves future search ranking.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        memoryId: {
+          type: 'string',
+          description: 'Memory ID that was used',
+        },
+        helpful: {
+          type: 'boolean',
+          description: 'Was the memory helpful?',
+        },
+      },
+      required: ['memoryId', 'helpful'],
     },
   },
 ];
@@ -313,6 +337,19 @@ export async function handleToolCall(
           {
             type: 'text',
             text: `Memory ${validated.memoryId} invalidated.`,
+          },
+        ],
+      };
+    }
+
+    case 'memrosetta_feedback': {
+      const validated = feedbackSchema.parse(args);
+      await engine.feedback(validated.memoryId, validated.helpful);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Feedback recorded for ${validated.memoryId}: ${validated.helpful ? 'helpful' : 'not helpful'}`,
           },
         ],
       };

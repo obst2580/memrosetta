@@ -25,6 +25,8 @@ function createTestMemory(overrides: Partial<Memory> = {}): Memory {
     accessCount: 3,
     confidence: 0.9,
     salience: 0.7,
+    useCount: 0,
+    successCount: 0,
     ...overrides,
   };
 }

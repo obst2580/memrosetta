@@ -194,6 +194,12 @@ Do NOT store:
 
 This checklist ensures nothing important is lost, including the last response before session ends.
 No need to specify userId -- it defaults to the system username.
+
+### Feedback (mcp__memory-service__memrosetta_feedback)
+After using a retrieved memory, report whether it was helpful:
+- Memory was accurate and useful -> feedback(memoryId, helpful=true)
+- Memory was outdated or wrong -> feedback(memoryId, helpful=false)
+This improves future search ranking automatically.
 `;
 
   writeFileSync(CLAUDE_MD_PATH, existing + memorySection, 'utf-8');

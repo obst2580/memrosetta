@@ -372,6 +372,8 @@ export class SqliteMemoryEngine implements IMemoryEngine {
           0, // access_count
           null, // last_accessed_at
           rows[0].memory_id, // compressed_from
+          0, // use_count
+          0, // success_count
         );
         compressed++;
 
@@ -464,6 +466,37 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     this.ensureInitialized();
     this.db!.prepare('UPDATE memories SET tier = ? WHERE memory_id = ?')
       .run(tier, memoryId);
+  }
+
+  async feedback(memoryId: string, helpful: boolean): Promise<void> {
+    this.ensureInitialized();
+    const db = this.db!;
+
+    db.transaction(() => {
+      // Increment use_count, and success_count if helpful
+      if (helpful) {
+        db.prepare(
+          'UPDATE memories SET use_count = use_count + 1, success_count = success_count + 1 WHERE memory_id = ?',
+        ).run(memoryId);
+      } else {
+        db.prepare(
+          'UPDATE memories SET use_count = use_count + 1 WHERE memory_id = ?',
+        ).run(memoryId);
+      }
+
+      // Recalculate salience based on success rate
+      // If never used (use_count=0), keep original salience
+      const row = db.prepare(
+        'SELECT salience, use_count, success_count FROM memories WHERE memory_id = ?',
+      ).get(memoryId) as { salience: number; use_count: number; success_count: number } | undefined;
+
+      if (row && row.use_count > 0) {
+        const successRate = row.success_count / row.use_count;
+        // Blend: keep at least 50% of original salience, boost up to 100% based on success
+        const newSalience = Math.min(1.0, Math.max(0.1, 0.5 + 0.5 * successRate));
+        db.prepare('UPDATE memories SET salience = ? WHERE memory_id = ?').run(newSalience, memoryId);
+      }
+    })();
   }
 
   async quality(userId: string): Promise<MemoryQuality> {

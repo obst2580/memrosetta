@@ -1370,3 +1370,79 @@ describe('SqliteMemoryEngine duplicate detection', () => {
     expect(updates).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Feedback (utility feedback system)
+// ---------------------------------------------------------------------------
+describe('SqliteMemoryEngine feedback', () => {
+  let engine: SqliteMemoryEngine;
+
+  beforeEach(async () => {
+    engine = new SqliteMemoryEngine({ dbPath: ':memory:' });
+    await engine.initialize();
+  });
+
+  afterEach(async () => {
+    await engine.close();
+  });
+
+  it('increments use_count and success_count when helpful=true', async () => {
+    const m = await engine.store(makeInput());
+    expect(m.useCount).toBe(0);
+    expect(m.successCount).toBe(0);
+
+    await engine.feedback(m.memoryId, true);
+    const after = await engine.getById(m.memoryId);
+    expect(after!.useCount).toBe(1);
+    expect(after!.successCount).toBe(1);
+  });
+
+  it('increments only use_count when helpful=false', async () => {
+    const m = await engine.store(makeInput());
+
+    await engine.feedback(m.memoryId, false);
+    const after = await engine.getById(m.memoryId);
+    expect(after!.useCount).toBe(1);
+    expect(after!.successCount).toBe(0);
+  });
+
+  it('increases salience after helpful feedback', async () => {
+    const m = await engine.store(makeInput({ salience: 0.5 }));
+    const originalSalience = m.salience;
+
+    await engine.feedback(m.memoryId, true);
+    const after = await engine.getById(m.memoryId);
+    // helpful=true with 100% success rate -> salience = 0.5 + 0.5 * 1.0 = 1.0
+    expect(after!.salience).toBeGreaterThanOrEqual(originalSalience);
+    expect(after!.salience).toBe(1.0);
+  });
+
+  it('decreases salience after not-helpful feedback', async () => {
+    const m = await engine.store(makeInput({ salience: 1.0 }));
+
+    await engine.feedback(m.memoryId, false);
+    const after = await engine.getById(m.memoryId);
+    // helpful=false with 0% success rate -> salience = 0.5 + 0.5 * 0.0 = 0.5
+    expect(after!.salience).toBe(0.5);
+  });
+
+  it('accumulates multiple feedback calls correctly', async () => {
+    const m = await engine.store(makeInput());
+
+    await engine.feedback(m.memoryId, true);
+    await engine.feedback(m.memoryId, true);
+    await engine.feedback(m.memoryId, false);
+
+    const after = await engine.getById(m.memoryId);
+    expect(after!.useCount).toBe(3);
+    expect(after!.successCount).toBe(2);
+    // successRate = 2/3 -> salience = 0.5 + 0.5 * (2/3) ~ 0.833
+    expect(after!.salience).toBeCloseTo(0.5 + 0.5 * (2 / 3), 5);
+  });
+
+  it('does not crash on non-existent memory', async () => {
+    // Should not throw
+    await engine.feedback('nonexistent-id', true);
+    await engine.feedback('nonexistent-id', false);
+  });
+});

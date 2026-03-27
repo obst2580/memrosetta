@@ -48,6 +48,12 @@ When new information updates or contradicts existing memories, create a relation
 ### Working memory (memrosetta_working_memory)
 Call this at the start of complex tasks to load relevant context.
 No need to specify userId -- it defaults to the system username.
+
+### Feedback (memrosetta_feedback)
+After using a retrieved memory, report whether it was helpful:
+- Memory was accurate and useful -> feedback(memoryId, helpful=true)
+- Memory was outdated or wrong -> feedback(memoryId, helpful=false)
+This improves future search ranking automatically.
 `;
 
 // ---------------------------------------------------------------------------

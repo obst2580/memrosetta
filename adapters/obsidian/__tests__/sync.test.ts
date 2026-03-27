@@ -22,6 +22,8 @@ function createMockMemory(overrides: Partial<Memory> = {}): Memory {
     accessCount: 2,
     confidence: 0.9,
     salience: 0.7,
+    useCount: 0,
+    successCount: 0,
     keywords: ['typescript', 'javascript'],
     ...overrides,
   };
@@ -49,6 +51,10 @@ function createMockEngine(memories: readonly Memory[] = []): IMemoryEngine {
       activationUpdated: 0, tiersUpdated: 0, compressed: 0, removed: 0,
     }),
     setTier: vi.fn(),
+    quality: vi.fn().mockResolvedValue({
+      total: 0, fresh: 0, invalidated: 0, superseded: 0, withRelations: 0, avgActivation: 0,
+    }),
+    feedback: vi.fn(),
   };
 }
 

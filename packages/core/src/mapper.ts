@@ -25,6 +25,8 @@ export interface MemoryRow {
   readonly access_count: number | null;
   readonly last_accessed_at: string | null;
   readonly compressed_from: string | null;
+  readonly use_count: number | null;
+  readonly success_count: number | null;
 }
 
 export function rowToMemory(row: MemoryRow): Memory {
@@ -51,6 +53,8 @@ export function rowToMemory(row: MemoryRow): Memory {
     accessCount: row.access_count ?? 0,
     ...(row.last_accessed_at != null ? { lastAccessedAt: row.last_accessed_at } : {}),
     ...(row.compressed_from != null ? { compressedFrom: row.compressed_from } : {}),
+    useCount: row.use_count ?? 0,
+    successCount: row.success_count ?? 0,
   };
 }
 

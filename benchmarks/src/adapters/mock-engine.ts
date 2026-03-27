@@ -39,6 +39,8 @@ export class MockEngine implements IMemoryEngine {
       tier: 'warm',
       activationScore: 1.0,
       accessCount: 0,
+      useCount: 0,
+      successCount: 0,
     };
     this.memories.set(memory.memoryId, memory);
     return memory;
@@ -173,6 +175,22 @@ export class MockEngine implements IMemoryEngine {
     const memory = this.memories.get(memoryId);
     if (memory) {
       this.memories.set(memoryId, { ...memory, tier });
+    }
+  }
+
+  async feedback(memoryId: string, helpful: boolean): Promise<void> {
+    const memory = this.memories.get(memoryId);
+    if (memory) {
+      const newUseCount = memory.useCount + 1;
+      const newSuccessCount = helpful ? memory.successCount + 1 : memory.successCount;
+      const successRate = newSuccessCount / newUseCount;
+      const newSalience = Math.min(1.0, Math.max(0.1, 0.5 + 0.5 * successRate));
+      this.memories.set(memoryId, {
+        ...memory,
+        useCount: newUseCount,
+        successCount: newSuccessCount,
+        salience: newSalience,
+      });
     }
   }
 

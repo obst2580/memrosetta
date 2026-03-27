@@ -137,6 +137,8 @@ describe('deriveMemoryState', () => {
       tier: 'warm',
       activationScore: 1.0,
       accessCount: 0,
+      useCount: 0,
+      successCount: 0,
     });
     expect(state).toBe('current');
   });
@@ -152,6 +154,8 @@ describe('deriveMemoryState', () => {
       tier: 'warm',
       activationScore: 1.0,
       accessCount: 0,
+      useCount: 0,
+      successCount: 0,
     });
     expect(state).toBe('superseded');
   });
@@ -168,6 +172,8 @@ describe('deriveMemoryState', () => {
       tier: 'warm',
       activationScore: 1.0,
       accessCount: 0,
+      useCount: 0,
+      successCount: 0,
     });
     expect(state).toBe('invalidated');
   });
@@ -184,6 +190,8 @@ describe('deriveMemoryState', () => {
       tier: 'warm',
       activationScore: 1.0,
       accessCount: 0,
+      useCount: 0,
+      successCount: 0,
     });
     expect(state).toBe('invalidated');
   });

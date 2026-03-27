@@ -28,6 +28,7 @@ const COMMANDS = new Set([
   'init',
   'reset',
   'update',
+  'feedback',
 ]);
 
 function findFlag(args: readonly string[], flag: string): boolean {
