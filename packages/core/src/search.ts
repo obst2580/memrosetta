@@ -123,7 +123,7 @@ export function buildSearchSql(query: SearchQuery): SearchSqlResult {
       stateConditions.push('(m.is_latest = 1 AND m.invalidated_at IS NULL)');
     }
     if (filters.states.includes('superseded')) {
-      stateConditions.push('(m.is_latest = 0)');
+      stateConditions.push('(m.is_latest = 0 AND m.invalidated_at IS NULL)');
     }
     if (filters.states.includes('invalidated')) {
       stateConditions.push('(m.invalidated_at IS NOT NULL)');
@@ -271,7 +271,7 @@ export function bruteForceVectorSearch(
       stateConditions.push('(is_latest = 1 AND invalidated_at IS NULL)');
     }
     if (filters.states.includes('superseded')) {
-      stateConditions.push('(is_latest = 0)');
+      stateConditions.push('(is_latest = 0 AND invalidated_at IS NULL)');
     }
     if (filters.states.includes('invalidated')) {
       stateConditions.push('(invalidated_at IS NOT NULL)');
@@ -397,7 +397,7 @@ export function vectorSearch(
       stateConditions.push('(is_latest = 1 AND invalidated_at IS NULL)');
     }
     if (filters.states.includes('superseded')) {
-      stateConditions.push('(is_latest = 0)');
+      stateConditions.push('(is_latest = 0 AND invalidated_at IS NULL)');
     }
     if (filters.states.includes('invalidated')) {
       stateConditions.push('(invalidated_at IS NOT NULL)');

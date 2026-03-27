@@ -147,6 +147,13 @@ export class SqliteMemoryEngine implements IMemoryEngine {
         } catch {
           // Failure should not block storage
         }
+
+        // Auto-relate by shared keywords
+        try {
+          await this.autoRelate(memory);
+        } catch {
+          // Failure should not block storage
+        }
       }
     }
 
@@ -307,10 +314,11 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     this.ensureInitialized();
     const db = this.db!;
 
-    // Find cold memories with very low activation
+    // Find cold memories with very low activation (exclude invalidated)
     const coldMemories = db.prepare(`
       SELECT * FROM memories
       WHERE user_id = ? AND tier = 'cold' AND activation_score < 0.1 AND is_latest = 1
+      AND invalidated_at IS NULL
       ORDER BY namespace, learned_at
     `).all(userId) as MemoryRow[];
 
