@@ -379,8 +379,11 @@ export function vectorSearch(
       WHERE embedding MATCH ?
       AND k = ?
     `).all(vecBuf, candidateLimit) as readonly { rowid: number; distance: number }[];
-  } catch {
-    // vec_memories table might not exist or sqlite-vec not loaded
+  } catch (err) {
+    // vec_memories table might not exist or sqlite-vec not loaded.
+    // Fall back to brute-force JS cosine similarity.
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`[memrosetta] vec_memories KNN unavailable, using brute-force fallback: ${msg}\n`);
     return bruteForceVectorSearch(db, queryVec, userId, limit, filters);
   }
 

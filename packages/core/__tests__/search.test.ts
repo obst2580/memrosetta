@@ -1437,3 +1437,64 @@ describe('applyThreeFactorReranking', () => {
     expect(reranked[0].score).toBeCloseTo(reranked[1].score, 1);
   });
 });
+
+describe('multi-user vector search isolation', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+    ensureSchema(db);
+  });
+
+  afterEach(() => {
+    db.close();
+  });
+
+  it('brute-force vector search only returns memories for requested userId', () => {
+    const vec1 = new Float32Array(384).fill(0.1);
+    const vec2 = new Float32Array(384).fill(0.1);
+    const vecOther = new Float32Array(384).fill(0.9);
+
+    // Insert memories for two different users
+    insertTestMemory(db, {
+      memory_id: 'mem-user1-a',
+      user_id: 'alice',
+      content: 'Alice memory 1',
+      embedding: serializeEmbedding(vec1),
+    });
+    insertTestMemory(db, {
+      memory_id: 'mem-user1-b',
+      user_id: 'alice',
+      content: 'Alice memory 2',
+      embedding: serializeEmbedding(vec2),
+    });
+    insertTestMemory(db, {
+      memory_id: 'mem-user2-a',
+      user_id: 'bob',
+      content: 'Bob memory 1',
+      embedding: serializeEmbedding(vecOther),
+    });
+
+    const queryVec = new Float32Array(384).fill(0.1);
+    const results = bruteForceVectorSearch(db, queryVec, 'alice', 10);
+
+    // Should only return Alice's memories, never Bob's
+    expect(results.length).toBe(2);
+    expect(results.every(r => r.memory.userId === 'alice')).toBe(true);
+    expect(results.some(r => r.memory.userId === 'bob')).toBe(false);
+  });
+
+  it('brute-force returns empty for user with no memories', () => {
+    const vec = new Float32Array(384).fill(0.5);
+    insertTestMemory(db, {
+      memory_id: 'mem-bob-1',
+      user_id: 'bob',
+      content: 'Bob only',
+      embedding: serializeEmbedding(vec),
+    });
+
+    const queryVec = new Float32Array(384).fill(0.5);
+    const results = bruteForceVectorSearch(db, queryVec, 'alice', 10);
+    expect(results.length).toBe(0);
+  });
+});
