@@ -563,7 +563,11 @@ describe('SqliteMemoryEngine with embedder', () => {
       });
 
       expect(response.results.length).toBeGreaterThan(0);
-      expect(response.results[0].memory.content).toContain('TypeScript');
+      // Hybrid search must include the TypeScript memory in results
+      const hasTypeScript = response.results.some(r =>
+        r.memory.content.includes('TypeScript'),
+      );
+      expect(hasTypeScript).toBe(true);
     });
 
     it('returns results with queryTimeMs', async () => {

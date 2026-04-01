@@ -575,6 +575,75 @@ export function rrfMergeWeighted(
 }
 
 // ---------------------------------------------------------------------------
+// Convex combination fusion (score-level merge)
+// ---------------------------------------------------------------------------
+
+/**
+ * Score-level fusion: alpha * normalizedVecSim + (1 - alpha) * normalizedFtsSim.
+ *
+ * Unlike RRF (which discards score magnitude), this preserves score information.
+ * Both FTS and vector scores are min-max normalized within the result set so
+ * neither modality dominates due to scale differences.
+ *
+ * Items found by both sources get the combined score (strongest signal).
+ * Items found by only one source get at most alpha or (1-alpha) of max.
+ */
+export function convexCombinationMerge(
+  ftsResults: readonly SearchResult[],
+  vecResults: readonly VectorSearchResult[],
+  alpha: number = 0.5,
+  limit: number = 10,
+): readonly SearchResult[] {
+  // Collect raw vector similarities
+  const vecSims = new Map<string, { sim: number; memory: Memory }>();
+  for (const vr of vecResults) {
+    vecSims.set(vr.memory.memoryId, {
+      sim: 1 - vr.distance,
+      memory: vr.memory,
+    });
+  }
+
+  // Min-max normalize vector similarities
+  const vecValues = [...vecSims.values()].map(v => v.sim);
+  const vecMin = vecValues.length > 0 ? Math.min(...vecValues) : 0;
+  const vecMax = vecValues.length > 0 ? Math.max(...vecValues) : 1;
+  const vecRange = vecMax - vecMin || 1;
+
+  // Min-max normalize FTS scores within result set
+  const ftsValues = ftsResults.map(r => r.score);
+  const ftsMin = ftsValues.length > 0 ? Math.min(...ftsValues) : 0;
+  const ftsMax = ftsValues.length > 0 ? Math.max(...ftsValues) : 1;
+  const ftsRange = ftsMax - ftsMin || 1;
+
+  // Merge all candidates
+  const merged = new Map<string, { score: number; memory: Memory }>();
+
+  for (const fr of ftsResults) {
+    const normFts = (fr.score - ftsMin) / ftsRange;
+    const vecEntry = vecSims.get(fr.memory.memoryId);
+    const normVec = vecEntry ? (vecEntry.sim - vecMin) / vecRange : 0;
+    const score = alpha * normVec + (1 - alpha) * normFts;
+    merged.set(fr.memory.memoryId, { score, memory: fr.memory });
+  }
+
+  for (const [id, entry] of vecSims) {
+    if (merged.has(id)) continue;
+    const normVec = (entry.sim - vecMin) / vecRange;
+    const score = alpha * normVec;
+    merged.set(id, { score, memory: entry.memory });
+  }
+
+  return [...merged.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(({ score, memory }) => ({
+      memory,
+      score,
+      matchType: 'hybrid' as const,
+    }));
+}
+
+// ---------------------------------------------------------------------------
 // Cosine similarity (JS fallback)
 // ---------------------------------------------------------------------------
 
@@ -787,7 +856,7 @@ export function updateAccessTracking(
  *
  * When queryVec is not provided, performs FTS-only search (backward compatible).
  * When queryVec is provided, performs hybrid search combining FTS + vector
- * results via Reciprocal Rank Fusion.
+ * results via convex combination score fusion.
  *
  * Results are weighted by activation score and access tracking is updated.
  */
@@ -851,45 +920,13 @@ export function searchMemories(
     const boosted = applyKeywordBoost(weighted, queryTokens);
     finalResults = deduplicateResults(boosted);
   } else {
-    // FTS-primary hybrid strategy:
-    // - If FTS returned enough results, use vector only as a re-ranker
-    //   (boost FTS items that also appear in vector results, but don't add new items)
-    // - If FTS returned few results, allow vector to add new items
+    // Convex combination fusion: principled score-level merge
     const limit = query.limit ?? DEFAULT_LIMIT;
-    const ftsHasEnough = ftsResults.length >= limit;
+    const merged = convexCombinationMerge(ftsResults, vecResults, 0.3, limit);
 
-    if (ftsHasEnough) {
-      // Re-rank mode: boost FTS results that vector also found
-      const vecIds = new Set(vecResults.map(r => r.memory.memoryId));
-      const reranked: SearchResult[] = ftsResults.map(r => ({
-        ...r,
-        score: r.score * (vecIds.has(r.memory.memoryId) ? 1.3 : 1.0),
-      }));
-      reranked.sort((a, b) => b.score - a.score);
-
-      const weighted = applyThreeFactorReranking(reranked);
-      const boosted = applyKeywordBoost(weighted, queryTokens);
-      finalResults = deduplicateResults(boosted);
-    } else {
-      // Fill mode: FTS results first, then vector adds new items
-      const ftsIds = new Set(ftsResults.map(r => r.memory.memoryId));
-      const ftsItems: SearchResult[] = [...ftsResults];
-
-      // Add vector-only results after FTS
-      for (const vr of vecResults) {
-        if (ftsItems.length >= limit) break;
-        if (ftsIds.has(vr.memory.memoryId)) continue;
-        ftsItems.push({
-          memory: vr.memory,
-          score: (1 - vr.distance) * 0.5, // Lower score than FTS items
-          matchType: 'hybrid' as const,
-        });
-      }
-
-      const weighted = applyThreeFactorReranking(ftsItems);
-      const boosted = applyKeywordBoost(weighted, queryTokens);
-      finalResults = deduplicateResults(boosted);
-    }
+    const weighted = applyThreeFactorReranking(merged);
+    const boosted = applyKeywordBoost(weighted, queryTokens);
+    finalResults = deduplicateResults(boosted);
   }
 
   // Update access tracking for returned results

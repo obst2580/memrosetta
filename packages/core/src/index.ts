@@ -7,7 +7,7 @@ export { createPreparedStatements, storeMemory, storeBatchInTransaction, storeMe
 export type { PreparedStatements } from './store.js';
 export { createRelationStatements, createRelation, getRelationsByMemory } from './relations.js';
 export type { RelationStatements } from './relations.js';
-export { buildFtsQuery, buildSearchSql, normalizeScores, ftsSearch, vectorSearch, bruteForceVectorSearch, rrfMerge, rrfMergeWeighted, searchMemories, updateAccessTracking, deduplicateResults, applyKeywordBoost, extractQueryTokens, applyThreeFactorReranking } from './search.js';
+export { buildFtsQuery, buildSearchSql, normalizeScores, ftsSearch, vectorSearch, bruteForceVectorSearch, rrfMerge, rrfMergeWeighted, convexCombinationMerge, searchMemories, updateAccessTracking, deduplicateResults, applyKeywordBoost, extractQueryTokens, applyThreeFactorReranking } from './search.js';
 export type { SearchSqlResult, VectorSearchResult } from './search.js';
 export { SqliteMemoryEngine, createEngine } from './engine.js';
 export type { SqliteEngineOptions } from './engine.js';
