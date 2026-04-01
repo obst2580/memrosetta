@@ -2,6 +2,24 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.3.0] - 2026-04-01
+
+### Added
+- **CI workflow**: build + typecheck + test on every push and pull request
+- **Codex integration**: `memrosetta init --codex` sets up MCP server in `~/.codex/config.toml` + AGENTS.md
+- **CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md**: community health files
+
+### Changed
+- **Node 22+ required**: unified minimum Node version across all packages (was mixed 20+/22+)
+- **Convex combination score fusion**: replaced ad-hoc FTS-primary hybrid strategy with principled convex combination for search ranking
+
+### Fixed
+- **Relation API 404 errors**: consistent `MemoryNotFoundError` when referenced memories do not exist
+- **Multi-user vector search**: brute-force fallback when KNN yields too few results for a user's subset
+
+### Tests
+- 696+ tests (up from 610+)
+
 ## [0.2.19] - 2026-03-27
 
 ### Added

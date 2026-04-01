@@ -67,6 +67,8 @@ You re-explain, re-decide, re-debug. MemRosetta gives any AI tool persistent, se
 
 ## Quick Start
 
+Requires **Node.js 22+**.
+
 ```bash
 npm install -g memrosetta
 ```
@@ -340,7 +342,7 @@ memrosetta maintain
 
 **Non-destructive** -- Nothing is ever deleted. Old versions are preserved via relations and `isLatest` flags.
 
-**610+ tests.**
+**696+ tests.**
 
 ## MCP Tools
 
@@ -624,7 +626,7 @@ git clone https://github.com/obst2580/memrosetta.git
 cd memrosetta
 pnpm install
 pnpm build             # Build all packages (required before first test)
-pnpm test              # 610+ tests
+pnpm test              # 696+ tests
 pnpm bench:mock        # Quick benchmark (no LLM needed)
 ```
 
@@ -632,6 +634,8 @@ pnpm bench:mock        # Quick benchmark (no LLM needed)
 > workspace packages (`@memrosetta/types`, `@memrosetta/core`, etc.) are compiled
 > before tests reference their `dist/` exports. If you only want to re-run tests
 > without rebuilding, use `pnpm test:only`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ## Roadmap
 
@@ -646,6 +650,8 @@ pnpm bench:mock        # Quick benchmark (no LLM needed)
 - [x] Claude Code integration
 - [x] LoCoMo benchmarks
 - [x] Multilingual embeddings (Korean, multilingual, configurable presets)
+- [x] Codex integration
+- [x] CI pipeline (build + typecheck + test)
 - [ ] PostgreSQL adapter (team/server use)
 - [ ] Profile builder (stable + dynamic user profiles)
 

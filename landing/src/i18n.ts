@@ -290,9 +290,9 @@ memrosetta maintain`,
             'Nothing is ever deleted. When a fact is updated, the old version remains with isLatest=false and a relation edge pointing to the new version. When a fact is invalidated, it gets an invalidatedAt timestamp. Full audit trail of every change.',
         },
         {
-          title: '588+ Tests',
+          title: '696+ Tests',
           description:
-            'Comprehensive test suite covering core engine, hybrid search, NLI contradiction detection, relation graph traversal, tier compression, activation scoring, MCP tools, REST API, CLI commands, and Claude Code integration.',
+            'Comprehensive test suite covering core engine, hybrid search, NLI contradiction detection, relation graph traversal, tier compression, activation scoring, MCP tools, REST API, CLI commands, and Claude Code integration. CI runs on every push and PR.',
         },
       ],
     },
@@ -703,9 +703,9 @@ memrosetta maintain`,
             '삭제 없음. 사실이 업데이트되면 이전 버전은 isLatest=false로 남고, 새 버전을 가리키는 관계 엣지가 생성. 사실이 무효화되면 invalidatedAt 타임스탬프를 받음. 모든 변경의 전체 감사 추적.',
         },
         {
-          title: '588+ 테스트',
+          title: '696+ 테스트',
           description:
-            '코어 엔진, 하이브리드 검색, NLI 모순 감지, 관계 그래프 탐색, 계층 압축, 활성화 점수, MCP 도구, REST API, CLI 명령어, Claude Code 통합을 커버하는 종합 테스트 스위트.',
+            '코어 엔진, 하이브리드 검색, NLI 모순 감지, 관계 그래프 탐색, 계층 압축, 활성화 점수, MCP 도구, REST API, CLI 명령어, Claude Code 통합을 커버하는 종합 테스트 스위트. 모든 push/PR에서 CI가 실행됩니다.',
         },
       ],
     },

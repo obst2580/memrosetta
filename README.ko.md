@@ -67,6 +67,8 @@ MemRosetta 없이:
 
 ## 시작하기
 
+**Node.js 22+** 필요.
+
 ```bash
 npm install -g memrosetta
 ```
@@ -80,6 +82,9 @@ memrosetta init --claude-code
 
 # Cursor: + MCP 설정
 memrosetta init --cursor
+
+# Codex: + config.toml + AGENTS.md 지침
+memrosetta init --codex
 ```
 
 끝입니다. 도구를 재시작하면 기억이 작동합니다.
@@ -144,7 +149,7 @@ Stop Hook이 놓친 것을 잡아냅니다.
 Claude Code ----+
 Claude Desktop --+--> ~/.memrosetta/memories.db <--+-- Cursor
 Windsurf -------+     (로컬 SQLite 파일 하나)       +-- Cline
-                                                   +-- Continue
+Codex ----------+                                  +-- Continue
 ```
 
 | 도구 | MCP | 설정 |
@@ -154,6 +159,7 @@ Windsurf -------+     (로컬 SQLite 파일 하나)       +-- Cline
 | Cursor | Yes | `memrosetta init --cursor` |
 | Windsurf | Yes | `memrosetta init --mcp` |
 | Cline | Yes | `memrosetta init --mcp` |
+| Codex | Yes | `memrosetta init --codex` |
 | Continue | Yes | `memrosetta init --mcp` |
 | ChatGPT / Copilot | -- | MCP 미지원. CLI 또는 REST API 사용. |
 
@@ -162,7 +168,7 @@ Windsurf -------+     (로컬 SQLite 파일 하나)       +-- Cline
 ```
 오전   Claude Code: 인증 시스템 디버깅           --> 기억 저장
 오후   Cursor: 로그인 UI 개발                    --> "인증" 검색 --> 오전 결정사항 조회
-저녁   Claude Desktop: 아키텍처 문서 작성         --> 양쪽 세션의 전체 맥락 보유
+저녁   Codex: 인증 미들웨어 리팩토링              --> 양쪽 세션의 전체 맥락 보유
 ```
 
 동기화 없음. 클라우드 없음. 설정 없음. 로컬 파일 하나로 동작합니다.
@@ -336,7 +342,7 @@ memrosetta maintain
 
 **비파괴적** -- 아무것도 삭제하지 않습니다. 이전 버전은 관계와 `isLatest` 플래그로 보존됩니다.
 
-**610개 이상의 테스트.**
+**696개 이상의 테스트.**
 
 ## MCP 도구
 
@@ -589,7 +595,7 @@ git clone https://github.com/obst2580/memrosetta.git
 cd memrosetta
 pnpm install
 pnpm build             # 모든 패키지 빌드 (첫 테스트 전 필수)
-pnpm test              # 610개 이상의 테스트
+pnpm test              # 696개 이상의 테스트
 pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 ```
 
@@ -597,6 +603,8 @@ pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 > 패키지(`@memrosetta/types`, `@memrosetta/core` 등)가 테스트에서 `dist/` 내보내기를
 > 참조하기 전에 컴파일되도록 합니다. 빌드 없이 테스트만 재실행하려면
 > `pnpm test:only`를 사용하세요.
+
+기여 가이드라인은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
 
 ## 로드맵
 
@@ -610,7 +618,9 @@ pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 - [x] CLI + REST API + MCP 서버
 - [x] Claude Code 연동
 - [x] LoCoMo 벤치마크
-- [ ] 다국어 임베딩 (한국어, 일본어 등)
+- [x] 다국어 임베딩 (한국어, 다국어, 프리셋 설정)
+- [x] Codex 연동
+- [x] CI 파이프라인 (빌드 + 타입체크 + 테스트)
 - [ ] PostgreSQL 어댑터 (팀/서버 용도)
 - [ ] 프로필 빌더 (stable + dynamic 사용자 프로필)
 
