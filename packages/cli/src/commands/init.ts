@@ -88,7 +88,7 @@ export async function run(options: InitOptions): Promise<void> {
   // Persist init options to config
   {
     const config = getConfig();
-    const updates: Partial<typeof config> = {};
+    const updates: Partial<{ -readonly [K in keyof typeof config]: (typeof config)[K] }> = {};
     if (db) {
       updates.dbPath = db;
     }
