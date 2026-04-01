@@ -24,4 +24,4 @@ jobs:
       - run: pnpm install
       - run: pnpm build
       - run: pnpm typecheck
-      - run: pnpm test
+      - run: pnpm test:only

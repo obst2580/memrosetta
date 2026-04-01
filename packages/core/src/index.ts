@@ -1,3 +1,4 @@
+export { MemoryNotFoundError } from './errors.js';
 export { ensureSchema } from './schema.js';
 export type { SchemaOptions } from './schema.js';
 export { generateMemoryId, nowIso, keywordsToString, stringToKeywords, deriveMemoryState } from './utils.js';

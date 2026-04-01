@@ -1,5 +1,6 @@
 import type { ErrorHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { MemoryNotFoundError } from '@memrosetta/core';
 import { ZodError } from 'zod';
 
 export class AppError extends Error {
@@ -27,6 +28,13 @@ export const errorHandler: ErrorHandler = (err, c) => {
         details: err.errors.map(e => ({ path: e.path.join('.'), message: e.message })),
       },
       400,
+    );
+  }
+
+  if (err instanceof MemoryNotFoundError) {
+    return c.json(
+      { success: false as const, error: err.message },
+      404,
     );
   }
 

@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { MemoryRelation, RelationType } from '@memrosetta/types';
+import { MemoryNotFoundError } from './errors.js';
 import { nowIso } from './utils.js';
 
 export interface RelationStatements {
@@ -38,11 +39,11 @@ export function createRelation(
   // Verify both memories exist
   const srcExists = stmts.checkMemoryExists.get(srcMemoryId);
   if (!srcExists) {
-    throw new Error(`Source memory not found: ${srcMemoryId}`);
+    throw new MemoryNotFoundError(srcMemoryId);
   }
   const dstExists = stmts.checkMemoryExists.get(dstMemoryId);
   if (!dstExists) {
-    throw new Error(`Destination memory not found: ${dstMemoryId}`);
+    throw new MemoryNotFoundError(dstMemoryId);
   }
 
   const createdAt = nowIso();

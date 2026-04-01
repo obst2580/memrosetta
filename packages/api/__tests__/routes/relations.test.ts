@@ -98,19 +98,37 @@ describe('Relations routes', () => {
     expect(data.success).toBe(false);
   });
 
-  it('POST /api/relations returns error for non-existent memory', async () => {
+  it('POST /api/relations returns 404 for non-existent source memory', async () => {
     const res = await app.request('/api/relations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         srcMemoryId: 'nonexistent-id-1',
+        dstMemoryId: memoryIdA,
+        relationType: 'derives',
+      }),
+    });
+    expect(res.status).toBe(404);
+    const data = await res.json();
+    expect(data.success).toBe(false);
+    expect(data.error).toContain('Memory not found');
+    expect(data.error).toContain('nonexistent-id-1');
+  });
+
+  it('POST /api/relations returns 404 for non-existent destination memory', async () => {
+    const res = await app.request('/api/relations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        srcMemoryId: memoryIdA,
         dstMemoryId: 'nonexistent-id-2',
         relationType: 'derives',
       }),
     });
-    // The engine may or may not throw for non-existent memories
-    // depending on foreign key constraints. Either 200 or 500 is acceptable.
+    expect(res.status).toBe(404);
     const data = await res.json();
-    expect(data).toBeDefined();
+    expect(data.success).toBe(false);
+    expect(data.error).toContain('Memory not found');
+    expect(data.error).toContain('nonexistent-id-2');
   });
 });

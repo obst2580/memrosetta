@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { IMemoryEngine, Memory, SearchResponse, MemoryRelation } from '@memrosetta/types';
+import { MemoryNotFoundError } from '@memrosetta/core';
 import { TOOL_NAMES, TOOL_DEFINITIONS, handleToolCall } from '../src/tools.js';
 
 // ---------------------------------------------------------------------------
@@ -424,6 +425,20 @@ describe('MCP tools', () => {
             memoryType: 'fact',
           }),
         ).rejects.toThrow('DB connection lost');
+      });
+
+      it('propagates MemoryNotFoundError from engine.relate', async () => {
+        (engine.relate as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+          new MemoryNotFoundError('mem-nonexistent'),
+        );
+
+        await expect(
+          handleToolCall(engine, 'memrosetta_relate', {
+            srcMemoryId: 'mem-nonexistent',
+            dstMemoryId: 'mem-2',
+            relationType: 'updates',
+          }),
+        ).rejects.toThrow('Memory not found: mem-nonexistent');
       });
 
       it('propagates non-Error thrown values', async () => {

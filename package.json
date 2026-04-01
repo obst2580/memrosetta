@@ -20,7 +20,7 @@
     "obsidian": "pnpm --filter @memrosetta/obsidian run start --"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

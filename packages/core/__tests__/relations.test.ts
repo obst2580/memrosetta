@@ -83,7 +83,7 @@ describe('relations', () => {
 
       expect(() => {
         createRelation(db, relStmts, 'mem-nonexistent', m1.memoryId, 'extends');
-      }).toThrow('Source memory not found: mem-nonexistent');
+      }).toThrow('Memory not found: mem-nonexistent');
     });
 
     it('throws error for non-existent destination memory', () => {
@@ -91,7 +91,7 @@ describe('relations', () => {
 
       expect(() => {
         createRelation(db, relStmts, m1.memoryId, 'mem-nonexistent', 'extends');
-      }).toThrow('Destination memory not found: mem-nonexistent');
+      }).toThrow('Memory not found: mem-nonexistent');
     });
 
     it('stores reason if provided', () => {
