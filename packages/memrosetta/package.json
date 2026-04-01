@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@memrosetta/cli": "0.2.22",
-    "@memrosetta/mcp": "0.2.21"
+    "@memrosetta/mcp": "0.2.22"
   },
   "keywords": ["ai", "memory", "llm", "claude", "cursor", "mcp", "sqlite", "local-first"],
   "license": "MIT",

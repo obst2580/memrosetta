@@ -364,7 +364,11 @@ export function vectorSearch(
   }
 
   // Step 1: KNN search in vec_memories
-  const candidateLimit = Math.min(limit * 5, 200);
+  // sqlite-vec KNN does not support WHERE clauses, so we fetch a large
+  // candidate set globally, then filter by userId + other criteria.
+  // If the filtered set is too small, fall back to brute-force (which
+  // applies userId from the start) to guarantee accuracy.
+  const candidateLimit = Math.min(limit * 10, 500);
   const vecBuf = Buffer.from(queryVec.buffer, queryVec.byteOffset, queryVec.byteLength);
 
   let candidates: readonly { rowid: number; distance: number }[];
@@ -451,6 +455,13 @@ export function vectorSearch(
   }
 
   const rows = db.prepare(sql).all(...params) as readonly MemoryRow[];
+
+  // If KNN global search + userId filter returned fewer results than
+  // requested, the user's memories may have been crowded out by other
+  // users' data. Fall back to brute-force which filters by userId first.
+  if (rows.length < limit) {
+    return bruteForceVectorSearch(db, queryVec, userId, limit, filters);
+  }
 
   return rows
     .map(row => ({
