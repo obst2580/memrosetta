@@ -8,6 +8,18 @@ import { fileURLToPath } from 'node:url';
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+function resolveAbsolutePath(command: string): string | null {
+  try {
+    const cmd =
+      process.platform === 'win32'
+        ? `where ${command}`
+        : `command -v ${command}`;
+    return execSync(cmd, { encoding: 'utf-8' }).trim().split('\n')[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 function isInPath(command: string): boolean {
   try {
     const cmd =
@@ -51,9 +63,12 @@ export function resolveMcpCommand(): {
   readonly command: string;
   readonly args: readonly string[];
 } {
-  // 1. Global binary in PATH
+  // 1. Global binary in PATH -- resolve to absolute path so tools that
+  // don't inherit the user's shell profile (e.g., Codex with inherit=core)
+  // can still find the binary.
   if (isInPath('memrosetta-mcp')) {
-    return { command: 'memrosetta-mcp', args: [] };
+    const absPath = resolveAbsolutePath('memrosetta-mcp');
+    return { command: absPath ?? 'memrosetta-mcp', args: [] };
   }
 
   // 2. Try require.resolve (works for npm-installed dependencies)
@@ -97,9 +112,9 @@ export function resolveMcpCommand(): {
 export function resolveHookCommand(
   hookName: 'memrosetta-on-stop' | 'memrosetta-on-prompt',
 ): string {
-  // 1. Global binary in PATH
+  // 1. Global binary in PATH -- use absolute path for non-interactive shells
   if (isInPath(hookName)) {
-    return hookName;
+    return resolveAbsolutePath(hookName) ?? hookName;
   }
 
   const hookFile =
