@@ -85,6 +85,9 @@ memrosetta init --cursor
 
 # Codex: + config.toml + AGENTS.md 지침
 memrosetta init --codex
+
+# Gemini: + settings.json + GEMINI.md 지침
+memrosetta init --gemini
 ```
 
 끝입니다. 도구를 재시작하면 기억이 작동합니다.
@@ -150,6 +153,7 @@ Claude Code ----+
 Claude Desktop --+--> ~/.memrosetta/memories.db <--+-- Cursor
 Windsurf -------+     (로컬 SQLite 파일 하나)       +-- Cline
 Codex ----------+                                  +-- Continue
+Gemini ---------+
 ```
 
 | 도구 | MCP | 설정 |
@@ -160,6 +164,7 @@ Codex ----------+                                  +-- Continue
 | Windsurf | Yes | `memrosetta init --mcp` |
 | Cline | Yes | `memrosetta init --mcp` |
 | Codex | Yes | `memrosetta init --codex` |
+| Gemini | Yes | `memrosetta init --gemini` |
 | Continue | Yes | `memrosetta init --mcp` |
 | ChatGPT / Copilot | -- | MCP 미지원. CLI 또는 REST API 사용. |
 
@@ -620,6 +625,7 @@ pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 - [x] LoCoMo 벤치마크
 - [x] 다국어 임베딩 (한국어, 다국어, 프리셋 설정)
 - [x] Codex 연동
+- [x] Gemini 연동
 - [x] CI 파이프라인 (빌드 + 타입체크 + 테스트)
 - [ ] PostgreSQL 어댑터 (팀/서버 용도)
 - [ ] 프로필 빌더 (stable + dynamic 사용자 프로필)

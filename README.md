@@ -85,6 +85,9 @@ memrosetta init --cursor
 
 # Codex: + config.toml + AGENTS.md instructions
 memrosetta init --codex
+
+# Gemini: + settings.json + GEMINI.md instructions
+memrosetta init --gemini
 ```
 
 That's it. Restart your tool and it has memory.
@@ -150,6 +153,7 @@ Claude Code ----+
 Claude Desktop --+--> ~/.memrosetta/memories.db <--+-- Cursor
 Windsurf -------+     (one local SQLite file)      +-- Cline
 Codex ----------+                                  +-- Continue
+Gemini ---------+
 ```
 
 | Tool | MCP | Setup |
@@ -160,6 +164,7 @@ Codex ----------+                                  +-- Continue
 | Windsurf | Yes | `memrosetta init` |
 | Cline | Yes | `memrosetta init` |
 | Codex | Yes | `memrosetta init --codex` |
+| Gemini | Yes | `memrosetta init --gemini` |
 | Continue | Yes | `memrosetta init` |
 | ChatGPT / Copilot | -- | No MCP support. Use CLI or REST API. |
 
@@ -555,6 +560,7 @@ MemRosetta supports multiple embedding models for different languages:
 memrosetta init --claude-code                # English (default)
 memrosetta init --claude-code --lang multi   # Multilingual
 memrosetta init --claude-code --lang ko      # Korean
+memrosetta init --gemini                     # Gemini (same flags apply)
 ```
 
 As a library:
@@ -651,6 +657,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] LoCoMo benchmarks
 - [x] Multilingual embeddings (Korean, multilingual, configurable presets)
 - [x] Codex integration
+- [x] Gemini integration
 - [x] CI pipeline (build + typecheck + test)
 - [ ] PostgreSQL adapter (team/server use)
 - [ ] Profile builder (stable + dynamic user profiles)

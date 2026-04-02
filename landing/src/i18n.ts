@@ -51,6 +51,7 @@ export const content = {
         'claude-code': 'Claude Code',
         cursor: 'Cursor / MCP',
         codex: 'Codex',
+        gemini: 'Gemini',
         cli: 'CLI',
       },
       code: {
@@ -108,6 +109,23 @@ memrosetta status
 # Remove integration
 memrosetta reset --codex`,
         },
+        gemini: {
+          language: 'bash',
+          code: `# Install CLI and set up everything
+npm install -g memrosetta
+memrosetta init --gemini
+
+# That's it. Restart Gemini.
+# Registers MCP server in ~/.gemini/settings.json
+# Adds memory instructions to GEMINI.md
+# Shares the same ~/.memrosetta/memories.db
+
+# Check status
+memrosetta status
+
+# Remove integration
+memrosetta reset --gemini`,
+        },
         cli: {
           language: 'bash',
           code: `# Install globally
@@ -139,7 +157,7 @@ memrosetta maintain`,
     compatibility: {
       title: 'Works With',
       subtitle:
-        'One local database, shared across all your AI tools. Memories stored in Claude Code are searchable from Cursor, and vice versa.',
+        'One local database, shared across all your AI tools. Memories stored in Claude Code are searchable from Cursor, Gemini, and vice versa.',
       diagramComment: '// All tools share one database',
       sharing: {
         title: 'Cross-tool memory sharing',
@@ -464,6 +482,7 @@ memrosetta maintain`,
         'claude-code': 'Claude Code',
         cursor: 'Cursor / MCP',
         codex: 'Codex',
+        gemini: 'Gemini',
         cli: 'CLI',
       },
       code: {
@@ -520,6 +539,23 @@ memrosetta status
 
 # 통합 제거
 memrosetta reset --codex`,
+        },
+        gemini: {
+          language: 'bash',
+          code: `# CLI 설치 후 모든 설정 완료
+npm install -g memrosetta
+memrosetta init --gemini
+
+# 끝. Gemini를 재시작하세요.
+# ~/.gemini/settings.json에 MCP 서버 등록
+# GEMINI.md에 메모리 사용 지침 추가
+# 동일한 ~/.memrosetta/memories.db 공유
+
+# 상태 확인
+memrosetta status
+
+# 통합 제거
+memrosetta reset --gemini`,
         },
         cli: {
           language: 'bash',

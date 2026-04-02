@@ -5,6 +5,7 @@ All notable changes to MemRosetta will be documented in this file.
 ## [0.3.0] - 2026-04-01
 
 ### Added
+- **Gemini integration**: `memrosetta init --gemini` registers MCP server in `~/.gemini/settings.json` + GEMINI.md instructions; `memrosetta reset --gemini` to remove
 - **CI workflow**: build + typecheck + test on every push and pull request
 - **Codex integration**: `memrosetta init --codex` sets up MCP server in `~/.codex/config.toml` + AGENTS.md
 - **CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md**: community health files

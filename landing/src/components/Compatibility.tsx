@@ -8,6 +8,7 @@ const SUPPORTED_TOOLS = [
   { name: 'Cursor', mcp: true, setup: 'memrosetta init --cursor' },
   { name: 'Windsurf', mcp: true, setup: 'memrosetta init --mcp' },
   { name: 'Codex', mcp: true, setup: 'memrosetta init --codex' },
+  { name: 'Gemini', mcp: true, setup: 'memrosetta init --gemini' },
   { name: 'Cline (VS Code)', mcp: true, setup: 'memrosetta init --mcp' },
   { name: 'Continue (VS Code)', mcp: true, setup: 'memrosetta init --mcp' },
   { name: 'ChatGPT / Copilot', mcp: false, setup: 'CLI / REST API' },
@@ -53,6 +54,10 @@ export function Compatibility({ lang }: CompatibilityProps) {
         <p>
           <span className="text-zinc-300">Codex</span>
           {'            --+'}
+        </p>
+        <p>
+          <span className="text-zinc-300">Gemini</span>
+          {'           --+'}
         </p>
       </div>
 
