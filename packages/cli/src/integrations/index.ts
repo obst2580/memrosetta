@@ -35,4 +35,15 @@ export {
   removeAgentsMdSection,
 } from './codex.js';
 
+export {
+  isGeminiInstalled,
+  isGeminiConfigured,
+  registerGeminiMCP,
+  removeGeminiMCP,
+  getGeminiSettingsFilePath,
+  getGeminiMdPath,
+  updateGeminiMd,
+  removeGeminiMdSection,
+} from './gemini.js';
+
 export { resolveMcpCommand, resolveHookCommand } from './resolve-command.js';

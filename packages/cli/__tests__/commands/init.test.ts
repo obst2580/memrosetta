@@ -9,22 +9,28 @@ const mockUpdateClaudeMd = vi.fn().mockReturnValue(true);
 const mockRegisterGenericMCP = vi.fn();
 const mockRegisterCursorMCP = vi.fn().mockReturnValue(true);
 const mockRegisterCodexMCP = vi.fn().mockReturnValue(true);
+const mockRegisterGeminiMCP = vi.fn().mockReturnValue(true);
 const mockIsClaudeCodeInstalled = vi.fn().mockReturnValue(true);
 const mockIsCodexInstalled = vi.fn().mockReturnValue(true);
+const mockIsGeminiInstalled = vi.fn().mockReturnValue(true);
 
 vi.mock('../../src/integrations/index.js', () => ({
   isClaudeCodeInstalled: (...args: unknown[]) => mockIsClaudeCodeInstalled(...args),
   isCodexInstalled: (...args: unknown[]) => mockIsCodexInstalled(...args),
+  isGeminiInstalled: (...args: unknown[]) => mockIsGeminiInstalled(...args),
   registerClaudeCodeHooks: (...args: unknown[]) => mockRegisterClaudeCodeHooks(...args),
   updateClaudeMd: (...args: unknown[]) => mockUpdateClaudeMd(...args),
   registerGenericMCP: (...args: unknown[]) => mockRegisterGenericMCP(...args),
   registerCursorMCP: (...args: unknown[]) => mockRegisterCursorMCP(...args),
   registerCodexMCP: (...args: unknown[]) => mockRegisterCodexMCP(...args),
+  registerGeminiMCP: (...args: unknown[]) => mockRegisterGeminiMCP(...args),
   getGenericMCPPath: () => '/mock-home/.mcp.json',
   getCursorMcpConfigPath: () => '/mock-home/.cursor/mcp.json',
   getCursorRulesPath: () => '/mock-home/.cursorrules',
   getCodexConfigFilePath: () => '/mock-home/.codex/config.toml',
   getAgentsMdPath: () => '/mock-home/AGENTS.md',
+  getGeminiSettingsFilePath: () => '/mock-home/.gemini/settings.json',
+  getGeminiMdPath: () => '/mock-home/GEMINI.md',
 }));
 
 vi.mock('../../src/hooks/config.js', () => ({
@@ -124,6 +130,22 @@ describe('init command', () => {
     const parsed = JSON.parse(written);
     expect(parsed.integrations.cursor).toBeDefined();
     expect(parsed.integrations.cursor.mcp).toBe(true);
+  });
+
+  it('sets up gemini integration with --gemini flag', async () => {
+    await run({
+      args: ['--gemini'],
+      format: 'json',
+      noEmbeddings: true,
+    });
+
+    expect(mockRegisterGeminiMCP).toHaveBeenCalled();
+    expect(mockRegisterClaudeCodeHooks).not.toHaveBeenCalled();
+
+    const written = stdoutSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written);
+    expect(parsed.integrations.gemini).toBeDefined();
+    expect(parsed.integrations.gemini.mcp).toBe(true);
   });
 
   it('sets up generic MCP with --mcp flag', async () => {

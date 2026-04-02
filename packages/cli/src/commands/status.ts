@@ -47,6 +47,7 @@ import {
   isGenericMCPConfigured,
   isCursorConfigured,
   isCodexConfigured,
+  isGeminiConfigured,
 } from '../integrations/index.js';
 
 interface StatusOptions {
@@ -124,6 +125,7 @@ export async function run(options: StatusOptions): Promise<void> {
   const claudeCodeStatus = isClaudeCodeConfigured();
   const cursorStatus = isCursorConfigured();
   const codexStatus = isCodexConfigured();
+  const geminiStatus = isGeminiConfigured();
   const mcpStatus = isGenericMCPConfigured();
 
   if (format === 'text') {
@@ -169,6 +171,9 @@ export async function run(options: StatusOptions): Promise<void> {
       `  Codex:         ${codexStatus ? 'configured (MCP)' : 'not configured'}\n`,
     );
     process.stdout.write(
+      `  Gemini:        ${geminiStatus ? 'configured (MCP)' : 'not configured'}\n`,
+    );
+    process.stdout.write(
       `  MCP (generic): ${mcpStatus ? 'configured' : 'not configured'}\n`,
     );
     return;
@@ -198,6 +203,7 @@ export async function run(options: StatusOptions): Promise<void> {
         claudeCode: claudeCodeStatus,
         cursor: cursorStatus,
         codex: codexStatus,
+        gemini: geminiStatus,
         mcp: mcpStatus,
       },
     },

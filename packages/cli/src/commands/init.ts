@@ -13,12 +13,16 @@ import {
   registerGenericMCP,
   registerCursorMCP,
   registerCodexMCP,
+  registerGeminiMCP,
   isCodexInstalled,
+  isGeminiInstalled,
   getGenericMCPPath,
   getCursorMcpConfigPath,
   getCursorRulesPath,
   getCodexConfigFilePath,
   getAgentsMdPath,
+  getGeminiSettingsFilePath,
+  getGeminiMdPath,
 } from '../integrations/index.js';
 
 type EmbeddingPresetFlag = 'en' | 'multi' | 'ko';
@@ -59,6 +63,12 @@ interface InitResult {
       readonly agentsMd: boolean;
       readonly agentsMdPath: string;
     };
+    readonly gemini?: {
+      readonly mcp: boolean;
+      readonly path: string;
+      readonly geminiMd: boolean;
+      readonly geminiMdPath: string;
+    };
     readonly mcp?: {
       readonly registered: boolean;
       readonly path: string;
@@ -72,6 +82,7 @@ export async function run(options: InitOptions): Promise<void> {
   const wantClaudeCode = hasFlag(args, '--claude-code');
   const wantCursor = hasFlag(args, '--cursor');
   const wantCodex = hasFlag(args, '--codex');
+  const wantGemini = hasFlag(args, '--gemini');
 
   // Parse --lang flag for embedding preset
   const langFlag = optionalOption(args, '--lang') as EmbeddingPresetFlag | undefined;
@@ -162,9 +173,21 @@ export async function run(options: InitOptions): Promise<void> {
     };
   }
 
-  // 6. Output
+  // 6. --gemini: register MCP in ~/.gemini/settings.json + GEMINI.md
+  if (wantGemini) {
+    const geminiMdUpdated = registerGeminiMCP();
+
+    (result.integrations as Record<string, unknown>).gemini = {
+      mcp: true,
+      path: getGeminiSettingsFilePath(),
+      geminiMd: geminiMdUpdated,
+      geminiMdPath: getGeminiMdPath(),
+    };
+  }
+
+  // 7. Output
   if (format === 'text') {
-    printTextOutput(result, wantClaudeCode, wantCursor, wantCodex);
+    printTextOutput(result, wantClaudeCode, wantCursor, wantCodex, wantGemini);
     return;
   }
 
@@ -176,6 +199,7 @@ function printTextOutput(
   claudeCode: boolean,
   cursor: boolean,
   codex: boolean = false,
+  gemini: boolean = false,
 ): void {
   const w = (s: string) => process.stdout.write(s);
 
@@ -228,10 +252,19 @@ function printTextOutput(
     }
   }
 
+  if (gemini) {
+    w(`  Gemini MCP: ${result.integrations.gemini!.path}\n`);
+    if (result.integrations.gemini!.geminiMd) {
+      w(`  GEMINI.md:  ${result.integrations.gemini!.geminiMdPath} (memory instructions added)\n`);
+    } else {
+      w('  GEMINI.md:  already configured\n');
+    }
+  }
+
   w('\n');
 
-  if (!claudeCode && !cursor && !codex) {
-    w('  MCP is ready. Add --claude-code, --cursor, or --codex for tool-specific setup.\n');
+  if (!claudeCode && !cursor && !codex && !gemini) {
+    w('  MCP is ready. Add --claude-code, --cursor, --codex, or --gemini for tool-specific setup.\n');
     w('  Example: memrosetta init --claude-code\n');
     w('\n');
   }

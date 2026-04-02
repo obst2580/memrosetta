@@ -8,6 +8,8 @@ import {
   removeCursorRulesSection,
   removeCodexMCP,
   removeAgentsMdSection,
+  removeGeminiMCP,
+  removeGeminiMdSection,
 } from '../integrations/index.js';
 
 interface ResetOptions {
@@ -26,6 +28,8 @@ interface ResetResult {
     readonly cursorRules: boolean;
     readonly codex: boolean;
     readonly agentsMd: boolean;
+    readonly gemini: boolean;
+    readonly geminiMd: boolean;
   };
 }
 
@@ -35,26 +39,28 @@ export async function run(options: ResetOptions): Promise<void> {
   const wantClaudeCode = hasFlag(args, '--claude-code');
   const wantCursor = hasFlag(args, '--cursor');
   const wantCodex = hasFlag(args, '--codex');
+  const wantGemini = hasFlag(args, '--gemini');
   const wantMCP = hasFlag(args, '--mcp');
   const wantAll = hasFlag(args, '--all');
 
-  const noFlags = !wantClaudeCode && !wantCursor && !wantCodex && !wantMCP && !wantAll;
+  const noFlags = !wantClaudeCode && !wantCursor && !wantCodex && !wantGemini && !wantMCP && !wantAll;
 
   if (noFlags) {
     const msg =
-      'Usage: memrosetta reset [--claude-code] [--cursor] [--codex] [--mcp] [--all]\n' +
+      'Usage: memrosetta reset [--claude-code] [--cursor] [--codex] [--gemini] [--mcp] [--all]\n' +
       '\n' +
       'Flags:\n' +
       '  --claude-code  Remove Claude Code hooks, MCP, and CLAUDE.md section\n' +
       '  --cursor       Remove Cursor MCP configuration\n' +
       '  --codex        Remove Codex MCP configuration and AGENTS.md section\n' +
+      '  --gemini       Remove Gemini MCP configuration and GEMINI.md section\n' +
       '  --mcp          Remove generic MCP configuration (~/.mcp.json)\n' +
       '  --all          Remove all integrations\n';
 
     if (format === 'text') {
       process.stdout.write(msg);
     } else {
-      output({ error: 'No flags specified. Use --claude-code, --cursor, --mcp, or --all.' }, format);
+      output({ error: 'No flags specified. Use --claude-code, --cursor, --codex, --gemini, --mcp, or --all.' }, format);
     }
     return;
   }
@@ -68,6 +74,8 @@ export async function run(options: ResetOptions): Promise<void> {
       cursorRules: false,
       codex: false,
       agentsMd: false,
+      gemini: false,
+      geminiMd: false,
     },
   };
 
@@ -100,6 +108,14 @@ export async function run(options: ResetOptions): Promise<void> {
     (result.removed as Record<string, boolean>).codex = removed;
     const mdRemoved = removeAgentsMdSection();
     (result.removed as Record<string, boolean>).agentsMd = mdRemoved;
+  }
+
+  // Gemini
+  if (wantGemini || wantAll) {
+    const removed = removeGeminiMCP();
+    (result.removed as Record<string, boolean>).gemini = removed;
+    const mdRemoved = removeGeminiMdSection();
+    (result.removed as Record<string, boolean>).geminiMd = mdRemoved;
   }
 
   // Generic MCP
@@ -141,6 +157,12 @@ function printTextOutput(result: ResetResult): void {
   if (removed.agentsMd) {
     w('Removed MemRosetta section from AGENTS.md\n');
   }
+  if (removed.gemini) {
+    w('Removed Gemini MCP from ~/.gemini/settings.json\n');
+  }
+  if (removed.geminiMd) {
+    w('Removed MemRosetta section from GEMINI.md\n');
+  }
 
   const anyRemoved =
     removed.claudeCodeHooks ||
@@ -149,7 +171,9 @@ function printTextOutput(result: ResetResult): void {
     removed.cursor ||
     removed.cursorRules ||
     removed.codex ||
-    removed.agentsMd;
+    removed.agentsMd ||
+    removed.gemini ||
+    removed.geminiMd;
 
   if (!anyRemoved) {
     w('Nothing to remove (no integrations were configured).\n');

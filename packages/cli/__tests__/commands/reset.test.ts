@@ -11,6 +11,8 @@ const mockRemoveCursorMCP = vi.fn().mockReturnValue(true);
 const mockRemoveCursorRulesSection = vi.fn().mockReturnValue(true);
 const mockRemoveCodexMCP = vi.fn().mockReturnValue(true);
 const mockRemoveAgentsMdSection = vi.fn().mockReturnValue(true);
+const mockRemoveGeminiMCP = vi.fn().mockReturnValue(true);
+const mockRemoveGeminiMdSection = vi.fn().mockReturnValue(true);
 
 vi.mock('../../src/integrations/index.js', () => ({
   removeClaudeCodeHooks: (...args: unknown[]) => mockRemoveClaudeCodeHooks(...args),
@@ -20,6 +22,8 @@ vi.mock('../../src/integrations/index.js', () => ({
   removeCursorRulesSection: (...args: unknown[]) => mockRemoveCursorRulesSection(...args),
   removeCodexMCP: (...args: unknown[]) => mockRemoveCodexMCP(...args),
   removeAgentsMdSection: (...args: unknown[]) => mockRemoveAgentsMdSection(...args),
+  removeGeminiMCP: (...args: unknown[]) => mockRemoveGeminiMCP(...args),
+  removeGeminiMdSection: (...args: unknown[]) => mockRemoveGeminiMdSection(...args),
 }));
 
 import { run } from '../../src/commands/reset.js';
@@ -109,6 +113,23 @@ describe('reset command', () => {
     expect(mockRemoveCursorMCP).not.toHaveBeenCalled();
   });
 
+  it('removes gemini integration with --gemini', async () => {
+    await run({
+      args: ['--gemini'],
+      format: 'json',
+      noEmbeddings: true,
+    });
+
+    expect(mockRemoveGeminiMCP).toHaveBeenCalled();
+    expect(mockRemoveGeminiMdSection).toHaveBeenCalled();
+    expect(mockRemoveClaudeCodeHooks).not.toHaveBeenCalled();
+
+    const written = stdoutSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written);
+    expect(parsed.removed.gemini).toBe(true);
+    expect(parsed.removed.geminiMd).toBe(true);
+  });
+
   it('removes all integrations with --all', async () => {
     await run({
       args: ['--all'],
@@ -120,6 +141,7 @@ describe('reset command', () => {
     expect(mockRemoveClaudeMdSection).toHaveBeenCalled();
     expect(mockRemoveGenericMCP).toHaveBeenCalled();
     expect(mockRemoveCursorMCP).toHaveBeenCalled();
+    expect(mockRemoveGeminiMCP).toHaveBeenCalled();
   });
 
   it('outputs text format for --claude-code', async () => {

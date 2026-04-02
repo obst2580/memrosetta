@@ -8,6 +8,7 @@ vi.mock('../../src/integrations/index.js', () => ({
   isClaudeCodeConfigured: vi.fn().mockReturnValue(true),
   isCursorConfigured: vi.fn().mockReturnValue(false),
   isCodexConfigured: vi.fn().mockReturnValue(false),
+  isGeminiConfigured: vi.fn().mockReturnValue(true),
   isGenericMCPConfigured: vi.fn().mockReturnValue(true),
 }));
 
@@ -53,6 +54,7 @@ describe('status command', () => {
     expect(allOutput).toContain('Claude Code:   configured');
     expect(allOutput).toContain('Cursor:        not configured');
     expect(allOutput).toContain('Codex:         not configured');
+    expect(allOutput).toContain('Gemini:        configured');
     expect(allOutput).toContain('MCP (generic): configured');
   });
 
@@ -69,6 +71,7 @@ describe('status command', () => {
     expect(parsed.integrations.claudeCode).toBe(true);
     expect(parsed.integrations.cursor).toBe(false);
     expect(parsed.integrations.codex).toBe(false);
+    expect(parsed.integrations.gemini).toBe(true);
     expect(parsed.integrations.mcp).toBe(true);
   });
 });
