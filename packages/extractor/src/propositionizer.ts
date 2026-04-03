@@ -48,6 +48,8 @@ export class PropositionizerDecomposer implements FactDecomposer {
     const results = await pipe(input, {
       max_new_tokens: this.maxLength,
       num_beams: this.numBeams,
+      repetition_penalty: 2.0,
+      no_repeat_ngram_size: 3,
     });
 
     const output = (results as Array<{ generated_text: string }>)[0]?.generated_text ?? '';
