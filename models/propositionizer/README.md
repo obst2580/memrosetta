@@ -257,10 +257,12 @@ interface FactDecomposer {
 - [x] v1 모델 학습 + HuggingFace 업로드
 - [x] v1 테스트 (영어 OK, 한국어 부족 확인)
 - [x] packages/extractor 통합 (PR #1)
-- [ ] 한국어 복잡 문장 데이터 5,000쌍+ 생성
-- [ ] v2 continued training (v1 위에 3 에포크)
-- [ ] generation_config에 repetition_penalty=2.0 설정
-- [ ] v2 평가 (한국어 F1 0.5+ 목표)
-- [ ] ONNX int8 양자화 (~300MB 목표)
-- [ ] Transformers.js 호환 확인
-- [ ] HuggingFace v2 업로드
+- [x] 한국어 복잡 문장 데이터 5,982쌍 생성
+- [x] v2 continued training (v1 위에 3 에포크, eval_loss 2.45)
+- [x] generation_config에 repetition_penalty=2.0 설정
+- [x] ONNX int8 양자화 (1.2GB — 300MB 목표 미달, 모델 구조 한계)
+- [x] HuggingFace v2 업로드
+
+### v2 잔여 이슈
+- 고유명사 hallucination (Vue→Unity 등) — v3에서 개선 필요
+- ONNX 크기 목표(300MB) 미달
