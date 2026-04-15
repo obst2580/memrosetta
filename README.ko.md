@@ -143,7 +143,8 @@ Claude Code 세션이 끝나면 Stop hook이 `memrosetta-enforce-claude-code`를
 지침은 모델이 스스로 체크리스트를 돌리기로 마음먹었을 때만 동작합니다.
 v0.5.0은 이 의지력 루프를 구조적 파이프라인으로 대체합니다 — 캡처는
 세션이 종료되는 순간 자동으로 일어나며, 모델이 기억해서 해야 할 일이
-아닙니다.
+아닙니다. `memrosetta init --claude-code`가 설치 시 Stop hook을 자동
+등록하므로, 별도의 `~/.claude/settings.json` 수정은 필요 없습니다.
 
 `@memrosetta/core`는 여전히 LLM-free입니다. 모델 호출은 hook 레이어에서만
 일어나며, hook 호출자는 이미 모델 비용을 지불하고 있기 때문입니다.
@@ -742,8 +743,9 @@ pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 - [x] CLI write 경로가 sync에 참여 (v0.4.7)
 - [x] 기기 간 공유 `syncUserId` (v0.4.5)
 - [x] 결정적/멱등적 backfill (v0.4.8)
-- [x] `memrosetta enforce` + Stop hook 기반 구조적 기억 캡처 (v0.5.0-wip)
-- [ ] Codex Stop hook continuation wrapper (v0.5.0)
+- [x] `memrosetta enforce` + Stop hook 기반 구조적 기억 캡처 (v0.5.0)
+- [x] 대용량 backfill을 위한 sync push 청크 분할 (v0.5.0)
+- [ ] Codex CLI Stop hook 자동 등록 (v0.5.1)
 - [ ] Sync server 1.0 (프로덕션 검증 후 0.1.x → 1.0 승격)
 - [ ] 프로필 빌더 (stable + dynamic 사용자 프로필)
 - [ ] Stable/volatile 기억 분류

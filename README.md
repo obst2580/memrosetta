@@ -143,7 +143,8 @@ Why hooks instead of instructions in `CLAUDE.md`: instructions that say
 "after every turn, decide what to store" only work if the model chooses
 to run the checklist. v0.5.0 replaces that willpower loop with a
 structural pipeline — capture is a side effect of the session ending,
-not a thing the model has to remember to do.
+not a thing the model has to remember to do. `memrosetta init --claude-code`
+wires the Stop hook automatically on install.
 
 `@memrosetta/core` remains LLM-free. All model calls live in the hook
 layer because the hook caller already pays for them.
@@ -792,8 +793,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] CLI write paths participate in sync (v0.4.7)
 - [x] Shared `syncUserId` across a user's devices (v0.4.5)
 - [x] Deterministic, idempotent backfill (v0.4.8)
-- [x] Structural memory capture via `memrosetta enforce` + Stop hook (v0.5.0-wip)
-- [ ] Codex Stop hook continuation wrapper (v0.5.0)
+- [x] Structural memory capture via `memrosetta enforce` + Stop hook (v0.5.0)
+- [x] Sync push chunking for large backfills (v0.5.0)
+- [ ] Codex CLI Stop hook auto-registration (v0.5.1)
 - [ ] Sync server 1.0 (promotion from 0.1.x after production validation)
 - [ ] Profile builder (stable + dynamic user profiles)
 - [ ] Stable/volatile memory classification

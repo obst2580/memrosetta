@@ -5,9 +5,7 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
-## v0.5.0-wip — 2026-04-15
-
-**Work in progress. Not yet published to the `latest` tag.**
+## v0.5.0 — 2026-04-15
 
 **Headline: `memrosetta enforce` — structural enforcement of memory capture.**
 
@@ -40,7 +38,10 @@ structural, not aspirational.
 - `memrosetta-enforce-claude-code` bin: Claude Code Stop hook wrapper that
   reads the Stop hook event from stdin, extracts the last assistant turn
   from the transcript, normalizes it, and `exec()`s `memrosetta enforce stop`.
-  Drop it into `~/.claude/settings.json` under `hooks.Stop`.
+  `memrosetta init --claude-code` now registers this binary automatically
+  (replacing the legacy `memrosetta-on-stop` entry) with a 30 s timeout,
+  so new installs get the LLM-extractor pipeline without hand-editing
+  `~/.claude/settings.json`.
 
 **Philosophy**
 - `@memrosetta/core` stays LLM-free. All model calls live in the hook
@@ -50,6 +51,14 @@ structural, not aspirational.
   continuation policy differ per client.
 
 **Fixed**
+- **`SyncClient.push()` choked on large backfills.** The sync server caps
+  each `/sync/push` at 500 ops, so a 2 k-memory backfill returned
+  `400 Bad Request` and the outbox stayed stuck. Push now chunks pending
+  ops into batches of 400 (`MAX_OPS_PER_PUSH`), marks each accepted batch
+  pushed before the next request, and re-reads the cursor per batch — so
+  a mid-run failure commits whatever succeeded instead of rolling the
+  whole backfill back. Verified with a 30/30 test suite covering the
+  multi-batch happy path and partial-failure recovery.
 - `@memrosetta/cli` Codex integration (`packages/cli/src/integrations/codex.ts`)
   now emits TOML **literal strings** (`'...'`) instead of basic strings
   (`"..."`) when writing `~/.codex/config.toml`. Basic strings interpret
@@ -57,8 +66,15 @@ structural, not aspirational.
   or produced `\U` unicode-escape errors. Literal strings have no escape
   processing, so Windows paths round-trip cleanly.
 - The register/reset paths now strip both the current
-  `[mcp_servers.memory-service]` block and any legacy orphaned sections
-  before rewriting, fixing a class of "stale entries survived a disable".
+  `[mcp_servers.memory-service]` block and any legacy
+  `[mcp_servers.memrosetta]` blocks written by older `memrosetta init`
+  versions, fixing a class of "stale entries survived a disable".
+
+**Deferred to v0.5.1**
+- Automatic Stop hook registration for Codex CLI (`~/.codex/hooks`).
+  `memrosetta enforce stop` itself is already the shared backend, so you
+  can wire Codex manually today; auto-registration is deferred because
+  its config-merge and reset semantics deserve a dedicated test pass.
 
 ---
 
