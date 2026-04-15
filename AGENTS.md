@@ -1,7 +1,8 @@
 ## MemRosetta (Long-term Memory)
 
 MCP server `memrosetta` provides persistent memory across sessions.
-userId defaults to the system username -- no need to specify it.
+For this environment, always use logical userId `obst`.
+Do not use the macOS account name `obst2580` for memory calls.
 
 ### When to search (memrosetta_search)
 When you need information not in the current context, search past memories.
