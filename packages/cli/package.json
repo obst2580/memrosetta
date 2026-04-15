@@ -1,13 +1,14 @@
 {
   "name": "@memrosetta/cli",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
     "memrosetta": "./dist/index.js",
     "memrosetta-on-stop": "./dist/hooks/on-stop.js",
     "memrosetta-on-prompt": "./dist/hooks/on-prompt.js",
-    "memrosetta-enforce-claude-code": "./dist/hooks/enforce-claude-code.js"
+    "memrosetta-enforce-claude-code": "./dist/hooks/enforce-claude-code.js",
+    "memrosetta-enforce-codex": "./dist/hooks/enforce-codex.js"
   },
   "files": [
     "dist",
@@ -15,7 +16,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/hooks/on-stop.ts src/hooks/on-prompt.ts src/hooks/enforce-claude-code.ts --format esm --external better-sqlite3 --external @memrosetta/core --external @memrosetta/embeddings --external @memrosetta/sync-client --external @memrosetta/types --external @memrosetta/llm --external @memrosetta/extractor --external @huggingface/transformers --external sqlite-vec --external onnxruntime-node",
+    "build": "tsup src/index.ts src/hooks/on-stop.ts src/hooks/on-prompt.ts src/hooks/enforce-claude-code.ts src/hooks/enforce-codex.ts --format esm --external better-sqlite3 --external @memrosetta/core --external @memrosetta/embeddings --external @memrosetta/sync-client --external @memrosetta/types --external @memrosetta/llm --external @memrosetta/extractor --external @huggingface/transformers --external sqlite-vec --external onnxruntime-node",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",

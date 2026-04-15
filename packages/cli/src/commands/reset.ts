@@ -7,6 +7,7 @@ import {
   removeCursorMCP,
   removeCursorRulesSection,
   removeCodexMCP,
+  removeCodexHooks,
   removeAgentsMdSection,
   removeGeminiMCP,
   removeGeminiMdSection,
@@ -108,6 +109,8 @@ export async function run(options: ResetOptions): Promise<void> {
     (result.removed as Record<string, boolean>).codex = removed;
     const mdRemoved = removeAgentsMdSection();
     (result.removed as Record<string, boolean>).agentsMd = mdRemoved;
+    const stopHookRemoved = removeCodexHooks();
+    (result.removed as Record<string, boolean>).codexStopHook = stopHookRemoved;
   }
 
   // Gemini

@@ -13,6 +13,7 @@ import {
   registerGenericMCP,
   registerCursorMCP,
   registerCodexMCP,
+  registerCodexHooks,
   registerGeminiMCP,
   isCodexInstalled,
   isGeminiInstalled,
@@ -20,6 +21,7 @@ import {
   getCursorMcpConfigPath,
   getCursorRulesPath,
   getCodexConfigFilePath,
+  getCodexHooksPath,
   getAgentsMdPath,
   getGeminiSettingsFilePath,
   getGeminiMdPath,
@@ -161,15 +163,19 @@ export async function run(options: InitOptions): Promise<void> {
     };
   }
 
-  // 5. --codex: register MCP in ~/.codex/config.toml + AGENTS.md
+  // 5. --codex: register MCP in ~/.codex/config.toml + AGENTS.md +
+  //    (on non-Windows) the Stop hook in ~/.codex/hooks.json.
   if (wantCodex) {
     const agentsMdUpdated = registerCodexMCP();
+    const hooksRegistered = registerCodexHooks();
 
     (result.integrations as Record<string, unknown>).codex = {
       mcp: true,
       path: getCodexConfigFilePath(),
       agentsMd: agentsMdUpdated,
       agentsMdPath: getAgentsMdPath(),
+      stopHook: hooksRegistered,
+      stopHookPath: getCodexHooksPath(),
     };
   }
 

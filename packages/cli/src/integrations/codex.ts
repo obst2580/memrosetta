@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { resolveMcpCommand } from './resolve-command.js';
+import { resolveMcpCommand, resolveHookCommand } from './resolve-command.js';
 
 const SERVER_NAME = 'memory-service';
 // Older versions of memrosetta init wrote the section under a different
@@ -9,7 +9,10 @@ const SERVER_NAME = 'memory-service';
 // does not end up with two MCP server entries pointing at the same binary.
 const LEGACY_SERVER_NAMES = ['memrosetta'] as const;
 const CODEX_CONFIG_PATH_GETTER = () => join(homedir(), '.codex', 'config.toml');
+const CODEX_HOOKS_PATH_GETTER = () => join(homedir(), '.codex', 'hooks.json');
 const AGENTS_MD_MARKER = '## MemRosetta (Long-term Memory)';
+const CODEX_HOOKS_FEATURE_MARKER = '[features]';
+const CODEX_HOOKS_FEATURE_KEY = 'codex_hooks';
 
 const MEMROSETTA_AGENTS_MD = `
 
@@ -227,6 +230,232 @@ export function updateAgentsMd(): boolean {
 
   writeFileSync(agentsPath, existing + MEMROSETTA_AGENTS_MD, 'utf-8');
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Stop hook integration (~/.codex/hooks.json + [features] codex_hooks)
+// ---------------------------------------------------------------------------
+
+interface CodexHookEntry {
+  readonly type: 'command';
+  readonly command: string;
+  readonly timeout?: number;
+  readonly statusMessage?: string;
+}
+
+interface CodexHookConfig {
+  readonly matcher?: string;
+  readonly hooks: readonly CodexHookEntry[];
+}
+
+interface CodexHooksFile {
+  hooks?: Record<string, readonly CodexHookConfig[]>;
+  [key: string]: unknown;
+}
+
+function isMemrosettaCodexHook(command: string): boolean {
+  // Matches current wrapper and any legacy memrosetta hook name so
+  // re-install cleanly replaces older entries.
+  return (
+    command.includes('memrosetta') &&
+    (command.includes('enforce-codex') ||
+      command.includes('enforce-claude-code') ||
+      command.includes('on-stop'))
+  );
+}
+
+function readCodexHooksFile(): CodexHooksFile {
+  const path = CODEX_HOOKS_PATH_GETTER();
+  if (!existsSync(path)) return {};
+  try {
+    const raw = readFileSync(path, 'utf-8');
+    if (!raw.trim()) return {};
+    return JSON.parse(raw) as CodexHooksFile;
+  } catch {
+    // If the file is malformed we intentionally start fresh rather than
+    // crash the user's install. A broken hooks.json already disables
+    // Codex hooks, so overwriting it is the safe move.
+    return {};
+  }
+}
+
+function writeCodexHooksFile(contents: CodexHooksFile): void {
+  const dir = getCodexConfigDir();
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(
+    CODEX_HOOKS_PATH_GETTER(),
+    JSON.stringify(contents, null, 2) + '\n',
+    'utf-8',
+  );
+}
+
+function stripMemrosettaHooks(file: CodexHooksFile): CodexHooksFile {
+  if (!file.hooks) return file;
+  const cleaned: Record<string, readonly CodexHookConfig[]> = {};
+  for (const [event, configs] of Object.entries(file.hooks)) {
+    const filtered = (configs as readonly CodexHookConfig[])
+      .map((cfg) => ({
+        ...cfg,
+        hooks: cfg.hooks.filter((h) => !isMemrosettaCodexHook(h.command)),
+      }))
+      .filter((cfg) => cfg.hooks.length > 0);
+    if (filtered.length > 0) {
+      cleaned[event] = filtered;
+    }
+  }
+  return { ...file, hooks: cleaned };
+}
+
+/**
+ * Ensure `[features] codex_hooks = true` is set in ~/.codex/config.toml.
+ * Idempotent: if the feature is already on, returns the unchanged content.
+ * Preserves any other `[features]` keys already present.
+ */
+function ensureHooksFeatureFlag(content: string): string {
+  // Already on?
+  if (/^\s*codex_hooks\s*=\s*true/m.test(content)) return content;
+
+  // Has a [features] section but codex_hooks is off or missing:
+  // insert the line directly after the section header.
+  if (content.includes(CODEX_HOOKS_FEATURE_MARKER)) {
+    // Flip an existing `codex_hooks = false` to `true` first.
+    if (/^\s*codex_hooks\s*=\s*false/m.test(content)) {
+      return content.replace(
+        /^\s*codex_hooks\s*=\s*false\s*$/m,
+        'codex_hooks = true',
+      );
+    }
+    return content.replace(
+      CODEX_HOOKS_FEATURE_MARKER,
+      `${CODEX_HOOKS_FEATURE_MARKER}\ncodex_hooks = true`,
+    );
+  }
+
+  // No [features] section at all — append one.
+  const trimmed = content.replace(/\n+$/, '');
+  return `${trimmed}\n\n[features]\ncodex_hooks = true\n`;
+}
+
+/**
+ * Turn off `codex_hooks = true` (leave the `[features]` section
+ * itself in place, since it may hold other flags).
+ */
+function stripHooksFeatureFlag(content: string): string {
+  if (!/^\s*codex_hooks\s*=\s*true/m.test(content)) return content;
+  return content.replace(/^\s*codex_hooks\s*=\s*true\s*\n?/m, '');
+}
+
+/**
+ * Check whether `memrosetta init --codex` has wired up the Stop hook.
+ */
+export function isCodexHooksConfigured(): boolean {
+  const file = readCodexHooksFile();
+  const stopHooks = file.hooks?.Stop ?? [];
+  return stopHooks.some((cfg) =>
+    cfg.hooks.some((h) => isMemrosettaCodexHook(h.command)),
+  );
+}
+
+export function getCodexHooksPath(): string {
+  return CODEX_HOOKS_PATH_GETTER();
+}
+
+/**
+ * Register the MemRosetta Codex Stop hook.
+ *
+ * Three things happen atomically-ish:
+ *   1. `~/.codex/hooks.json` gets a `Stop` entry pointing at the
+ *      `memrosetta-enforce-codex` binary. Any pre-existing
+ *      memrosetta hook entries are stripped first so re-install is
+ *      idempotent.
+ *   2. `[features] codex_hooks = true` is added to
+ *      `~/.codex/config.toml` so Codex CLI actually fires the hook.
+ *   3. The function is a no-op on Windows, where Codex hooks are
+ *      currently disabled upstream — returning `false` so the caller
+ *      can surface a friendly message.
+ */
+export function registerCodexHooks(): boolean {
+  if (process.platform === 'win32') return false;
+  if (!isCodexInstalled()) return false;
+
+  // 1. hooks.json: strip old entries, add the current enforce wrapper.
+  const file = stripMemrosettaHooks(readCodexHooksFile());
+  const newHooks = { ...(file.hooks ?? {}) } as Record<string, CodexHookConfig[]>;
+  const existingStop = (newHooks.Stop ?? []) as CodexHookConfig[];
+  newHooks.Stop = [
+    ...existingStop,
+    {
+      matcher: '*',
+      hooks: [
+        {
+          type: 'command',
+          command: resolveHookCommand('memrosetta-enforce-codex'),
+          timeout: 30,
+          statusMessage: 'memrosetta: enforcing memory capture',
+        },
+      ],
+    },
+  ];
+  writeCodexHooksFile({ ...file, hooks: newHooks });
+
+  // 2. config.toml: enable the feature flag if missing.
+  const configPath = getCodexConfigPath();
+  const configContent = readCodexConfig(configPath);
+  const updated = ensureHooksFeatureFlag(configContent);
+  if (updated !== configContent) {
+    writeFileSync(configPath, updated, 'utf-8');
+  }
+
+  return true;
+}
+
+/**
+ * Remove the MemRosetta Codex Stop hook entry and, if nothing else is
+ * left in `[features] codex_hooks`, turn the feature flag off as well.
+ *
+ * Returns true if anything was removed, false if the hook was not
+ * configured in the first place.
+ */
+export function removeCodexHooks(): boolean {
+  const hadHook = isCodexHooksConfigured();
+
+  // Strip any memrosetta entries from hooks.json. Keep the file around
+  // because the user may have other non-memrosetta hooks registered.
+  const file = readCodexHooksFile();
+  const cleaned = stripMemrosettaHooks(file);
+  const anyOtherHooks = Object.values(cleaned.hooks ?? {}).some(
+    (cfgs) => (cfgs as readonly CodexHookConfig[]).length > 0,
+  );
+
+  if (hadHook) {
+    if (anyOtherHooks) {
+      writeCodexHooksFile(cleaned);
+    } else {
+      // No hooks of any kind left — remove the file entirely so a
+      // future install starts from a clean slate.
+      const hooksPath = CODEX_HOOKS_PATH_GETTER();
+      if (existsSync(hooksPath)) {
+        writeCodexHooksFile({});
+      }
+    }
+  }
+
+  // If no other Stop hooks and no other events, also turn off the
+  // feature flag so we don't leave dead config behind.
+  if (!anyOtherHooks) {
+    const configPath = getCodexConfigPath();
+    if (existsSync(configPath)) {
+      const configContent = readCodexConfig(configPath);
+      const stripped = stripHooksFeatureFlag(configContent);
+      if (stripped !== configContent) {
+        writeFileSync(configPath, stripped, 'utf-8');
+      }
+    }
+  }
+
+  return hadHook;
 }
 
 /**

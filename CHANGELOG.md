@@ -2,6 +2,36 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.5.1] - 2026-04-16
+
+### Added
+- **Codex CLI Stop hook auto-registration.** `memrosetta init --codex`
+  now wires the `memrosetta-enforce-codex` binary into
+  `~/.codex/hooks.json` under the `Stop` event and flips
+  `[features] codex_hooks = true` in `~/.codex/config.toml`, so Codex
+  CLI users get the same enforce pipeline as Claude Code without
+  hand-editing config files. `memrosetta reset --codex` reverses the
+  change: it strips the memrosetta hook entries, preserves any other
+  user-defined hooks, and turns the feature flag back off only if
+  nothing else is registered. Skipped on Windows, where Codex hooks
+  are still disabled upstream.
+- **`memrosetta-enforce-codex` binary** (Codex Stop hook wrapper).
+  Reads the Codex Stop event from stdin (`last_assistant_message` is
+  available directly — no transcript walking), exec()s
+  `memrosetta enforce stop --client codex`, and maps the enforce
+  envelope back to Codex's continuation protocol: `stored` / `noop` →
+  `{}`, `needs-continuation` → `{ "decision": "block", "reason": "..." }`
+  so Codex re-prompts the model. Respects `stop_hook_active` to
+  prevent runaway loops and fails open on any error.
+
+### Fixed
+- `packages/cli/src/integrations/codex.ts` now also recognizes
+  `memrosetta-enforce-claude-code` and `memrosetta-on-stop` command
+  strings as memrosetta-owned hook entries, so re-running
+  `memrosetta init --codex` on a machine that was wired up with an
+  older wrapper name cleanly replaces the entry instead of leaving
+  duplicates.
+
 ## [0.5.0] - 2026-04-15
 
 ### Added

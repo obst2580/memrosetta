@@ -27,9 +27,13 @@ export {
 export {
   isCodexInstalled,
   isCodexConfigured,
+  isCodexHooksConfigured,
   registerCodexMCP,
   removeCodexMCP,
+  registerCodexHooks,
+  removeCodexHooks,
   getCodexConfigFilePath,
+  getCodexHooksPath,
   getAgentsMdPath,
   updateAgentsMd,
   removeAgentsMdSection,

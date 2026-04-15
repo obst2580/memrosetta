@@ -5,6 +5,38 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.5.1 — 2026-04-16
+
+**Headline: Codex CLI gets the same enforced memory capture as Claude Code.**
+
+`memrosetta init --codex` now writes an auto-enabled Stop hook into
+`~/.codex/hooks.json` + flips `[features] codex_hooks = true`, so
+Codex CLI users no longer have to hand-wire the pipeline.
+
+**Added**
+- `memrosetta-enforce-codex` bin: Codex Stop hook wrapper. Unlike the
+  Claude Code counterpart, it reads `last_assistant_message` directly
+  from the Codex hook event — no transcript walking. Maps the
+  `memrosetta enforce stop` envelope to Codex's continuation protocol:
+  `needs-continuation` becomes `{ "decision": "block", "reason": ... }`
+  so Codex re-prompts the model, other statuses let the session end.
+- `registerCodexHooks()` / `removeCodexHooks()` in
+  `@memrosetta/cli` wire the Stop hook end-to-end: hooks.json entry,
+  `[features] codex_hooks = true` in config.toml, legacy entry
+  cleanup, and Windows detection (skipped upstream).
+- 16 new tests in `packages/cli/__tests__/integrations/codex.test.ts`
+  cover happy-path install, re-install idempotency, legacy entry
+  stripping, feature-flag merging, and feature-flag tear-down on
+  reset.
+
+**Fixed**
+- The hook matcher in `codex.ts` now recognizes the full set of
+  memrosetta wrapper names (`memrosetta-on-stop`,
+  `memrosetta-enforce-claude-code`, `memrosetta-enforce-codex`) so
+  re-installing from any earlier version cleans up cleanly.
+
+---
+
 ## v0.5.0 — 2026-04-15
 
 **Headline: `memrosetta enforce` — structural enforcement of memory capture.**
