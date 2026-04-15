@@ -2,6 +2,36 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.4.6] - 2026-04-15
+
+### Fixed
+- **Pull was effectively a no-op.** `SyncClient.pull()` landed incoming
+  ops in `sync_inbox` and advanced the cursor, but never wrote them back
+  into the local `memories` / `memory_relations` tables. Devices showed
+  "pulled=N" yet searched zero matches, because nothing had actually been
+  applied. This broke the core promise of multi-device sync for every
+  release from 0.4.0 up to 0.4.5.
+
+### Added
+- **`applyInboxOps(db, ops)` applier module** in
+  `@memrosetta/sync-client`. Idempotent, transaction-wrapped, separate
+  from the transport layer so the engine schema stays out of
+  `SyncClient`. Handles `memory_created`, `relation_created`
+  (including the `updates` -> `is_latest = 0` side effect),
+  `memory_invalidated`, `feedback_given`, and `memory_tier_set`.
+- `SyncClient.pull()` now calls the applier after inbox insert and
+  advances the cursor only once ops are both inboxed and folded into
+  local state.
+- `SyncClient.applyPendingInbox()` helper for tests and advanced
+  callers that want to replay existing inbox rows without a network
+  fetch.
+
+### Upgrade note
+- Existing devices on 0.4.0-0.4.5 with stale `sync_inbox` rows will
+  have them auto-applied on the first `sync now` after upgrading.
+  Reset `last_cursor` and `pull_cursor` to `0` in `sync_state` if you
+  want to replay everything the server has.
+
 ## [0.4.5] - 2026-04-15
 
 ### Fixed

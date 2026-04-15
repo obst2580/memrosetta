@@ -8,6 +8,8 @@ export type {
 export { Outbox } from './outbox.js';
 export { Inbox } from './inbox.js';
 export { ensureSyncSchema } from './schema.js';
+export { applyInboxOps } from './applier.js';
+export type { ApplyResult } from './applier.js';
 export type {
   SyncOp,
   SyncPulledOp,

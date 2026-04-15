@@ -7,6 +7,7 @@ import type {
 import { ensureSyncSchema } from './schema.js';
 import { Outbox } from './outbox.js';
 import { Inbox } from './inbox.js';
+import { applyInboxOps, type ApplyResult } from './applier.js';
 
 /**
  * Minimal config required by SyncClient at runtime.
@@ -166,17 +167,42 @@ export class SyncClient {
     }
 
     const body = (await response.json()) as SyncPullResponse;
-    const { ops, nextCursor, hasMore } = body.data;
+    const { ops, nextCursor } = body.data;
 
+    // 1. Land incoming ops in the inbox (idempotent INSERT OR IGNORE by op_id).
     if (ops.length > 0) {
       this.inbox.addOps(ops);
     }
 
-    // Advance cursor
+    // 2. Apply any inbox ops that have not yet been folded into the local
+    //    memories / relations tables. This covers both the batch we just
+    //    received and any leftovers from a prior failed pull.
+    const pending = this.inbox.getPending();
+    if (pending.length > 0) {
+      const result = applyInboxOps(this.db, pending);
+      if (result.applied.length > 0) {
+        this.inbox.markApplied(result.applied);
+      }
+    }
+
+    // 3. Advance cursor + timestamps.
     this.setCursor(nextCursor);
     this.setState('last_pull_success_at', new Date().toISOString());
 
     return ops.length;
+  }
+
+  /** For tests / advanced callers: apply currently-pending inbox ops manually. */
+  applyPendingInbox(): ApplyResult {
+    const pending = this.inbox.getPending();
+    if (pending.length === 0) {
+      return { applied: [], skipped: [] };
+    }
+    const result = applyInboxOps(this.db, pending);
+    if (result.applied.length > 0) {
+      this.inbox.markApplied(result.applied);
+    }
+    return result;
   }
 
   getState(key: string): string | null {
