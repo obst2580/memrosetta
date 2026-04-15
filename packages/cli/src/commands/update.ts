@@ -1,35 +1,73 @@
 import { execSync } from 'node:child_process';
+import { resolveCliVersion } from '../version.js';
+
+/**
+ * Parse `npm list -g <name> --depth=0 --json` output, tolerating warnings
+ * that npm sometimes prints before the JSON body.
+ */
+function parseNpmList(raw: string): Record<string, unknown> {
+  // Find the first `{` so we skip any stderr-on-stdout noise.
+  const start = raw.indexOf('{');
+  if (start === -1) return {};
+  try {
+    return JSON.parse(raw.slice(start)) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function getInstalledVersion(packageName: string): string | null {
+  try {
+    const raw = execSync(`npm list -g ${packageName} --depth=0 --json`, {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const parsed = parseNpmList(raw);
+    const deps = (parsed.dependencies ?? {}) as Record<string, { version?: string }>;
+    return deps[packageName]?.version ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export async function run(): Promise<void> {
-  // Check if installed via wrapper package (memrosetta) or directly (@memrosetta/cli)
-  const wrapperCheck = execSync('npm list -g memrosetta --depth=0 --json 2>/dev/null || echo "{}"', { encoding: 'utf-8' });
-  const cliCheck = execSync('npm list -g @memrosetta/cli --depth=0 --json 2>/dev/null || echo "{}"', { encoding: 'utf-8' });
+  // The currently-running binary always has a valid version. Use that as the
+  // ground truth for "what am I" instead of re-parsing npm list output.
+  const runningVersion = resolveCliVersion();
+
+  // Figure out which distribution path is installed globally so `npm install`
+  // can update the right one. Wrapper package (memrosetta) takes precedence
+  // because it drops the `memrosetta` binary + hooks.
+  const wrapperInstalled = getInstalledVersion('memrosetta');
+  const cliInstalled = getInstalledVersion('@memrosetta/cli');
 
   let packageName: string;
   let currentVersion: string;
-  try {
-    const wrapperParsed = JSON.parse(wrapperCheck);
-    const cliParsed = JSON.parse(cliCheck);
-    const wrapperVersion = wrapperParsed.dependencies?.['memrosetta']?.version;
-    const cliVersion = cliParsed.dependencies?.['@memrosetta/cli']?.version;
 
-    if (wrapperVersion) {
-      packageName = 'memrosetta';
-      currentVersion = wrapperVersion;
-    } else {
-      packageName = '@memrosetta/cli';
-      currentVersion = cliVersion ?? 'unknown';
-    }
-  } catch {
+  if (wrapperInstalled) {
     packageName = 'memrosetta';
-    currentVersion = 'unknown';
+    currentVersion = wrapperInstalled;
+  } else if (cliInstalled) {
+    packageName = '@memrosetta/cli';
+    currentVersion = cliInstalled;
+  } else {
+    // Neither `memrosetta` nor `@memrosetta/cli` appeared in `npm list -g`
+    // (common when `memrosetta` is running via `npx` or a local workspace
+    // path). Fall back to the running binary's own version.
+    packageName = 'memrosetta';
+    currentVersion = runningVersion;
   }
 
   process.stdout.write(`Current version: ${currentVersion} (${packageName})\n`);
+  if (currentVersion !== runningVersion && runningVersion !== 'unknown') {
+    process.stdout.write(`Running binary:   ${runningVersion}\n`);
+  }
   process.stdout.write('Checking for updates...\n');
 
   try {
-    const latest = execSync(`npm view ${packageName} version`, { encoding: 'utf-8' }).trim();
+    const latest = execSync(`npm view ${packageName} version`, {
+      encoding: 'utf-8',
+    }).trim();
 
     if (latest === currentVersion) {
       process.stdout.write(`Already up to date (${currentVersion}).\n`);

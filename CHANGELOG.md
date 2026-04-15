@@ -2,6 +2,24 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.4.3] - 2026-04-15
+
+### Fixed
+- **`memrosetta update` showed "Current version: unknown"**: the command
+  parsed `npm list -g` output but did not tolerate the warning lines npm
+  occasionally prints before the JSON body, and it had no fallback when
+  neither `memrosetta` nor `@memrosetta/cli` was listed at the global level
+  (for example when running from `npx` or a workspace). It now parses
+  tolerantly, resolves the running binary's version via a shared
+  `resolveCliVersion()` helper, and shows both the installed version and the
+  running binary version when they disagree.
+
+### Changed
+- Extracted `packages/cli/src/version.ts::resolveCliVersion()` so both
+  `status` and `update` read the current binary version through the same
+  three-strategy lookup (dev tsx, exports map, directory walk). No public
+  API impact.
+
 ## [0.4.2] - 2026-04-15
 
 ### Fixed
