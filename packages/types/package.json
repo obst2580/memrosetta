@@ -1,6 +1,6 @@
 {
   "name": "@memrosetta/types",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,7 +10,11 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "build": "rm -f tsconfig.tsbuildinfo && tsc",

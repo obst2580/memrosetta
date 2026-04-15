@@ -38,6 +38,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.27.1(zod@3.25.76)
+      better-sqlite3:
+        specifier: ^11.0.0
+        version: 11.10.0
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -278,11 +281,11 @@ importers:
   packages/memrosetta:
     dependencies:
       '@memrosetta/cli':
-        specifier: 0.3.2
-        version: 0.3.2(@anthropic-ai/sdk@0.30.1)(openai@4.104.0(zod@3.25.76))
+        specifier: workspace:*
+        version: link:../cli
       '@memrosetta/mcp':
-        specifier: 0.3.0
-        version: 0.3.0
+        specifier: workspace:*
+        version: link:../../adapters/mcp
 
   packages/postgres:
     dependencies:
@@ -852,34 +855,6 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
-
-  '@memrosetta/cli@0.3.2':
-    resolution: {integrity: sha512-F+r7ORiq/nYS9dQoWopt44eMSBFTTdabxoxU42KkrT05kAWUi+B4E/8Svn8OC/VONWeeo9liVjOvCIPcU6CuiA==}
-    hasBin: true
-
-  '@memrosetta/core@0.3.0':
-    resolution: {integrity: sha512-xHaxN8rIYQN+OdFTOABZ/EFfuVW4KzqT03gNHnOkQ+M9bMW9dVzz2QPxvdAVhTVbeWVorXvRyd3mYfM7IXgCYQ==}
-
-  '@memrosetta/embeddings@0.3.0':
-    resolution: {integrity: sha512-8VKTYi7DpAXSCQ469aBugvztAqRafA3FxGDDUPFj/DRm37uxDEyIr0NMrBS9L5NNF2hOBlPg7Q6H7tNmnhesng==}
-
-  '@memrosetta/llm@0.3.0':
-    resolution: {integrity: sha512-kRH97LJG8xtB7R2Lmq/2gAjMXYI1u+w9ExQTObac73kT9YE0DIs9PELE6L7zMRVQcIxQYt/4KcGvYIR9dLESzw==}
-    peerDependencies:
-      '@anthropic-ai/sdk': ^0.30.0
-      openai: ^4.0.0
-    peerDependenciesMeta:
-      '@anthropic-ai/sdk':
-        optional: true
-      openai:
-        optional: true
-
-  '@memrosetta/mcp@0.3.0':
-    resolution: {integrity: sha512-ZOSH8QuFU1NR4Q9DPozqzI8xFXQyZ1VDYslV2YpFfhcGbnotN2/F0YlflFwJXUfXxB2zat4l3+QOkKncdkw+Iw==}
-    hasBin: true
-
-  '@memrosetta/types@0.3.0':
-    resolution: {integrity: sha512-KDoGQJJ5P19BOoBi09boWNEtNDLZEbowQdSewjxaCQeQqEET5Axpend6N6j9WteyPfD1DN+7KNRzRGmeVoBU2w==}
 
   '@modelcontextprotocol/sdk@1.27.1':
     resolution: {integrity: sha512-sr6GbP+4edBwFndLbM60gf07z0FQ79gaExpnsjMGePXqFcSSb7t6iscpjk9DhFhwd+mTEQrzNafGP8/iGGFYaA==}
@@ -2523,53 +2498,6 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
-
-  '@memrosetta/cli@0.3.2(@anthropic-ai/sdk@0.30.1)(openai@4.104.0(zod@3.25.76))':
-    dependencies:
-      '@memrosetta/core': 0.3.0
-      '@memrosetta/embeddings': 0.3.0
-      '@memrosetta/types': 0.3.0
-      better-sqlite3: 11.10.0
-    optionalDependencies:
-      '@memrosetta/llm': 0.3.0(@anthropic-ai/sdk@0.30.1)(openai@4.104.0(zod@3.25.76))
-    transitivePeerDependencies:
-      - '@anthropic-ai/sdk'
-      - openai
-
-  '@memrosetta/core@0.3.0':
-    dependencies:
-      '@memrosetta/types': 0.3.0
-      better-sqlite3: 11.10.0
-      nanoid: 5.1.7
-      sqlite-vec: 0.1.7
-    optionalDependencies:
-      '@memrosetta/embeddings': 0.3.0
-
-  '@memrosetta/embeddings@0.3.0':
-    dependencies:
-      '@huggingface/transformers': 3.8.1
-
-  '@memrosetta/llm@0.3.0(@anthropic-ai/sdk@0.30.1)(openai@4.104.0(zod@3.25.76))':
-    dependencies:
-      '@memrosetta/types': 0.3.0
-      zod: 3.25.76
-    optionalDependencies:
-      '@anthropic-ai/sdk': 0.30.1
-      openai: 4.104.0(zod@3.25.76)
-    optional: true
-
-  '@memrosetta/mcp@0.3.0':
-    dependencies:
-      '@memrosetta/core': 0.3.0
-      '@memrosetta/embeddings': 0.3.0
-      '@memrosetta/types': 0.3.0
-      '@modelcontextprotocol/sdk': 1.27.1(zod@3.25.76)
-      zod: 3.25.76
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - supports-color
-
-  '@memrosetta/types@0.3.0': {}
 
   '@modelcontextprotocol/sdk@1.27.1(zod@3.25.76)':
     dependencies:

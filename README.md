@@ -176,7 +176,7 @@ Afternoon Cursor: build login UI                  --> searches "auth" --> finds 
 Evening   Codex: refactor auth middleware          --> has full context from both sessions
 ```
 
-No sync. No cloud. No config. One local file.
+Local-first by default. Optional self-hosted sync. No cloud required.
 
 ## How It Works
 

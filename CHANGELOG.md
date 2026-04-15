@@ -2,6 +2,39 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.4.0] - 2026-04-15
+
+### Added
+- **Optional sync layer**: local SQLite remains primary; sync is opt-in via
+  `~/.memrosetta/config.json`. No public sync server — users self-host.
+- **`@memrosetta/sync-client`**: outbox/inbox with push/pull, idempotent apply,
+  and background push when MCP detects `syncEnabled: true`.
+- **Operation log schema**: `memory_created`, `relation_created`,
+  `memory_invalidated`, `feedback_given`, `memory_tier_set`; append-only,
+  idempotent by `(user_id, op_id)`.
+- **Brain Spec documents**: `docs/brain-spec.md`, `docs/memory-types.md`,
+  `docs/recall-modes.md`, `docs/sync-architecture.md`, `docs/sync-api.md`,
+  including a self-hosting guide.
+- **API expansion**: `/api/memories/:id/invalidate`, `/feedback`,
+  `/api/working-memory`, `/api/memories/:id/quality`, and API key auth
+  (`MEMROSETTA_API_KEYS` or `SERVICE_KEY`) with constant-time comparison.
+- **`@memrosetta/extractor`**: multilingual fact decomposition using the
+  Propositionizer-mT5-small ONNX model.
+
+### Security
+- `~/.memrosetta/config.json` is written with `0600` and the parent directory
+  with `0700` on POSIX systems (best-effort on Windows).
+
+### Changed
+- MCP tool pipeline now takes an optional `SyncRecorder`; enqueue failures are
+  non-fatal so SQLite writes always succeed.
+- Relation error handling and CI cleanups from the 0.3.x line are rolled
+  forward.
+
+### Notes
+- `@memrosetta/sync-server` and `@memrosetta/postgres` ship as 0.1.0 building
+  blocks for self-hosted deployments; they are not published to `latest` yet.
+
 ## [0.3.0] - 2026-04-01
 
 ### Added

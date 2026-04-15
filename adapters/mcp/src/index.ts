@@ -8,7 +8,7 @@ import { SyncClient, ensureSyncSchema } from '@memrosetta/sync-client';
 import { registerTools } from './tools.js';
 import type { SyncRecorder } from './sync-recorder.js';
 import type { Memory, MemoryRelation, SyncOp } from '@memrosetta/types';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -35,12 +35,15 @@ function readConfig(): MemRosettaConfig {
 
 function writeConfig(config: MemRosettaConfig): void {
   const configDir = join(homedir(), '.memrosetta');
-  mkdirSync(configDir, { recursive: true });
-  writeFileSync(
-    join(configDir, 'config.json'),
-    JSON.stringify(config, null, 2),
-    'utf-8',
-  );
+  const configPath = join(configDir, 'config.json');
+  mkdirSync(configDir, { recursive: true, mode: 0o700 });
+  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+  try {
+    chmodSync(configDir, 0o700);
+    chmodSync(configPath, 0o600);
+  } catch {
+    // Best-effort on non-POSIX systems (Windows)
+  }
 }
 
 function ensureDeviceId(config: MemRosettaConfig): { readonly config: MemRosettaConfig; readonly deviceId: string } {

@@ -16,7 +16,7 @@ MemRosetta의 멀티디바이스 동기화 아키텍처.
 ```
 ┌─────────────┐        ┌──────────────┐        ┌─────────────┐
 │  Device A   │        │  Sync Hub    │        │  Device B   │
-│  (Mac)      │        │  (Azure)     │        │  (GPU서버)  │
+│  (Mac)      │        │  (Sync Hub)  │        │  (GPU서버)  │
 │             │        │              │        │             │
 │ ┌─────────┐ │  push  │ ┌──────────┐ │  pull  │ ┌─────────┐ │
 │ │ SQLite  │─┼───────→│ │PostgreSQL│←┼────────┼─│ SQLite  │ │
@@ -117,7 +117,7 @@ CREATE TABLE sync_state (
 -- 예: ('last_pull_cursor', '2026-04-15T00:00:00Z')
 --     ('device_id', 'mac-obst-001')
 --     ('sync_enabled', 'true')
---     ('sync_server_url', 'https://memrosetta-api.azurewebsites.net')
+--     ('sync_server_url', 'https://your-sync-server.example.com')
 ```
 
 ## 6. 동기화 대상 분류
@@ -319,7 +319,7 @@ cli         → core, sync-client (sync 명령 추가)
 
 ```bash
 # 동기화 활성화
-memrosetta sync enable --server https://memrosetta-api.azurewebsites.net --key YOUR_API_KEY
+memrosetta sync enable --server https://your-sync-server.example.com --key YOUR_API_KEY
 
 # 즉시 동기화
 memrosetta sync now
@@ -337,6 +337,42 @@ memrosetta sync disable
 MEMROSETTA_SYNC_PORT=8080
 DATABASE_URL=postgresql://...
 MEMROSETTA_API_KEYS=key1,key2,key3
+```
+
+### 11.3 Self-Hosting 가이드
+
+MemRosetta는 공용 sync 서버를 기본 제공하지 않습니다. sync는 기본 비활성화이며, 사용자가 직접 서버를 운영할 때만 활성화해야 합니다.
+
+최소 요구사항:
+
+- Node.js 22+
+- PostgreSQL 15+ (`sync_ops` 저장용)
+- `DATABASE_URL`
+- `MEMROSETTA_API_KEYS`
+
+배포 방법 예시:
+
+- Azure App Service: `@memrosetta/sync-server`를 배포하고 App Settings에 `DATABASE_URL`, `MEMROSETTA_API_KEYS`, `PORT`를 설정
+- Docker: 컨테이너 시작 시 `node dist/standalone.js` 실행, PostgreSQL은 별도 관리형 서비스 또는 사이드카 사용
+- VPS/systemd: 빌드 후 `node dist/standalone.js`를 systemd 서비스로 실행하고, reverse proxy(Nginx/Caddy) 뒤에 배치
+
+권장 절차:
+
+1. PostgreSQL 데이터베이스를 준비한다.
+2. `DATABASE_URL`과 `MEMROSETTA_API_KEYS`를 설정한다.
+3. `@memrosetta/sync-server`를 빌드/배포한다.
+4. `GET /sync/health`가 `{\"status\":\"ok\",\"db\":\"ok\"}`를 반환하는지 확인한다.
+5. 각 클라이언트의 `~/.memrosetta/config.json`에 서버 URL과 API key를 넣고 sync를 활성화한다.
+
+예시 설정:
+
+```json
+{
+  "syncEnabled": true,
+  "syncServerUrl": "https://your-sync-server.example.com",
+  "syncApiKey": "replace-with-your-api-key",
+  "syncDeviceId": "device-your-machine"
+}
 ```
 
 ## 12. Embedding 동기화 전략
