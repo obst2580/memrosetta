@@ -32,3 +32,20 @@ export type {
   DynamicProfile,
   UserProfile,
 } from './profile.js';
+
+export type {
+  SyncOpType,
+  SyncOp,
+  SyncPushRequest,
+  SyncPushResult,
+  SyncPushResponse,
+  SyncPullParams,
+  SyncPulledOp,
+  SyncPullResponse,
+  SyncConfig,
+  SyncMemoryPayload,
+  SyncRelationPayload,
+  SyncInvalidatePayload,
+  SyncFeedbackPayload,
+  SyncTierPayload,
+} from './sync.js';
