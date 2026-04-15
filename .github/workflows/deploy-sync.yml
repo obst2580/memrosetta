@@ -51,6 +51,20 @@ jobs:
           cp -r packages/types/dist/* deploy/packages/types/dist/
           cp packages/types/package.json deploy/packages/types/
 
+          # Strip workspace: protocol from sub-package.json files
+          for pkg in deploy/packages/*/package.json; do
+            node -e "
+              const p = JSON.parse(require('fs').readFileSync('$pkg','utf8'));
+              for (const k of ['dependencies','devDependencies','peerDependencies']) {
+                if (!p[k]) continue;
+                for (const [n,v] of Object.entries(p[k])) {
+                  if (String(v).startsWith('workspace:')) delete p[k][n];
+                }
+              }
+              require('fs').writeFileSync('$pkg', JSON.stringify(p, null, 2));
+            "
+          done
+
           cd deploy
           cat > package.json << 'PKG'
           {
@@ -61,6 +75,9 @@ jobs:
               "start": "node packages/sync-server/dist/standalone.js"
             },
             "dependencies": {
+              "@memrosetta/types": "file:packages/types",
+              "@memrosetta/postgres": "file:packages/postgres",
+              "@memrosetta/sync-server": "file:packages/sync-server",
               "hono": "^4.0.0",
               "@hono/node-server": "^1.0.0",
               "pg": "^8.0.0",
