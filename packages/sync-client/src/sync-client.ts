@@ -3,11 +3,23 @@ import type {
   SyncPushResponse,
   SyncPullResponse,
   SyncPushResult,
+  SyncOp,
 } from './types.js';
 import { ensureSyncSchema } from './schema.js';
 import { Outbox } from './outbox.js';
 import { Inbox } from './inbox.js';
 import { applyInboxOps, type ApplyResult } from './applier.js';
+
+/**
+ * Maximum ops per /sync/push HTTP call. The server's zod schema caps
+ * each push at 500 ops (see adapters/sync-server push route), so we
+ * chunk below that with a safety margin. Large backfills (thousands
+ * of memories) are split across multiple sequential HTTP requests and
+ * each batch is marked pushed as soon as it succeeds — that way a
+ * mid-run failure still makes forward progress instead of rolling
+ * the whole backfill back.
+ */
+const MAX_OPS_PER_PUSH = 400;
 
 /**
  * Minimal config required by SyncClient at runtime.
@@ -97,50 +109,65 @@ export class SyncClient {
       return { pushed: 0, results: [], highWatermark: 0 };
     }
 
-    const baseCursor = this.getCursor();
-
-    // Build wire ops: payload stored as JSON string in SQLite needs to be
-    // sent as a parsed object over HTTP.
-    const wireOps = pending.map((op) => ({
-      ...op,
-      payload: typeof op.payload === 'string' ? JSON.parse(op.payload as string) : op.payload,
-    }));
-
     const url = `${this.config.serverUrl}/sync/push`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({
-        deviceId: this.config.deviceId,
-        baseCursor,
-        ops: wireOps,
-      }),
-    });
+    const aggregatedResults: SyncPushResult[] = [];
+    let totalPushed = 0;
+    let highWatermark = 0;
 
-    if (!response.ok) {
-      throw new Error(`Push failed: ${response.status} ${response.statusText}`);
+    // Chunk pending ops across multiple HTTP requests. Each batch is
+    // acknowledged and marked pushed before moving on, so a mid-run
+    // failure still commits the batches that succeeded.
+    for (let start = 0; start < pending.length; start += MAX_OPS_PER_PUSH) {
+      const chunk = pending.slice(start, start + MAX_OPS_PER_PUSH);
+      const baseCursor = this.getCursor();
+
+      const wireOps = chunk.map((op: SyncOp) => ({
+        ...op,
+        payload:
+          typeof op.payload === 'string'
+            ? JSON.parse(op.payload as string)
+            : op.payload,
+      }));
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          deviceId: this.config.deviceId,
+          baseCursor,
+          ops: wireOps,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Push failed: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      const body = (await response.json()) as SyncPushResponse;
+      const { results, highWatermark: batchHigh } = body.data;
+
+      const pushedIds = results
+        .filter((r) => r.status === 'accepted' || r.status === 'duplicate')
+        .map((r) => r.opId);
+
+      this.outbox.markPushed(pushedIds);
+      this.setCursor(batchHigh);
+
+      aggregatedResults.push(...results);
+      totalPushed += pushedIds.length;
+      highWatermark = batchHigh;
     }
 
-    const body = (await response.json()) as SyncPushResponse;
-    const { results, highWatermark } = body.data;
-
-    // Mark accepted and duplicate ops as pushed
-    const pushedIds = results
-      .filter((r) => r.status === 'accepted' || r.status === 'duplicate')
-      .map((r) => r.opId);
-
-    this.outbox.markPushed(pushedIds);
-
-    // Advance cursor to server's highWatermark
-    this.setCursor(highWatermark);
     this.setState('last_push_success_at', new Date().toISOString());
 
     return {
-      pushed: pushedIds.length,
-      results,
+      pushed: totalPushed,
+      results: aggregatedResults,
       highWatermark,
     };
   }

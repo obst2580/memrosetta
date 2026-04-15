@@ -2,6 +2,46 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.5.0] - 2026-04-15
+
+### Added
+- **`memrosetta enforce stop`** — shared backend for client-side Stop
+  hooks (option 0 + 1 + 5). Loads a normalized event JSON, runs the
+  LLM extractor, stores atomic memories via the engine, and returns a
+  JSON envelope with `status` (`stored | needs-continuation | noop`),
+  memory ids, attempt/max-attempts, and an audit footer
+  (`STORED: ...`). Max 2 attempts per turn to prevent continuation
+  loops.
+- **Client-side LLM extractor** (`packages/cli/src/hooks/llm-extractor.ts`)
+  with fallback chain: `ANTHROPIC_API_KEY` -> Claude Haiku 4.5 ->
+  `OPENAI_API_KEY` -> GPT-4o-mini -> optional `@memrosetta/extractor`
+  propositionizer ONNX -> none. `@memrosetta/core` stays LLM-free; the
+  extractor lives in the hook layer because hook callers already pay for
+  model calls.
+- **`memrosetta-enforce-claude-code` binary** — Claude Code Stop hook
+  wrapper. Reads Claude Code's Stop event from stdin, locates the last
+  assistant turn in the transcript, normalizes it, and exec()s
+  `memrosetta enforce stop`. `init --claude-code` now registers this
+  binary as the Stop hook (with a 30 s timeout) and cleans up the legacy
+  `memrosetta-on-stop` registration on re-install.
+
+### Fixed
+- **`SyncClient.push()` blew up on large backfills.** The server caps
+  each `/sync/push` at 500 ops, so a 2k-memory backfill returned
+  `400 Bad Request`. Push now chunks pending ops into batches of
+  `MAX_OPS_PER_PUSH = 400`, marks each successful batch pushed before
+  moving to the next, and re-reads the cursor per batch. A mid-run
+  failure keeps the batches that already succeeded, so retries make
+  forward progress instead of rolling back the whole run.
+- **Codex `~/.codex/config.toml` mangled Windows paths.** The previous
+  `escapeTomlString` emitted TOML basic strings (`"..."`), whose
+  backslash escapes mutated `C:\Users\jhlee13\...` into `\\`-doubled or
+  `\U`-unicode-escape errors. Replaced with `tomlLiteral()`, which emits
+  TOML literal strings (`'...'`) with no escape processing. Every
+  register / reset path now also strips legacy
+  `[mcp_servers.memrosetta]` blocks written by older `memrosetta init`
+  versions, so re-install no longer leaves duplicate MCP entries.
+
 ## [0.4.8] - 2026-04-15
 
 ### Fixed

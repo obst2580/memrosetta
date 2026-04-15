@@ -106,11 +106,14 @@ export function resolveMcpCommand(): {
 }
 
 /**
- * Resolve hook command (on-stop or on-prompt).
+ * Resolve hook command (on-stop, on-prompt, or enforce-claude-code).
  * Priority: global binary > require.resolve > workspace relative > bare fallback
  */
 export function resolveHookCommand(
-  hookName: 'memrosetta-on-stop' | 'memrosetta-on-prompt',
+  hookName:
+    | 'memrosetta-on-stop'
+    | 'memrosetta-on-prompt'
+    | 'memrosetta-enforce-claude-code',
 ): string {
   // 1. Global binary in PATH -- use absolute path for non-interactive shells
   if (isInPath(hookName)) {
@@ -120,7 +123,9 @@ export function resolveHookCommand(
   const hookFile =
     hookName === 'memrosetta-on-stop'
       ? 'hooks/on-stop.js'
-      : 'hooks/on-prompt.js';
+      : hookName === 'memrosetta-on-prompt'
+        ? 'hooks/on-prompt.js'
+        : 'hooks/enforce-claude-code.js';
 
   // 2. Try require.resolve
   try {

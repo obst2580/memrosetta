@@ -152,6 +152,24 @@ describe('resolve-command', () => {
       expect(result).toContain('hooks/on-prompt.js');
     });
 
+    it('falls back to node + resolved path for enforce-claude-code hook', () => {
+      mockExecSync.mockImplementation(() => {
+        throw new Error('not found');
+      });
+
+      const mockRequire = vi.fn();
+      mockRequire.resolve = vi.fn().mockReturnValue(
+        '/mock/node_modules/@memrosetta/cli/package.json',
+      );
+      mockCreateRequire.mockReturnValue(mockRequire);
+      mockExistsSync.mockReturnValue(true);
+
+      const result = resolveHookCommand('memrosetta-enforce-claude-code');
+
+      expect(result).toContain('node ');
+      expect(result).toContain('hooks/enforce-claude-code.js');
+    });
+
     it('falls back to bare command when not in PATH and package not found', () => {
       mockExecSync.mockImplementation(() => {
         throw new Error('not found');

@@ -87,7 +87,26 @@ describe('claude-code integration', () => {
       expect(isClaudeCodeConfigured()).toBe(false);
     });
 
-    it('returns true when memrosetta stop hook is registered', () => {
+    it('returns true when enforce wrapper stop hook is registered', () => {
+      mockFs[SETTINGS_PATH] = JSON.stringify({
+        hooks: {
+          Stop: [
+            {
+              matcher: '*',
+              hooks: [
+                {
+                  type: 'command',
+                  command: 'memrosetta-enforce-claude-code',
+                },
+              ],
+            },
+          ],
+        },
+      });
+      expect(isClaudeCodeConfigured()).toBe(true);
+    });
+
+    it('still recognizes legacy on-stop hook as configured', () => {
       mockFs[SETTINGS_PATH] = JSON.stringify({
         hooks: {
           Stop: [
@@ -122,11 +141,11 @@ describe('claude-code integration', () => {
       const settings = JSON.parse(mockFs[SETTINGS_PATH]);
       expect(settings.hooks.Stop).toHaveLength(1);
       expect(settings.hooks.Stop[0].hooks[0].command).toContain(
-        'memrosetta-on-stop',
+        'memrosetta-enforce-claude-code',
       );
     });
 
-    it('removes existing memrosetta hooks before adding new ones', () => {
+    it('replaces legacy on-stop hook with the enforce wrapper', () => {
       mockFs[CLAUDE_DIR] = '';
       mockFs[SETTINGS_PATH] = JSON.stringify({
         hooks: {
@@ -153,13 +172,14 @@ describe('claude-code integration', () => {
       registerClaudeCodeHooks();
 
       const settings = JSON.parse(mockFs[SETTINGS_PATH]);
-      // Should have the other hook + the new memrosetta hook
+      // Legacy memrosetta hook removed, enforce wrapper added, other hook preserved
       expect(settings.hooks.Stop).toHaveLength(2);
       const memHook = settings.hooks.Stop.find(
         (hc: { hooks: { command: string }[] }) =>
           hc.hooks.some((h: { command: string }) => h.command.includes('memrosetta')),
       );
-      expect(memHook.hooks[0].command).toContain('memrosetta-on-stop');
+      expect(memHook.hooks[0].command).toContain('memrosetta-enforce-claude-code');
+      expect(memHook.hooks[0].command).not.toContain('memrosetta-on-stop');
     });
 
     it('preserves existing non-memrosetta hooks', () => {

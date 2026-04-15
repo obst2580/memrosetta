@@ -32,9 +32,14 @@ interface ClaudeSettings {
 // ---------------------------------------------------------------------------
 
 function isMemrosettaHook(command: string): boolean {
+  // Matches current enforce wrapper as well as legacy on-stop/on-prompt
+  // binaries so `init --claude-code` cleanly replaces an older install
+  // instead of leaving stale Stop hooks behind.
   return (
     command.includes('memrosetta') &&
-    (command.includes('on-stop') || command.includes('on-prompt'))
+    (command.includes('enforce-claude-code') ||
+      command.includes('on-stop') ||
+      command.includes('on-prompt'))
   );
 }
 
@@ -111,7 +116,10 @@ export function registerClaudeCodeHooks(): boolean {
   // Remove any existing memrosetta hooks first
   settings = removeMemrosettaHooksFromSettings(settings);
 
-  // Add Stop hook
+  // Add Stop hook.
+  // v0.5.0+: register the enforce wrapper which runs the LLM extractor
+  // pipeline and emits an audit footer back to Claude Code. The old
+  // best-effort on-stop hook is superseded.
   const stopHookConfigs = (settings.hooks!['Stop'] || []) as HookConfig[];
   (settings.hooks as Record<string, unknown>)['Stop'] = [
     ...stopHookConfigs,
@@ -120,8 +128,8 @@ export function registerClaudeCodeHooks(): boolean {
       hooks: [
         {
           type: 'command',
-          command: resolveHookCommand('memrosetta-on-stop'),
-          timeout: 15,
+          command: resolveHookCommand('memrosetta-enforce-claude-code'),
+          timeout: 30,
         },
       ],
     },

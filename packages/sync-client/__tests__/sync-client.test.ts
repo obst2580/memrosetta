@@ -170,6 +170,110 @@ describe('SyncClient', () => {
       expect(client.getState('last_push_attempt_at')).toBeTruthy();
       expect(client.getState('last_push_success_at')).toBeNull();
     });
+
+    it('chunks pending ops across multiple HTTP requests (max 400 per batch)', async () => {
+      const outbox = client.getOutbox();
+      const total = 850; // 3 batches: 400 + 400 + 50
+      for (let i = 0; i < total; i++) {
+        outbox.addOp({
+          opId: `op-${i}`,
+          opType: 'memory_created',
+          deviceId: TEST_CONFIG.deviceId,
+          userId: 'user-test',
+          payload: { content: `hello-${i}` },
+          createdAt: `2025-01-01T00:00:${String(i).padStart(2, '0')}Z`,
+        });
+      }
+
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(async (_url, init) => {
+          const body = JSON.parse((init as RequestInit).body as string);
+          const ops = body.ops as Array<{ opId: string }>;
+          const baseCursor = body.baseCursor as number;
+          const results = ops.map((op, idx) => ({
+            opId: op.opId,
+            status: 'accepted' as const,
+            cursor: baseCursor + idx + 1,
+          }));
+          const response: SyncPushResponse = {
+            success: true,
+            data: {
+              results,
+              highWatermark: baseCursor + ops.length,
+            },
+          };
+          return new Response(JSON.stringify(response), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        });
+
+      const result = await client.push();
+
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+      expect(result.pushed).toBe(total);
+      expect(result.results).toHaveLength(total);
+      expect(result.highWatermark).toBe(total);
+      expect(outbox.getPending()).toHaveLength(0);
+      expect(client.getState('last_push_success_at')).toBeTruthy();
+
+      // Each batch size should respect the 400 cap.
+      const batchSizes = fetchSpy.mock.calls.map((call) => {
+        const body = JSON.parse((call[1] as RequestInit).body as string);
+        return body.ops.length;
+      });
+      expect(batchSizes).toEqual([400, 400, 50]);
+    });
+
+    it('preserves progress when a later chunk fails', async () => {
+      const outbox = client.getOutbox();
+      const total = 600; // 2 batches: 400 accepted + 200 fails
+      for (let i = 0; i < total; i++) {
+        outbox.addOp({
+          opId: `op-${i}`,
+          opType: 'memory_created',
+          deviceId: TEST_CONFIG.deviceId,
+          userId: 'user-test',
+          payload: { content: `hello-${i}` },
+          createdAt: `2025-01-01T00:00:${String(i).padStart(2, '0')}Z`,
+        });
+      }
+
+      let call = 0;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+        call += 1;
+        if (call === 1) {
+          const body = JSON.parse((init as RequestInit).body as string);
+          const ops = body.ops as Array<{ opId: string }>;
+          const results = ops.map((op, idx) => ({
+            opId: op.opId,
+            status: 'accepted' as const,
+            cursor: idx + 1,
+          }));
+          const response: SyncPushResponse = {
+            success: true,
+            data: { results, highWatermark: ops.length },
+          };
+          return new Response(JSON.stringify(response), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response('Bad Request', {
+          status: 400,
+          statusText: 'Bad Request',
+        });
+      });
+
+      await expect(client.push()).rejects.toThrow('Push failed: 400 Bad Request');
+
+      // First 400 ops were accepted and marked pushed.
+      expect(outbox.getPending()).toHaveLength(200);
+      expect(client.getState('last_cursor')).toBe('400');
+      // last_push_success_at stays unset because the run did not complete.
+      expect(client.getState('last_push_success_at')).toBeNull();
+    });
   });
 
   describe('pull', () => {
