@@ -27,7 +27,7 @@ export function Features({ lang }: FeaturesProps) {
         {t.title}
       </SectionTitle>
 
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {t.items.map((item, i) => (
           <div key={i} className="group">
             <div className="mb-3 flex items-center gap-3">
@@ -46,9 +46,18 @@ export function Features({ lang }: FeaturesProps) {
                   />
                 </svg>
               </div>
-              <h3 className="text-sm font-semibold text-zinc-800">
-                {item.title}
-              </h3>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-semibold text-zinc-800">
+                    {item.title}
+                  </h3>
+                  {'badge' in item ? (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-mono text-[11px] text-amber-700">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
             </div>
             <p className="pl-11 text-sm leading-relaxed text-zinc-500">
               {item.description}

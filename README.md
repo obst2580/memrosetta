@@ -125,16 +125,28 @@ Claude gets 6 memory tools it can call during any session:
 
 **memrosetta_count** -- Quick check: "How many memories do I have for this project?"
 
-### 2. Stop Hook (automatic backup on session end)
+### 2. Stop Hook — structured enforcement, not willpower
 
-When a Claude Code session ends, a hook automatically:
-1. Reads the session transcript (JSONL)
-2. Extracts meaningful turns (skips confirmations, code blocks, tool calls)
-3. Stores them as memories in the database
-4. Deduplicates: if the same session is saved twice, old entries are replaced
+When a Claude Code session ends, the Stop hook runs
+`memrosetta-enforce-claude-code`, which:
 
-This is a safety net. Claude stores important things via MCP during the session,
-but the Stop Hook catches anything that was missed.
+1. Reads the Stop hook event (stdin) and the session transcript (JSONL).
+2. Extracts the last assistant turn and normalizes it.
+3. Runs an LLM extractor (Claude Haiku → GPT-4o-mini → Propositionizer
+   fallback → none) to decompose the turn into atomic facts.
+4. Calls `memrosetta enforce stop`, which stores the resulting memories
+   and returns a JSON envelope with `status`, counts, memory ids, and an
+   audit footer (`STORED: ...`).
+5. Deduplicates: the same session cannot inflate its own memories.
+
+Why hooks instead of instructions in `CLAUDE.md`: instructions that say
+"after every turn, decide what to store" only work if the model chooses
+to run the checklist. v0.5.0 replaces that willpower loop with a
+structural pipeline — capture is a side effect of the session ending,
+not a thing the model has to remember to do.
+
+`@memrosetta/core` remains LLM-free. All model calls live in the hook
+layer because the hook caller already pays for them.
 
 ### 3. CLAUDE.md Instructions
 
@@ -532,6 +544,15 @@ machines, you can run your own sync hub.
   each device at your own URL.
 - Every device keeps a full local SQLite copy. Sync is an append-only
   operation log — works offline, pushes when connected.
+- **Genuinely bidirectional since v0.4.6.** `pull()` writes remote ops
+  into your local `memories` graph, not just an inbox, so memories
+  created on another device become searchable immediately after a pull.
+- **All write paths participate since v0.4.7.** CLI `store / relate /
+  invalidate / feedback` and the MCP adapter all enqueue ops to the
+  sync outbox after the local SQLite write succeeds.
+- **Same person, different OS usernames.** Set `--user <id>` explicitly
+  (see below) so a Mac account `alice` and a Windows account `alice-w`
+  end up on the same server-side op stream.
 
 ### Enable sync on a device
 
@@ -540,7 +561,9 @@ machines, you can run your own sync hub.
 
 # Option A — env variable (recommended for Windows PowerShell / CI)
 export MEMROSETTA_SYNC_API_KEY="your-api-key"
-memrosetta sync enable --server https://your-sync-server.example.com
+memrosetta sync enable \
+  --server https://your-sync-server.example.com \
+  --user alice         # shared logical user id — use the SAME value on every device you own
 
 # Option B — read from a file (never appears in shell history)
 memrosetta sync enable \
@@ -578,6 +601,11 @@ Use `sync backfill` once on a device that already had local memories before
 you enabled sync. It enqueues the current SQLite contents into the outbox; it
 does not push automatically, so run `memrosetta sync now` after the enqueue
 step. `--dry-run` shows how many memories and relations would be queued.
+
+Since v0.4.8, backfill is **idempotent**: op ids are derived deterministically
+from `sha256(memory_id)` / `sha256(src|dst|type)`, and the outbox inserts use
+`INSERT OR IGNORE`, so re-running `sync backfill` on the same device is a
+no-op at every layer (local outbox, server op log, downstream inboxes).
 
 ### Self-hosting the sync server
 
@@ -760,6 +788,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] CI pipeline (build + typecheck + test)
 - [x] Optional multi-device sync (self-hosted op log hub)
 - [x] Multilingual fact decomposition (Propositionizer-mT5)
+- [x] Bidirectional sync (pull applies ops into the local graph, v0.4.6)
+- [x] CLI write paths participate in sync (v0.4.7)
+- [x] Shared `syncUserId` across a user's devices (v0.4.5)
+- [x] Deterministic, idempotent backfill (v0.4.8)
+- [x] Structural memory capture via `memrosetta enforce` + Stop hook (v0.5.0-wip)
+- [ ] Codex Stop hook continuation wrapper (v0.5.0)
 - [ ] Sync server 1.0 (promotion from 0.1.x after production validation)
 - [ ] Profile builder (stable + dynamic user profiles)
 - [ ] Stable/volatile memory classification

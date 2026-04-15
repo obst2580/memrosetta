@@ -157,12 +157,12 @@ memrosetta maintain`,
     compatibility: {
       title: 'Works With',
       subtitle:
-        'One local database, shared across all your AI tools. Memories stored in Claude Code are searchable from Cursor, Gemini, and vice versa. Add optional self-hosted sync when you need the same memory on another machine.',
-      diagramComment: '// All tools share one database',
+        'One local SQLite database per machine, shared across all your AI tools. Need the same memory on another machine? Optional self-hosted sync now separates OS usernames from logical sync users, applies pulled memories into the local graph, and keeps MCP clients current with background push + pull.',
+      diagramComment: '// Local by default, optional sync across devices',
       sharing: {
-        title: 'Cross-tool memory sharing',
+        title: 'Cross-tool and cross-device memory sharing',
         description:
-          'Morning: Claude Code session about auth system -- memories saved. Afternoon: Open Cursor for frontend -- search "auth" -- finds morning\'s decisions. Evening: Codex refactors middleware -- same memories, same DB. By default it stays local; if you want the same memory on another machine, add optional self-hosted sync.',
+          'MacBook uses OS user `obst`, Windows laptop uses `jhlee13` -- but both run `memrosetta sync enable --user alice`, so they join the same logical stream. Claude Code writes via MCP, CLI writes enqueue the same sync outbox, `sync backfill` migrates older local history, and pulled ops become searchable locally instead of stopping at the inbox.',
       },
       table: {
         headers: { tool: 'Tool', mcp: 'MCP', setup: 'Setup', note: 'Note' },
@@ -270,7 +270,7 @@ memrosetta maintain`,
     },
     features: {
       title: 'Features',
-      subtitle: 'Cognitive-science-inspired memory management. Local-first storage, optional self-hosted sync, intelligent retrieval, and full memory lifecycle.',
+      subtitle: 'Core memory engine plus the recent sync and enforce releases: local-first storage, safer multi-device sync, and hook-driven capture.',
       items: [
         {
           title: 'Hybrid Search',
@@ -293,29 +293,34 @@ memrosetta maintain`,
             'Hot tier (~3K tokens): working memory, always loaded, highest-activation facts. Warm tier: last 30 days of active memories, normal search ranking. Cold tier: older than 30 days, compressed into summaries. Automatic tier management via the maintain command.',
         },
         {
-          title: 'Optional Self-Hosted Sync',
+          badge: 'v0.4.5',
+          title: 'Logical Sync Users',
           description:
-            'By default every tool shares one local SQLite database on your machine. Need the same memory on another laptop or workstation? Run your own sync server, keep local SQLite on each device, and use memrosetta sync enable/status/now to move ops through your own infrastructure. No vendor cloud required.',
+            '`memrosetta sync enable --user <id>` separates the shared human identity from each machine\'s OS username. A Mac `obst` and Windows `jhlee13` can finally converge on the same remote stream without hacks or surprise empty pulls.',
         },
         {
-          title: 'Relations',
+          badge: 'v0.4.6',
+          title: 'True Bidirectional Sync',
           description:
-            '5 relation types form a knowledge graph: updates (fact changed), extends (detail added), derives (inference made), contradicts (conflict detected), supports (corroborating evidence). Old versions are preserved via isLatest flags, not deleted.',
+            '`pull()` no longer stops at the inbox. Remote ops are applied into the local `memories` graph and retried if an earlier apply was skipped, so memories from another device become searchable on the next sync.',
         },
         {
-          title: 'Time Model',
+          badge: 'v0.4.7',
+          title: 'CLI Writes + Sync Backfill',
           description:
-            'Four timestamps per memory: learnedAt (when MemRosetta first saw it), documentDate (when the conversation happened), eventDateStart/End (when the real-world event occurred), invalidatedAt (when it became outdated). Enables temporal queries like "what did we know as of last Tuesday?"',
+            'CLI `store`, `relate`, `invalidate`, and `feedback` now enqueue sync ops after the local SQLite write succeeds. `memrosetta sync backfill` migrates existing local memories and relations into the outbox for first-time sync rollout.',
         },
         {
-          title: 'Non-destructive',
+          badge: 'v0.4.8',
+          title: 'Sync Integrity Guardrails',
           description:
-            'Nothing is ever deleted. When a fact is updated, the old version remains with isLatest=false and a relation edge pointing to the new version. When a fact is invalidated, it gets an invalidatedAt timestamp. Full audit trail of every change.',
+            'Keywords are normalized to the canonical space-joined format, `sync backfill` uses deterministic op ids, and the MCP background loop now runs `push()` plus `pull()` so remote updates arrive without manual babysitting.',
         },
         {
-          title: '696+ Tests',
+          badge: 'v0.5.0-wip',
+          title: 'Hook-Enforced Capture',
           description:
-            'Comprehensive test suite covering core engine, hybrid search, NLI contradiction detection, relation graph traversal, tier compression, activation scoring, MCP tools, REST API, CLI commands, and Claude Code integration. CI runs on every push and PR.',
+            '`memrosetta enforce stop` turns end-of-session capture into a structural hook pipeline. Claude Code\'s Stop hook wrapper normalizes the event, extracts atomic memories, and stores them without relying on the model to remember a checklist.',
         },
       ],
     },
@@ -597,12 +602,12 @@ memrosetta maintain`,
     compatibility: {
       title: '호환성',
       subtitle:
-        '하나의 로컬 데이터베이스를 모든 AI 도구가 공유합니다. Claude Code에 저장한 기억을 Cursor에서 검색할 수 있습니다. 다른 기기에도 같은 기억이 필요하면 선택적으로 자체 호스팅 동기화를 붙일 수 있습니다.',
-      diagramComment: '// 모든 도구가 하나의 데이터베이스를 공유',
+        '기기마다 있는 로컬 SQLite 데이터베이스 하나를 모든 AI 도구가 공유합니다. 다른 기기에도 같은 기억이 필요하면 선택적으로 자체 호스팅 sync를 붙이면 됩니다. 이제 OS username과 논리 sync 사용자를 분리하고, pull 결과를 로컬 그래프에 적용하며, MCP 클라이언트는 백그라운드 push + pull로 최신 상태를 유지합니다.',
+      diagramComment: '// 기본은 로컬, 필요할 때 기기 간 sync',
       sharing: {
-        title: '도구 간 기억 공유',
+        title: '도구 간 + 기기 간 기억 공유',
         description:
-          '오전: Claude Code로 인증 시스템 작업 -- 기억 저장. 오후: Cursor로 프론트엔드 작업 -- "auth" 검색 -- 오전의 결정 사항 발견. 저녁: Codex로 미들웨어 리팩토링 -- 같은 기억, 같은 DB. 기본은 로컬 공유이고, 다른 기기까지 이어야 하면 선택적으로 자체 호스팅 동기화를 붙이면 됩니다.',
+          'MacBook의 OS user가 `obst`, Windows 노트북은 `jhlee13`여도 두 기기에서 `memrosetta sync enable --user alice`를 쓰면 같은 논리 스트림에 합류합니다. Claude Code의 MCP 쓰기와 CLI 쓰기가 같은 outbox로 들어가고, `sync backfill`이 예전 로컬 히스토리를 올리며, pull한 op는 inbox에서 멈추지 않고 로컬에서 바로 검색 가능해집니다.',
       },
       table: {
         headers: { tool: '도구', mcp: 'MCP', setup: '설정', note: '비고' },
@@ -710,7 +715,7 @@ memrosetta maintain`,
     },
     features: {
       title: '기능',
-      subtitle: '인지과학 기반의 기억 관리. 로컬 우선 저장, 선택적 자체 호스팅 동기화, 지능적 검색, 그리고 전체 기억 생명주기.',
+      subtitle: '코어 메모리 엔진에 최근 sync와 enforce 릴리즈까지: 로컬 우선 저장, 더 안전한 멀티디바이스 sync, 그리고 hook 기반 캡처.',
       items: [
         {
           title: '하이브리드 검색',
@@ -733,29 +738,34 @@ memrosetta maintain`,
             'Hot 계층 (~3K 토큰): 작업 기억, 항상 로드, 최고 활성화 사실. Warm 계층: 최근 30일 활성 기억, 정상 검색 랭킹. Cold 계층: 30일 이상, 요약으로 압축. maintain 명령으로 자동 계층 관리.',
         },
         {
-          title: '선택적 자체 호스팅 동기화',
+          badge: 'v0.4.5',
+          title: '논리 sync 사용자 ID',
           description:
-            '기본 동작은 내 기기의 SQLite 파일 하나를 모든 도구가 공유하는 구조입니다. 다른 노트북이나 워크스테이션에도 같은 기억이 필요하면 직접 sync 서버를 운영하고, 각 기기에서는 계속 로컬 SQLite를 유지한 채 memrosetta sync enable/status/now 명령으로 동기화할 수 있습니다. 벤더 클라우드는 필요 없습니다.',
+            '`memrosetta sync enable --user <id>`가 사람의 공유 sync ID를 각 기기의 OS username과 분리합니다. macOS의 `obst`와 Windows의 `jhlee13`도 더 이상 갈라진 스트림에 빠지지 않고 같은 원격 op 스트림으로 합쳐집니다.',
         },
         {
-          title: '관계',
+          badge: 'v0.4.6',
+          title: '진짜 양방향 sync',
           description:
-            '5가지 관계 타입이 지식 그래프 형성: updates (사실 변경), extends (세부사항 추가), derives (추론 도출), contradicts (충돌 감지), supports (뒷받침 증거). 이전 버전은 isLatest 플래그로 보존, 삭제하지 않음.',
+            '`pull()`이 더 이상 inbox에서 멈추지 않습니다. 다른 기기에서 온 op를 로컬 `memories` 그래프에 실제로 적용하고, 이전 apply가 건너뛰어진 행도 다음 pull에서 다시 시도하므로 다른 기기의 기억이 로컬에서 바로 검색됩니다.',
         },
         {
-          title: '시간 모델',
+          badge: 'v0.4.7',
+          title: 'CLI 쓰기 + sync backfill',
           description:
-            '기억당 4개 타임스탬프: learnedAt (MemRosetta가 처음 인지한 시점), documentDate (대화가 일어난 시점), eventDateStart/End (실제 사건 발생 시점), invalidatedAt (무효화된 시점). "지난 화요일 시점에 우리가 알고 있던 것은?" 같은 시간 기반 쿼리 가능.',
+            'CLI `store`, `relate`, `invalidate`, `feedback`도 이제 로컬 SQLite 쓰기 직후 sync op를 enqueue합니다. `memrosetta sync backfill`은 기존 로컬 memories/relations를 outbox에 올려서 첫 sync 도입 시 히스토리를 한 번에 이관합니다.',
         },
         {
-          title: '비파괴적',
+          badge: 'v0.4.8',
+          title: 'sync 정합성 가드레일',
           description:
-            '삭제 없음. 사실이 업데이트되면 이전 버전은 isLatest=false로 남고, 새 버전을 가리키는 관계 엣지가 생성. 사실이 무효화되면 invalidatedAt 타임스탬프를 받음. 모든 변경의 전체 감사 추적.',
+            'keywords는 canonical한 공백-결합 포맷으로 정규화되고, `sync backfill`은 deterministic op id를 쓰며, MCP 백그라운드 루프는 `push()` 뒤에 `pull()`까지 수행합니다. 따라서 수동 재실행과 장치 간 동기화가 훨씬 안전해졌습니다.',
         },
         {
-          title: '696+ 테스트',
+          badge: 'v0.5.0-wip',
+          title: 'Hook 기반 강제 캡처',
           description:
-            '코어 엔진, 하이브리드 검색, NLI 모순 감지, 관계 그래프 탐색, 계층 압축, 활성화 점수, MCP 도구, REST API, CLI 명령어, Claude Code 통합을 커버하는 종합 테스트 스위트. 모든 push/PR에서 CI가 실행됩니다.',
+            '`memrosetta enforce stop`이 세션 종료 시 기억 추출을 "하면 좋다"가 아니라 구조적 hook 파이프라인으로 바꿉니다. Claude Code Stop hook wrapper가 이벤트를 정규화하고 atomic memory를 추출/저장해, 모델의 의지력 대신 hook이 캡처를 강제합니다.',
         },
       ],
     },

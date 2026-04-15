@@ -5,6 +5,112 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.5.0-wip — 2026-04-15
+
+**Work in progress. Not yet published to the `latest` tag.**
+
+**Headline: `memrosetta enforce` — structural enforcement of memory capture.**
+
+CLAUDE.md instructions that say "after every turn, decide what to store"
+only work if the model remembers to check the checklist. v0.5.0 replaces
+that willpower loop with a concrete hook-driven pipeline so capture is
+structural, not aspirational.
+
+**Added**
+- `memrosetta enforce stop`: new CLI subcommand that accepts a normalized
+  event JSON on stdin, runs a client-side LLM extractor, stores the
+  resulting atomic memories, and prints a JSON envelope:
+  ```
+  {
+    "status": "stored | needs-continuation | noop",
+    "structuredCount": N,
+    "extractedCount": N,
+    "memories": [{ "type": "decision", "memoryId": "mem-..." }],
+    "footer": "STORED: decision(mem-...)",
+    "attempt": 1,
+    "maxAttempts": 2,
+    "reason": "..."
+  }
+  ```
+  `max_attempts = 2` prevents continuation loops.
+- LLM extractor (`packages/cli/src/hooks/llm-extractor.ts`) with a clean
+  fallback chain: `ANTHROPIC_API_KEY` (Claude Haiku) →
+  `OPENAI_API_KEY` (GPT-4o-mini) → optional `@memrosetta/extractor`
+  propositionizer → no-op.
+- `memrosetta-enforce-claude-code` bin: Claude Code Stop hook wrapper that
+  reads the Stop hook event from stdin, extracts the last assistant turn
+  from the transcript, normalizes it, and `exec()`s `memrosetta enforce stop`.
+  Drop it into `~/.claude/settings.json` under `hooks.Stop`.
+
+**Philosophy**
+- `@memrosetta/core` stays LLM-free. All model calls live in the hook
+  layer, since hook callers already pay for model inference.
+- The same `memrosetta enforce stop` pipeline is designed to back Codex
+  CLI and Copilot wrappers in follow-up releases — only the trigger and
+  continuation policy differ per client.
+
+**Fixed**
+- `@memrosetta/cli` Codex integration (`packages/cli/src/integrations/codex.ts`)
+  now emits TOML **literal strings** (`'...'`) instead of basic strings
+  (`"..."`) when writing `~/.codex/config.toml`. Basic strings interpret
+  backslashes, which mangled Windows paths like `C:\Users\...` into `\\`
+  or produced `\U` unicode-escape errors. Literal strings have no escape
+  processing, so Windows paths round-trip cleanly.
+- The register/reset paths now strip both the current
+  `[mcp_servers.memory-service]` block and any legacy orphaned sections
+  before rewriting, fixing a class of "stale entries survived a disable".
+
+---
+
+## v0.4.8 — 2026-04-15
+
+**Highlights**
+- Seven data-integrity fixes surfaced by Codex's end-of-session review.
+- v0.4.0 → v0.4.7 sync looked healthy but was quietly corrupting keyword
+  storage and re-publishing the same memories on every backfill run.
+
+**Fixed — High (data integrity)**
+- **Keyword format mismatch.** The `@memrosetta/sync-client` applier wrote
+  keywords as a JSON array, but `@memrosetta/core` expects a space-joined
+  string. FTS keyword recall was degraded on every synced memory. The
+  applier and `sync backfill` now use the canonical space-joined format.
+- **`sync backfill` crashed on keyworded memories.** Previously called
+  `JSON.parse(row.keywords)` and threw on the first row. Now uses
+  split-by-space, matching core.
+- **Non-idempotent backfill.** `sync backfill` previously generated fresh
+  `randomUUID()` op ids per run, so re-runs inflated the local outbox,
+  the server log, and downstream inboxes. Backfill now uses deterministic
+  ids (`op-<sha256(memory_id)[:16]>` and `op-<sha256(src|dst|type)[:16]>`),
+  and `Outbox.addOp` switched to `INSERT OR IGNORE` so re-runs are no-ops
+  at every layer.
+
+**Fixed — Medium**
+- **Salience drift across devices.** Pulled `feedback_given` ops only
+  bumped `use_count` / `success_count`. Local `engine.feedback()` also
+  adjusts `salience`, so cross-device ranking drifted over time. The
+  applier now applies the same
+  `salience = clamp(0.5 + 0.5 * success_rate, 0.1, 1.0)` update.
+- **`pull()` ignored apply-skipped ops.** The cursor still advances (so
+  skipped ops are not redownloaded forever), but `pull()` now logs every
+  skip to stderr and only updates `last_pull_success_at` when no ops were
+  skipped. Skipped ops stay pending in `sync_inbox` for retry.
+- **MCP background sync was push-only.** The 5-minute MCP background loop
+  only ran `push()`, so an MCP-only device never saw remote updates
+  without a manual `memrosetta sync now`. The interval now runs
+  `push()` + `pull()` sequentially, with separated logging.
+
+**Fixed — Low**
+- `@memrosetta/mcp` no longer hard-codes `VERSION = '0.3.0'`. Resolved
+  from `package.json` at startup.
+
+**Upgrade note**
+After upgrading on any sync-enabled device, consider re-running
+`memrosetta sync backfill` once. Because backfill is now idempotent
+via deterministic op ids, the second run is a no-op on healthy memories
+but will re-normalize any memory whose keywords had been mangled.
+
+---
+
 ## v0.4.7 — 2026-04-15
 
 **Highlights**
@@ -41,15 +147,26 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 ## v0.4.5 — 2026-04-15
 
 **Highlights**
-- MCP-originated writes now enter the sync outbox automatically.
+- Cross-device sync finally works when the same person's OS usernames
+  disagree (e.g. `obst` on macOS and `jhlee13` on Windows).
+
+**Fixed**
+- Devices previously picked `userId` from the OS username, so two machines
+  owned by the same human ended up partitioned into different server-side
+  op streams. Pull returned zero ops and sync silently looked one-way.
 
 **Added**
-- MCP adapter wires a `SyncRecorder` so `store`, `relate`, `invalidate`,
-  and `feedback` enqueue sync ops when sync is enabled.
+- `MemRosettaConfig.syncUserId` is now a first-class field. Both the CLI
+  and the MCP adapter read it, falling back to the OS username only when
+  absent.
+- `memrosetta sync enable --user <id>` sets the shared logical user id.
+  Run it on every device with the **same** value.
+- `memrosetta sync status` prints the active `userId` so mismatches are
+  obvious before you debug pull counts.
 
-**Notes**
-- This closed the MCP write path, but CLI writes still remained local-only
-  until v0.4.7.
+**Upgrade note**
+Users on 0.4.1–0.4.4 should re-run `memrosetta sync enable --user <id>`
+on every device, using one consistent id for all machines you own.
 
 ---
 
@@ -167,7 +284,7 @@ and idempotent.
 
 ## Session Ownership
 
-This release line (v0.4.0 → v0.4.4) was produced via a tight
+This release line (v0.4.0 → v0.5.0-wip) was produced via a tight
 Claude ↔ Codex collaboration:
 
 - Architecture reviews and implementation splits were agreed panel-to-panel
