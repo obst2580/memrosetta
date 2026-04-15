@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { MiddlewareHandler } from 'hono';
 
 function extractApiKey(headers: {
@@ -22,9 +22,9 @@ function extractApiKey(headers: {
 }
 
 function matchesApiKey(expected: string, provided: string): boolean {
-  const left = Buffer.from(expected);
-  const right = Buffer.from(provided);
-  return left.length === right.length && timingSafeEqual(left, right);
+  const left = createHmac('sha256', expected).update(expected).digest();
+  const right = createHmac('sha256', expected).update(provided).digest();
+  return timingSafeEqual(left, right);
 }
 
 export function apiKeyAuthMiddleware(apiKeys: readonly string[]): MiddlewareHandler {

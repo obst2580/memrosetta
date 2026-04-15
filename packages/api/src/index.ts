@@ -8,7 +8,7 @@ const DB_PATH = process.env.DB_PATH ?? './memrosetta.db';
 const ENABLE_EMBEDDINGS = process.env.ENABLE_EMBEDDINGS !== 'false';
 
 function getApiKeysFromEnv(): string[] {
-  const raw = process.env.MEMROSETTA_API_KEYS ?? process.env.SERVICE_KEY ?? '';
+  const raw = process.env.MEMROSETTA_API_KEYS || process.env.SERVICE_KEY || '';
   return raw.split(',').map(key => key.trim()).filter(Boolean);
 }
 
