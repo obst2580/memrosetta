@@ -9,7 +9,7 @@ export const content = {
     hero: {
       badge: 'Open source -- MIT License',
       title: 'MemRosetta',
-      subtitle: 'One persistent memory for all your AI tools. Local SQLite. Zero cloud.',
+      subtitle: 'One persistent memory for all your AI tools. Local-first SQLite. Optional self-hosted sync.',
       install: 'npm install -g memrosetta',
       stats: {
         mrr: { value: '+324%', label: 'MRR improvement' },
@@ -157,12 +157,12 @@ memrosetta maintain`,
     compatibility: {
       title: 'Works With',
       subtitle:
-        'One local database, shared across all your AI tools. Memories stored in Claude Code are searchable from Cursor, Gemini, and vice versa.',
+        'One local database, shared across all your AI tools. Memories stored in Claude Code are searchable from Cursor, Gemini, and vice versa. Add optional self-hosted sync when you need the same memory on another machine.',
       diagramComment: '// All tools share one database',
       sharing: {
         title: 'Cross-tool memory sharing',
         description:
-          'Morning: Claude Code session about auth system -- memories saved. Afternoon: Open Cursor for frontend -- search "auth" -- finds morning\'s decisions. Evening: Codex refactors middleware -- same memories, same DB. No sync, no cloud.',
+          'Morning: Claude Code session about auth system -- memories saved. Afternoon: Open Cursor for frontend -- search "auth" -- finds morning\'s decisions. Evening: Codex refactors middleware -- same memories, same DB. By default it stays local; if you want the same memory on another machine, add optional self-hosted sync.',
       },
       table: {
         headers: { tool: 'Tool', mcp: 'MCP', setup: 'Setup', note: 'Note' },
@@ -270,7 +270,7 @@ memrosetta maintain`,
     },
     features: {
       title: 'Features',
-      subtitle: 'Cognitive-science-inspired memory management. Not just storage -- intelligent retrieval and lifecycle.',
+      subtitle: 'Cognitive-science-inspired memory management. Local-first storage, optional self-hosted sync, intelligent retrieval, and full memory lifecycle.',
       items: [
         {
           title: 'Hybrid Search',
@@ -291,6 +291,11 @@ memrosetta maintain`,
           title: 'Memory Tiers',
           description:
             'Hot tier (~3K tokens): working memory, always loaded, highest-activation facts. Warm tier: last 30 days of active memories, normal search ranking. Cold tier: older than 30 days, compressed into summaries. Automatic tier management via the maintain command.',
+        },
+        {
+          title: 'Optional Self-Hosted Sync',
+          description:
+            'By default every tool shares one local SQLite database on your machine. Need the same memory on another laptop or workstation? Run your own sync server, keep local SQLite on each device, and use memrosetta sync enable/status/now to move ops through your own infrastructure. No vendor cloud required.',
         },
         {
           title: 'Relations',
@@ -336,7 +341,11 @@ memrosetta maintain`,
         },
         {
           name: '@memrosetta/cli',
-          description: 'Full CLI for manual memory management: store, search, relate, maintain, compress, ingest, status. Supports JSON and text output formats.',
+          description: 'Full CLI for manual memory management: store, search, relate, maintain, compress, ingest, status, and sync commands. Supports JSON and text output formats.',
+        },
+        {
+          name: '@memrosetta/sync-client',
+          description: 'Optional local-first sync client. Keeps an outbox/inbox in SQLite and can push or pull through your own sync server when you want cross-device memory.',
         },
         {
           name: '@memrosetta/api',
@@ -347,7 +356,7 @@ memrosetta maintain`,
           description: 'Optional LLM-based fact extraction from conversation transcripts. Supports OpenAI and Anthropic. Used by Stop Hook layer 2 for higher-quality extraction.',
         },
       ],
-      dependencyGraph: 'cli, mcp, api, claude-code --> core --> embeddings',
+      dependencyGraph: 'cli, mcp, api, sync-client, claude-code --> core --> embeddings',
     },
     comparison: {
       title: 'Why MemRosetta?',
@@ -427,7 +436,7 @@ memrosetta maintain`,
     },
     footer: {
       tagline:
-        'One persistent memory shared across all your AI tools. Local-first. Open source.',
+        'One persistent memory shared across all your AI tools. Local-first, optionally synced, open source.',
       motto: 'Memory + Rosetta: unlocking AI memory, one fact at a time.',
     },
   },
@@ -440,7 +449,7 @@ memrosetta maintain`,
     hero: {
       badge: '오픈소스 -- MIT 라이선스',
       title: 'MemRosetta',
-      subtitle: '모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 SQLite. 클라우드 없음.',
+      subtitle: '모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 우선 SQLite. 필요하면 자체 호스팅 동기화.',
       install: 'npm install -g memrosetta',
       stats: {
         mrr: { value: '+324%', label: 'MRR 향상' },
@@ -588,12 +597,12 @@ memrosetta maintain`,
     compatibility: {
       title: '호환성',
       subtitle:
-        '하나의 로컬 데이터베이스를 모든 AI 도구가 공유합니다. Claude Code에 저장한 기억을 Cursor에서 검색할 수 있습니다.',
+        '하나의 로컬 데이터베이스를 모든 AI 도구가 공유합니다. Claude Code에 저장한 기억을 Cursor에서 검색할 수 있습니다. 다른 기기에도 같은 기억이 필요하면 선택적으로 자체 호스팅 동기화를 붙일 수 있습니다.',
       diagramComment: '// 모든 도구가 하나의 데이터베이스를 공유',
       sharing: {
         title: '도구 간 기억 공유',
         description:
-          '오전: Claude Code로 인증 시스템 작업 -- 기억 저장. 오후: Cursor로 프론트엔드 작업 -- "auth" 검색 -- 오전의 결정 사항 발견. 저녁: Codex로 미들웨어 리팩토링 -- 같은 기억, 같은 DB. 동기화 없음. 클라우드 없음.',
+          '오전: Claude Code로 인증 시스템 작업 -- 기억 저장. 오후: Cursor로 프론트엔드 작업 -- "auth" 검색 -- 오전의 결정 사항 발견. 저녁: Codex로 미들웨어 리팩토링 -- 같은 기억, 같은 DB. 기본은 로컬 공유이고, 다른 기기까지 이어야 하면 선택적으로 자체 호스팅 동기화를 붙이면 됩니다.',
       },
       table: {
         headers: { tool: '도구', mcp: 'MCP', setup: '설정', note: '비고' },
@@ -701,7 +710,7 @@ memrosetta maintain`,
     },
     features: {
       title: '기능',
-      subtitle: '인지과학 기반의 기억 관리. 단순 저장이 아닌 지능적 검색과 생명주기.',
+      subtitle: '인지과학 기반의 기억 관리. 로컬 우선 저장, 선택적 자체 호스팅 동기화, 지능적 검색, 그리고 전체 기억 생명주기.',
       items: [
         {
           title: '하이브리드 검색',
@@ -722,6 +731,11 @@ memrosetta maintain`,
           title: '기억 계층',
           description:
             'Hot 계층 (~3K 토큰): 작업 기억, 항상 로드, 최고 활성화 사실. Warm 계층: 최근 30일 활성 기억, 정상 검색 랭킹. Cold 계층: 30일 이상, 요약으로 압축. maintain 명령으로 자동 계층 관리.',
+        },
+        {
+          title: '선택적 자체 호스팅 동기화',
+          description:
+            '기본 동작은 내 기기의 SQLite 파일 하나를 모든 도구가 공유하는 구조입니다. 다른 노트북이나 워크스테이션에도 같은 기억이 필요하면 직접 sync 서버를 운영하고, 각 기기에서는 계속 로컬 SQLite를 유지한 채 memrosetta sync enable/status/now 명령으로 동기화할 수 있습니다. 벤더 클라우드는 필요 없습니다.',
         },
         {
           title: '관계',
@@ -767,7 +781,11 @@ memrosetta maintain`,
         },
         {
           name: '@memrosetta/cli',
-          description: '수동 기억 관리를 위한 전체 CLI: store, search, relate, maintain, compress, ingest, status. JSON 및 텍스트 출력 형식 지원.',
+          description: '수동 기억 관리를 위한 전체 CLI: store, search, relate, maintain, compress, ingest, status, sync 명령을 포함합니다. JSON 및 텍스트 출력 형식 지원.',
+        },
+        {
+          name: '@memrosetta/sync-client',
+          description: '선택적 로컬 우선 동기화 클라이언트. SQLite 안에 outbox/inbox를 유지하고, 다른 기기와 기억을 공유하고 싶을 때 직접 운영하는 sync 서버를 통해 push/pull 합니다.',
         },
         {
           name: '@memrosetta/api',
@@ -778,7 +796,7 @@ memrosetta maintain`,
           description: '대화 트랜스크립트에서 LLM 기반 사실 추출 (선택사항). OpenAI와 Anthropic 지원. Stop Hook 레이어 2에서 더 높은 품질의 추출에 사용.',
         },
       ],
-      dependencyGraph: 'cli, mcp, api, claude-code --> core --> embeddings',
+      dependencyGraph: 'cli, mcp, api, sync-client, claude-code --> core --> embeddings',
     },
     comparison: {
       title: '왜 MemRosetta인가?',
@@ -858,7 +876,7 @@ memrosetta maintain`,
     },
     footer: {
       tagline:
-        '모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 우선. 오픈소스.',
+        '모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 우선, 필요하면 동기화, 오픈소스.',
       motto: 'Memory + Rosetta: AI 기억의 열쇠, 한 사실씩.',
     },
   },

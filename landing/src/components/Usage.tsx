@@ -56,7 +56,7 @@ const CONTENT = {
         highlight: 'Claude Code, Cursor, Claude Desktop -- all share one memory.',
       },
     ],
-    footer: 'One SQLite file on your machine. All your AI tools read and write to it. No cloud. No server. No configuration beyond the initial setup.',
+    footer: 'One SQLite file on your machine by default. All your AI tools read and write to it. Need another machine too? Add optional self-hosted sync. No vendor cloud required.',
     setup: {
       title: 'Setup takes 10 seconds:',
       command: 'npm install -g memrosetta && memrosetta init --claude-code',
@@ -112,7 +112,7 @@ const CONTENT = {
         highlight: 'Claude Code, Cursor, Claude Desktop -- 모두 하나의 기억을 공유합니다.',
       },
     ],
-    footer: '내 컴퓨터의 SQLite 파일 하나. 모든 AI 도구가 읽고 씁니다. 클라우드 없음. 서버 없음. 초기 설정 외에 설정할 것 없음.',
+    footer: '기본은 내 컴퓨터의 SQLite 파일 하나를 모든 AI 도구가 읽고 쓰는 구조입니다. 다른 기기까지 이어야 하면 선택적으로 자체 호스팅 동기화를 붙이면 됩니다. 벤더 클라우드는 필요 없습니다.',
     setup: {
       title: '설정은 10초면 끝:',
       command: 'npm install -g memrosetta && memrosetta init --claude-code',

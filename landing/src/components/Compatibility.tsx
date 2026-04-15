@@ -21,6 +21,10 @@ interface CompatibilityProps {
 
 export function Compatibility({ lang }: CompatibilityProps) {
   const t = content[lang].compatibility
+  const localNote =
+    lang === 'ko'
+      ? '(기본은 로컬 공유, 기기 간은 선택적 동기화)'
+      : '(shared locally by default, optional sync across devices)'
 
   return (
     <Section id="compatibility" className="border-t border-zinc-100">
@@ -45,7 +49,7 @@ export function Compatibility({ lang }: CompatibilityProps) {
         <p>
           <span className="text-zinc-300">Cursor</span>
           {'           --+     '}
-          <span className="text-zinc-600">{'(one shared SQLite file)'}</span>
+          <span className="text-zinc-600">{localNote}</span>
         </p>
         <p>
           <span className="text-zinc-300">Windsurf</span>

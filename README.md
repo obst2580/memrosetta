@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">MemRosetta</h1>
-  <p align="center">One persistent memory shared across all your AI tools. Local SQLite. Zero cloud.</p>
+  <p align="center">One persistent memory shared across all your AI tools. Local SQLite by default, optional self-hosted sync for multiple devices.</p>
 </p>
 
 > 한국어 버전: [README.ko.md](README.ko.md)
@@ -43,7 +43,7 @@ Tuesday afternoon — switch to Cursor for frontend work:
              → Same memories. Same DB. Different tool.
 ```
 
-**One SQLite file. All your AI tools share it. No cloud. No config. It just works.**
+**One SQLite file. All your AI tools share it. Local-first. Optional self-hosted sync when you need multiple devices.**
 
 ---
 
@@ -347,7 +347,9 @@ memrosetta maintain
 
 **Non-destructive** -- Nothing is ever deleted. Old versions are preserved via relations and `isLatest` flags.
 
-**696+ tests.**
+**Optional Multi-Device Sync** -- Local-first remains the default. When opted in, each device keeps its SQLite and syncs through an append-only operation log hosted on your own PostgreSQL. CRDT-free, idempotent, works offline.
+
+**900+ tests across 25 test files.**
 
 ## MCP Tools
 
@@ -484,7 +486,7 @@ POST /api/memories/mem-abc123/invalidate
 
 ## CLI Reference
 
-14 commands for full memory management. [Full CLI documentation](docs/CLI.md) | [CLI 한국어 문서](docs/CLI.ko.md)
+15 commands for full memory management. [Full CLI documentation](docs/CLI.md) | [CLI 한국어 문서](docs/CLI.ko.md)
 
 | Command | Description |
 |---------|-------------|
@@ -502,8 +504,83 @@ POST /api/memories/mem-abc123/invalidate
 | `compress` | Run compression only |
 | `status` | Show database and integration status |
 | `reset` | Remove integrations |
+| `sync` | Manage optional multi-device sync |
 
 Global flags: `--db <path>` `--format json|text` `--no-embeddings`
+
+## Multi-Device Sync (Optional)
+
+MemRosetta is local-first. The CLI, MCP server, and SQLite engine all run
+without any server. If you want to use the same memory graph from multiple
+machines, you can run your own sync hub.
+
+**Key points:**
+
+- Disabled by default. Existing installs behave exactly as before.
+- No public sync service. You self-host `@memrosetta/sync-server` and point
+  each device at your own URL.
+- Every device keeps a full local SQLite copy. Sync is an append-only
+  operation log — works offline, pushes when connected.
+
+### Enable sync on a device
+
+```bash
+# 1. Set the key (pick the one that fits your environment)
+
+# Option A — env variable (recommended for Windows PowerShell / CI)
+export MEMROSETTA_SYNC_API_KEY="your-api-key"
+memrosetta sync enable --server https://your-sync-server.example.com
+
+# Option B — read from a file (never appears in shell history)
+memrosetta sync enable \
+  --server https://your-sync-server.example.com \
+  --key-file /path/to/key
+
+# Option C — inline (visible in history)
+memrosetta sync enable \
+  --server https://your-sync-server.example.com \
+  --key your-api-key
+
+# Option D — pipe via stdin (POSIX shells)
+echo "your-api-key" | memrosetta sync enable \
+  --server https://your-sync-server.example.com \
+  --key-stdin
+```
+
+The flags are **mutually exclusive** — pass exactly one of `--key`,
+`--key-stdin`, or `--key-file`, or set `MEMROSETTA_SYNC_API_KEY`. On a POSIX
+TTY with none of the above, `sync enable` falls back to a hidden prompt.
+
+### Inspect and operate
+
+```bash
+memrosetta sync status --format text   # enabled, cursor, pending ops, last push/pull
+memrosetta sync now                    # push then pull right now
+memrosetta sync now --push-only        # push only
+memrosetta sync device-id               # print the local device id
+memrosetta sync disable                 # stop syncing (keeps config)
+```
+
+### Self-hosting the sync server
+
+The server is a Hono app that writes an append-only op log into any
+PostgreSQL 15+ database. See [docs/sync-architecture.md](docs/sync-architecture.md)
+for the full architecture and [docs/sync-api.md](docs/sync-api.md) for the
+push/pull protocol.
+
+Minimum runtime setup:
+
+1. Create an empty PostgreSQL database.
+2. Set `DATABASE_URL` and `MEMROSETTA_API_KEYS` (one or more comma-separated
+   API keys).
+3. Start `@memrosetta/sync-server` (Node 22+). It auto-runs the migration in
+   `@memrosetta/postgres/migrations` on first start.
+
+Verify with `GET /sync/health` — expect `{"status":"ok","db":"ok"}`.
+
+> **Important:** `@memrosetta/sync-server` and `@memrosetta/postgres` are
+> currently pre-1.0 (0.1.x). They are not published to the `latest` npm tag
+> yet. Build them from the monorepo or pin explicitly until they stabilize.
 
 ## As a Library
 
@@ -586,6 +663,10 @@ const custom = new HuggingFaceEmbedder({ modelId: 'Xenova/some-model' });
 | `@memrosetta/api` | REST API (Hono) |
 | `@memrosetta/claude-code` | Claude Code integration (hooks + init) |
 | `@memrosetta/llm` | LLM-based fact extraction (OpenAI/Anthropic) -- optional |
+| `@memrosetta/extractor` | Multilingual atomic fact decomposition (Propositionizer-mT5) -- optional |
+| `@memrosetta/sync-client` | Local outbox/inbox for optional multi-device sync |
+| `@memrosetta/sync-server` | Self-hostable Hono sync hub (pre-1.0, not on `latest`) |
+| `@memrosetta/postgres` | PostgreSQL adapter for the sync hub (pre-1.0, not on `latest`) |
 
 ## Benchmarks
 
@@ -659,8 +740,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] Codex integration
 - [x] Gemini integration
 - [x] CI pipeline (build + typecheck + test)
-- [ ] PostgreSQL adapter (team/server use)
+- [x] Optional multi-device sync (self-hosted op log hub)
+- [x] Multilingual fact decomposition (Propositionizer-mT5)
+- [ ] Sync server 1.0 (promotion from 0.1.x after production validation)
 - [ ] Profile builder (stable + dynamic user profiles)
+- [ ] Stable/volatile memory classification
 
 ## License
 

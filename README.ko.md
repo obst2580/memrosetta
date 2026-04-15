@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">MemRosetta</h1>
-  <p align="center">모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 SQLite. 클라우드 없음.</p>
+  <p align="center">모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 SQLite 기본, 필요하면 직접 호스팅하는 sync도 옵션.</p>
 </p>
 
 > English version: [README.md](README.md)
@@ -43,7 +43,7 @@ npm install -g memrosetta && memrosetta init --claude-code
              → 같은 기억. 같은 DB. 다른 도구.
 ```
 
-**SQLite 파일 하나. 모든 AI 도구가 공유. 클라우드 없음. 설정 없음. 그냥 됩니다.**
+**SQLite 파일 하나. 모든 AI 도구가 공유. Local-first. 여러 기기가 필요하면 직접 호스팅하는 sync 서버를 옵셔널로 연결하면 됩니다.**
 
 ---
 
@@ -347,7 +347,9 @@ memrosetta maintain
 
 **비파괴적** -- 아무것도 삭제하지 않습니다. 이전 버전은 관계와 `isLatest` 플래그로 보존됩니다.
 
-**696개 이상의 테스트.**
+**옵셔널 멀티 디바이스 동기화** -- Local-first가 기본. 활성화하면 각 기기가 로컬 SQLite를 유지하면서 직접 호스팅한 PostgreSQL의 append-only 연산 로그를 통해 동기화합니다. CRDT 없음, 멱등, 오프라인 지원.
+
+**900개 이상의 테스트, 25개 테스트 파일.**
 
 ## MCP 도구
 
@@ -484,7 +486,7 @@ POST /api/memories/mem-abc123/invalidate
 
 ## CLI 레퍼런스
 
-14개 명령어로 기억을 완전히 관리합니다. [CLI 전체 문서](docs/CLI.ko.md) | [CLI English docs](docs/CLI.md)
+15개 명령어로 기억을 완전히 관리합니다. [CLI 전체 문서](docs/CLI.ko.md) | [CLI English docs](docs/CLI.md)
 
 | 명령어 | 설명 |
 |--------|------|
@@ -502,8 +504,70 @@ POST /api/memories/mem-abc123/invalidate
 | `compress` | 압축만 실행 |
 | `status` | 데이터베이스 및 연동 상태 확인 |
 | `reset` | 연동 설정 제거 |
+| `sync` | 옵셔널 멀티 디바이스 동기화 관리 |
 
 글로벌 플래그: `--db <path>` `--format json|text` `--no-embeddings`
+
+## 멀티 디바이스 동기화 (옵션)
+
+MemRosetta는 local-first입니다. CLI, MCP, SQLite 엔진 모두 서버 없이 동작합니다. 여러 기기에서 같은 기억 그래프를 쓰고 싶을 때는, 본인이 직접 sync 서버를 띄우면 됩니다.
+
+**핵심 원칙:**
+
+- 기본 비활성화. 켜지 않으면 기존 버전과 완전히 동일.
+- 공용 sync 서버 없음. `@memrosetta/sync-server`를 직접 호스팅하고, 각 기기가 자기 서버 URL을 바라봄.
+- 모든 기기가 로컬 SQLite 전체를 가짐. sync는 append-only 연산 로그 기반 — 오프라인에서 작동하고, 연결되면 push.
+
+### 기기에서 sync 활성화
+
+```bash
+# 1. 키 지정 (환경에 맞는 방식 하나 선택)
+
+# 옵션 A — 환경변수 (Windows PowerShell/CI 권장)
+export MEMROSETTA_SYNC_API_KEY="your-api-key"
+memrosetta sync enable --server https://your-sync-server.example.com
+
+# 옵션 B — 파일에서 읽기 (쉘 히스토리에 남지 않음)
+memrosetta sync enable \
+  --server https://your-sync-server.example.com \
+  --key-file /path/to/key
+
+# 옵션 C — 직접 인자 (히스토리에 남음)
+memrosetta sync enable \
+  --server https://your-sync-server.example.com \
+  --key your-api-key
+
+# 옵션 D — stdin 파이프 (POSIX 쉘)
+echo "your-api-key" | memrosetta sync enable \
+  --server https://your-sync-server.example.com \
+  --key-stdin
+```
+
+키 입력 소스는 **상호 배타**입니다. `--key`, `--key-stdin`, `--key-file` 중 정확히 하나만 쓰거나, `MEMROSETTA_SYNC_API_KEY`를 설정하세요. POSIX TTY에서 이 중 어느 것도 없으면 hidden prompt로 폴백합니다.
+
+### 확인 & 운영
+
+```bash
+memrosetta sync status --format text   # 활성화 여부, cursor, pending ops, 마지막 push/pull
+memrosetta sync now                    # 즉시 push + pull
+memrosetta sync now --push-only        # push만
+memrosetta sync device-id               # 현재 기기 ID 출력
+memrosetta sync disable                 # 동기화 끄기 (설정은 유지)
+```
+
+### Sync 서버 셀프 호스팅
+
+sync 서버는 Hono 앱이며, append-only 연산 로그를 PostgreSQL 15+에 기록합니다. 전체 아키텍처는 [docs/sync-architecture.md](docs/sync-architecture.md), push/pull 프로토콜은 [docs/sync-api.md](docs/sync-api.md) 참조.
+
+최소 설정:
+
+1. 빈 PostgreSQL 데이터베이스를 만든다.
+2. `DATABASE_URL`과 `MEMROSETTA_API_KEYS`(쉼표 구분 다중 키 가능)를 설정한다.
+3. `@memrosetta/sync-server`(Node 22+)를 시작한다. 첫 실행 시 `@memrosetta/postgres/migrations`의 마이그레이션을 자동 적용.
+
+`GET /sync/health`가 `{"status":"ok","db":"ok"}`를 반환하면 정상.
+
+> **중요:** `@memrosetta/sync-server`와 `@memrosetta/postgres`는 현재 pre-1.0 (0.1.x)입니다. 아직 npm `latest` 태그로 공개하지 않았습니다. 모노레포에서 직접 빌드하거나 명시적으로 pin해서 사용하세요.
 
 ## 라이브러리로 사용
 
@@ -555,6 +619,10 @@ await engine.close();
 | `@memrosetta/api` | REST API (Hono) |
 | `@memrosetta/claude-code` | Claude Code 연동 (hooks + init) |
 | `@memrosetta/llm` | LLM 기반 사실 추출 (OpenAI/Anthropic) -- 선택사항 |
+| `@memrosetta/extractor` | 다국어 원자적 사실 분해 (Propositionizer-mT5) -- 선택사항 |
+| `@memrosetta/sync-client` | 옵셔널 멀티 디바이스 동기화용 로컬 outbox/inbox |
+| `@memrosetta/sync-server` | 셀프 호스트 가능한 Hono sync hub (pre-1.0, `latest`에 없음) |
+| `@memrosetta/postgres` | sync hub용 PostgreSQL 어댑터 (pre-1.0, `latest`에 없음) |
 
 ## 벤치마크
 
@@ -627,8 +695,11 @@ pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 - [x] Codex 연동
 - [x] Gemini 연동
 - [x] CI 파이프라인 (빌드 + 타입체크 + 테스트)
-- [ ] PostgreSQL 어댑터 (팀/서버 용도)
+- [x] 옵셔널 멀티 디바이스 동기화 (self-host op log hub)
+- [x] 다국어 원자적 사실 분해 (Propositionizer-mT5)
+- [ ] Sync server 1.0 (프로덕션 검증 후 0.1.x → 1.0 승격)
 - [ ] 프로필 빌더 (stable + dynamic 사용자 프로필)
+- [ ] Stable/volatile 기억 분류
 
 ## 라이선스
 
