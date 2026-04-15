@@ -366,6 +366,17 @@ When connected via MCP, your AI tool gets these capabilities:
 
 ## REST API
 
+> **Scope note.** `@memrosetta/api` is an **advanced, single-node
+> self-host option**, not the recommended deployment model. It runs the
+> local SQLite engine behind HTTP for callers on the same machine or
+> trusted LAN — useful for connecting web UIs, CRON jobs, or services
+> that cannot speak MCP directly.
+>
+> It is **not** a multi-tenant cloud API. For multi-device access keep
+> the local SQLite primary and use the optional sync hub
+> (`@memrosetta/sync-server`). A PostgreSQL-backed remote API is a future
+> phase, not a current deployment target.
+
 ### Store a memory
 
 ```http
@@ -660,7 +671,7 @@ const custom = new HuggingFaceEmbedder({ modelId: 'Xenova/some-model' });
 | `@memrosetta/embeddings` | Local embeddings (bge-small-en-v1.5) + NLI (nli-deberta-v3-xsmall) |
 | `@memrosetta/cli` | Command-line interface |
 | `@memrosetta/mcp` | MCP server for AI tool integration |
-| `@memrosetta/api` | REST API (Hono) |
+| `@memrosetta/api` | REST API (Hono) -- single-node self-host, not a multi-tenant cloud API |
 | `@memrosetta/claude-code` | Claude Code integration (hooks + init) |
 | `@memrosetta/llm` | LLM-based fact extraction (OpenAI/Anthropic) -- optional |
 | `@memrosetta/extractor` | Multilingual atomic fact decomposition (Propositionizer-mT5) -- optional |

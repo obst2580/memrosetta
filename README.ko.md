@@ -366,6 +366,10 @@ MCP로 연결하면 AI 도구가 다음 기능을 사용할 수 있습니다:
 
 ## REST API
 
+> **범위 주의.** `@memrosetta/api`는 **어드밴스드 싱글 노드 self-host 옵션**이지, 권장 배포 모델이 아닙니다. 로컬 SQLite 엔진을 HTTP 뒤에 붙여서, 같은 머신이나 신뢰된 LAN 안의 클라이언트(웹 UI, CRON, MCP를 못 쓰는 서비스 등)가 접근할 수 있게 해주는 용도입니다.
+>
+> 멀티 테넌트 클라우드 API가 **아닙니다**. 여러 기기에서 쓰려면 로컬 SQLite를 primary로 두고 옵셔널 sync hub(`@memrosetta/sync-server`)를 사용하세요. PostgreSQL 기반 원격 API는 현재 배포 대상이 아니라 향후 phase입니다.
+
 ### 기억 저장
 
 ```http
@@ -616,7 +620,7 @@ await engine.close();
 | `@memrosetta/embeddings` | 로컬 임베딩 (bge-small-en-v1.5) + NLI (nli-deberta-v3-xsmall) |
 | `@memrosetta/cli` | CLI |
 | `@memrosetta/mcp` | MCP 서버 (AI 도구 연동) |
-| `@memrosetta/api` | REST API (Hono) |
+| `@memrosetta/api` | REST API (Hono) -- 싱글 노드 self-host용, 멀티 테넌트 클라우드 API 아님 |
 | `@memrosetta/claude-code` | Claude Code 연동 (hooks + init) |
 | `@memrosetta/llm` | LLM 기반 사실 추출 (OpenAI/Anthropic) -- 선택사항 |
 | `@memrosetta/extractor` | 다국어 원자적 사실 분해 (Propositionizer-mT5) -- 선택사항 |
