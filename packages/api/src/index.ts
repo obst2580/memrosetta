@@ -7,6 +7,11 @@ const PORT = parseInt(process.env.PORT ?? '3100', 10);
 const DB_PATH = process.env.DB_PATH ?? './memrosetta.db';
 const ENABLE_EMBEDDINGS = process.env.ENABLE_EMBEDDINGS !== 'false';
 
+function getApiKeysFromEnv(): string[] {
+  const raw = process.env.MEMROSETTA_API_KEYS ?? process.env.SERVICE_KEY ?? '';
+  return raw.split(',').map(key => key.trim()).filter(Boolean);
+}
+
 async function main(): Promise<void> {
   // Initialize engine
   const embedder = ENABLE_EMBEDDINGS ? new HuggingFaceEmbedder() : undefined;
@@ -24,7 +29,11 @@ async function main(): Promise<void> {
   process.stdout.write(`Database initialized: ${DB_PATH}\n`);
 
   // Create and start server
-  const app = createApp(engine);
+  const apiKeys = getApiKeysFromEnv();
+  if (apiKeys.length > 0) {
+    process.stdout.write(`API key auth enabled with ${apiKeys.length} configured key(s)\n`);
+  }
+  const app = createApp(engine, { apiKeys });
 
   process.stdout.write(`MemRosetta API running on http://localhost:${PORT}\n`);
   serve({

@@ -87,8 +87,9 @@ export async function storeMemoryAsync(
   let embeddingBlob: Buffer | null = null;
   let embeddingVec: Float32Array | null = null;
   if (embedder) {
-    embeddingVec = await embedder.embed(input.content);
-    embeddingBlob = serializeEmbedding(embeddingVec);
+    const computedEmbedding = await embedder.embed(input.content);
+    embeddingVec = computedEmbedding;
+    embeddingBlob = serializeEmbedding(computedEmbedding);
   }
 
   const info = stmts.insertMemory.run(
