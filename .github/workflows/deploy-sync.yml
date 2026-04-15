@@ -1,0 +1,77 @@
+name: Deploy Sync Server
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/sync-server/**"
+      - "packages/postgres/**"
+      - "packages/types/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: |
+          pnpm --filter @memrosetta/types run build
+          pnpm --filter @memrosetta/postgres run build
+          pnpm --filter @memrosetta/sync-server run build
+
+      - name: Prepare deploy bundle
+        run: |
+          mkdir -p deploy/packages/sync-server/dist
+          mkdir -p deploy/packages/postgres/dist
+          mkdir -p deploy/packages/postgres/migrations
+          mkdir -p deploy/packages/types/dist
+
+          cp -r packages/sync-server/dist/* deploy/packages/sync-server/dist/
+          cp packages/sync-server/package.json deploy/packages/sync-server/
+          cp packages/sync-server/startup.sh deploy/
+
+          cp -r packages/postgres/dist/* deploy/packages/postgres/dist/
+          cp packages/postgres/package.json deploy/packages/postgres/
+          cp -r packages/postgres/migrations/* deploy/packages/postgres/migrations/
+
+          cp -r packages/types/dist/* deploy/packages/types/dist/
+          cp packages/types/package.json deploy/packages/types/
+
+          cd deploy
+          cat > package.json << 'PKG'
+          {
+            "name": "memrosetta-sync-deploy",
+            "private": true,
+            "type": "module",
+            "scripts": {
+              "start": "node packages/sync-server/dist/standalone.js"
+            },
+            "dependencies": {
+              "hono": "^4.0.0",
+              "@hono/node-server": "^1.0.0",
+              "pg": "^8.0.0",
+              "zod": "^3.23.0"
+            }
+          }
+          PKG
+          npm install --production
+
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: memrosetta-sync
+          publish-profile: ${{ secrets.AZURE_SYNC_PUBLISH_PROFILE }}
+          package: deploy

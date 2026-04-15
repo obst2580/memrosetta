@@ -327,6 +327,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.0.0
         version: 1.19.11(hono@4.12.9)
+      '@memrosetta/postgres':
+        specifier: workspace:*
+        version: link:../postgres
       '@memrosetta/types':
         specifier: workspace:*
         version: link:../types
