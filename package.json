@@ -2,6 +2,9 @@
   "name": "memrosetta",
   "private": true,
   "type": "module",
+  "devDependencies": {
+    "@types/node": "^24.5.2"
+  },
   "scripts": {
     "build": "pnpm --filter @memrosetta/types run build && pnpm --filter @memrosetta/embeddings run build && pnpm --filter @memrosetta/core run build && pnpm -r run build",
     "test": "pnpm run build && pnpm -r run test",

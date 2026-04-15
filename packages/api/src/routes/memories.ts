@@ -1,6 +1,13 @@
 import { Hono } from 'hono';
 import type { AppContext } from '../app.js';
-import { storeMemorySchema, storeBatchSchema } from '../validation/schemas.js';
+import { NotFoundError } from '../middleware/error-handler.js';
+import {
+  storeMemorySchema,
+  storeBatchSchema,
+  memoryIdParamSchema,
+  invalidateMemorySchema,
+  feedbackSchema,
+} from '../validation/schemas.js';
 
 export function memoriesRoutes(ctx: AppContext): Hono {
   const router = new Hono();
@@ -22,6 +29,48 @@ export function memoriesRoutes(ctx: AppContext): Hono {
       success: true as const,
       data: memories,
       count: memories.length,
+    });
+  });
+
+  // POST /memories/:memoryId/invalidate - Mark a memory as invalidated
+  router.post('/memories/:memoryId/invalidate', async (c) => {
+    const { memoryId } = memoryIdParamSchema.parse(c.req.param());
+    const body = c.req.header('content-type')?.includes('application/json')
+      ? await c.req.json()
+      : {};
+    const parsed = invalidateMemorySchema.parse(body);
+
+    const memory = await ctx.engine.getById(memoryId);
+    if (!memory) {
+      throw new NotFoundError(`Memory not found: ${memoryId}`);
+    }
+
+    await ctx.engine.invalidate(memoryId, parsed.reason);
+    return c.json({
+      success: true as const,
+      data: { memoryId, invalidated: true as const },
+    });
+  });
+
+  // POST /memories/:memoryId/feedback - Record utility feedback
+  router.post('/memories/:memoryId/feedback', async (c) => {
+    const { memoryId } = memoryIdParamSchema.parse(c.req.param());
+    const body = await c.req.json();
+    const parsed = feedbackSchema.parse(body);
+
+    const memory = await ctx.engine.getById(memoryId);
+    if (!memory) {
+      throw new NotFoundError(`Memory not found: ${memoryId}`);
+    }
+
+    await ctx.engine.feedback(memoryId, parsed.helpful);
+    return c.json({
+      success: true as const,
+      data: {
+        memoryId,
+        helpful: parsed.helpful,
+        feedbackRecorded: true as const,
+      },
     });
   });
 
