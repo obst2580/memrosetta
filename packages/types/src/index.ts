@@ -48,4 +48,5 @@ export type {
   SyncInvalidatePayload,
   SyncFeedbackPayload,
   SyncTierPayload,
+  ISyncStorage,
 } from './sync.js';

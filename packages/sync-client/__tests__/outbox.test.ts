@@ -7,12 +7,11 @@ import type { SyncOp } from '../src/types.js';
 function createTestOp(overrides?: Partial<SyncOp>): SyncOp {
   return {
     opId: `op-${Math.random().toString(36).slice(2, 8)}`,
-    opType: 'store_memory',
+    opType: 'memory_created',
     deviceId: 'device-1',
     userId: 'user-1',
-    payload: JSON.stringify({ content: 'test' }),
+    payload: { content: 'test' },
     createdAt: new Date().toISOString(),
-    pushedAt: null,
     ...overrides,
   };
 }
@@ -39,7 +38,10 @@ describe('Outbox', () => {
   it('getPending returns only unpushed ops', () => {
     outbox.addOp(createTestOp({ opId: 'op-1' }));
     outbox.addOp(createTestOp({ opId: 'op-2' }));
-    outbox.addOp(createTestOp({ opId: 'op-3', pushedAt: new Date().toISOString() }));
+    outbox.addOp(createTestOp({ opId: 'op-3' }));
+
+    // Simulate op-3 being pushed
+    outbox.markPushed(['op-3']);
 
     const pending = outbox.getPending();
     expect(pending).toHaveLength(2);

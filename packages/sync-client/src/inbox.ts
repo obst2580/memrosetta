@@ -14,11 +14,13 @@ interface InboxRow {
 function rowToPulledOp(row: InboxRow): SyncPulledOp {
   return {
     opId: row.op_id,
-    opType: row.op_type,
+    opType: row.op_type as SyncPulledOp['opType'],
     deviceId: row.device_id,
     userId: row.user_id,
-    payload: row.payload,
+    payload: JSON.parse(row.payload) as unknown,
     createdAt: row.created_at,
+    cursor: 0,
+    receivedAt: '',
   };
 }
 
@@ -39,7 +41,11 @@ export class Inbox {
 
     const insertMany = this.db.transaction((items: readonly SyncPulledOp[]) => {
       for (const op of items) {
-        stmt.run(op.opId, op.opType, op.deviceId, op.userId, op.payload, op.createdAt);
+        const payloadStr =
+          typeof op.payload === 'string'
+            ? op.payload
+            : JSON.stringify(op.payload);
+        stmt.run(op.opId, op.opType, op.deviceId, op.userId, payloadStr, op.createdAt);
       }
     });
 

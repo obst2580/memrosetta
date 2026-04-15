@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import { SyncClient } from '../src/sync-client.js';
-import type { SyncConfig, ServerPushResponse, ServerPullResponse } from '../src/types.js';
+import type { SyncClientConfig } from '../src/sync-client.js';
+import type { SyncPushResponse, SyncPullResponse } from '../src/types.js';
 
-const TEST_CONFIG: SyncConfig = {
+const TEST_CONFIG: SyncClientConfig = {
   serverUrl: 'https://api.example.com',
   apiKey: 'test-api-key',
   deviceId: 'device-test',
-  userId: 'user-test',
 };
 
 describe('SyncClient', () => {
@@ -64,23 +64,28 @@ describe('SyncClient', () => {
   describe('push', () => {
     it('returns empty result when no pending ops', async () => {
       const result = await client.push();
-      expect(result).toEqual({ pushed: 0, acknowledged: [] });
+      expect(result).toEqual({ pushed: 0, results: [], highWatermark: 0 });
     });
 
     it('sends pending ops to server and marks them pushed', async () => {
       const outbox = client.getOutbox();
       outbox.addOp({
         opId: 'op-1',
-        opType: 'store_memory',
+        opType: 'memory_created',
         deviceId: TEST_CONFIG.deviceId,
-        userId: TEST_CONFIG.userId,
-        payload: '{"content":"hello"}',
+        userId: 'user-test',
+        payload: { content: 'hello' },
         createdAt: '2025-01-01T00:00:00Z',
-        pushedAt: null,
       });
 
-      const mockResponse: ServerPushResponse = {
-        acknowledged: ['op-1'],
+      const mockResponse: SyncPushResponse = {
+        success: true,
+        data: {
+          results: [
+            { opId: 'op-1', status: 'accepted', cursor: 121 },
+          ],
+          highWatermark: 121,
+        },
       };
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
@@ -92,7 +97,10 @@ describe('SyncClient', () => {
 
       const result = await client.push();
       expect(result.pushed).toBe(1);
-      expect(result.acknowledged).toEqual(['op-1']);
+      expect(result.results).toEqual([
+        { opId: 'op-1', status: 'accepted', cursor: 121 },
+      ]);
+      expect(result.highWatermark).toBe(121);
 
       const pending = outbox.getPending();
       expect(pending).toHaveLength(0);
@@ -105,18 +113,27 @@ describe('SyncClient', () => {
           Authorization: 'Bearer test-api-key',
         }),
       );
+
+      // Verify request body matches canonical protocol
+      const body = JSON.parse(requestInit.body as string);
+      expect(body.deviceId).toBe('device-test');
+      expect(body.baseCursor).toBe(0);
+      expect(body.ops).toHaveLength(1);
+      expect(body.ops[0].opType).toBe('memory_created');
+      expect(body.ops[0].payload).toEqual({ content: 'hello' });
+      // No userId at top level
+      expect(body.userId).toBeUndefined();
     });
 
     it('throws on non-ok response', async () => {
       const outbox = client.getOutbox();
       outbox.addOp({
         opId: 'op-1',
-        opType: 'store_memory',
+        opType: 'memory_created',
         deviceId: TEST_CONFIG.deviceId,
-        userId: TEST_CONFIG.userId,
-        payload: '{}',
+        userId: 'user-test',
+        payload: {},
         createdAt: '2025-01-01T00:00:00Z',
-        pushedAt: null,
       });
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
@@ -129,18 +146,24 @@ describe('SyncClient', () => {
 
   describe('pull', () => {
     it('fetches ops from server and stores in inbox', async () => {
-      const mockResponse: ServerPullResponse = {
-        ops: [
-          {
-            opId: 'remote-1',
-            opType: 'store_memory',
-            deviceId: 'other-device',
-            userId: 'user-test',
-            payload: '{"content":"from server"}',
-            createdAt: '2025-01-01T00:00:00Z',
-          },
-        ],
-        cursor: 'cursor-abc',
+      const mockResponse: SyncPullResponse = {
+        success: true,
+        data: {
+          ops: [
+            {
+              cursor: 121,
+              opId: 'remote-1',
+              opType: 'memory_created',
+              deviceId: 'other-device',
+              userId: 'user-test',
+              payload: { content: 'from server' },
+              createdAt: '2025-01-01T00:00:00Z',
+              receivedAt: '2025-01-01T00:00:01Z',
+            },
+          ],
+          nextCursor: 121,
+          hasMore: false,
+        },
       };
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
@@ -158,14 +181,19 @@ describe('SyncClient', () => {
       expect(pending).toHaveLength(1);
       expect(pending[0].opId).toBe('remote-1');
 
-      expect(client.getState('pull_cursor')).toBe('cursor-abc');
+      expect(client.getState('pull_cursor')).toBe('121');
     });
 
-    it('sends cursor from state in pull request', async () => {
-      client.setState('pull_cursor', 'existing-cursor');
+    it('sends since param in pull request', async () => {
+      client.setState('pull_cursor', '100');
 
-      const mockResponse: ServerPullResponse = {
-        ops: [],
+      const mockResponse: SyncPullResponse = {
+        success: true,
+        data: {
+          ops: [],
+          nextCursor: 100,
+          hasMore: false,
+        },
       };
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
@@ -179,11 +207,21 @@ describe('SyncClient', () => {
 
       const fetchCall = vi.mocked(fetch).mock.calls[0];
       const url = fetchCall[0] as string;
-      expect(url).toContain('cursor=existing-cursor');
+      expect(url).toContain('since=100');
+      // No userId or cursor params (old protocol)
+      expect(url).not.toContain('userId=');
+      expect(url).not.toContain('cursor=');
     });
 
     it('returns 0 when server returns empty ops', async () => {
-      const mockResponse: ServerPullResponse = { ops: [] };
+      const mockResponse: SyncPullResponse = {
+        success: true,
+        data: {
+          ops: [],
+          nextCursor: 0,
+          hasMore: false,
+        },
+      };
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
         new Response(JSON.stringify(mockResponse), {

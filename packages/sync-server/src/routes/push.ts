@@ -23,6 +23,9 @@ const syncOpSchema = z.object({
 const pushRequestSchema = z.object({
   deviceId: z.string().min(1),
   baseCursor: z.number().int().min(0),
+  // TODO: userId should be derived from auth context in production.
+  // For now, accept it in the request body for development convenience.
+  userId: z.string().min(1).optional(),
   ops: z.array(syncOpSchema).min(1).max(500),
 });
 
@@ -32,12 +35,13 @@ export function pushRoutes(ctx: SyncAppContext): Hono {
   // POST /sync/push
   router.post('/push', async (c) => {
     const body = await c.req.json();
-    const { ops } = pushRequestSchema.parse(body);
+    const parsed = pushRequestSchema.parse(body);
 
-    // All ops must belong to the same user
-    const userId = ops[0].userId;
+    // Resolve userId: prefer body-level userId, fall back to first op's userId.
+    // TODO: In production, derive userId from authenticated identity instead.
+    const userId = parsed.userId ?? parsed.ops[0].userId;
 
-    const syncOps = ops as unknown as readonly SyncOp[];
+    const syncOps = parsed.ops as unknown as readonly SyncOp[];
     const results = await ctx.storage.pushOps(userId, syncOps);
     const highWatermark = await ctx.storage.getHighWatermark(userId);
 

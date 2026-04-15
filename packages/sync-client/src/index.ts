@@ -6,7 +6,9 @@ export type {
   SyncOp,
   SyncPulledOp,
   SyncConfig,
+  SyncPushRequest,
+  SyncPushResult,
   SyncPushResponse,
-  ServerPushResponse,
-  ServerPullResponse,
+  SyncPullParams,
+  SyncPullResponse,
 } from './types.js';

@@ -14,12 +14,11 @@ interface OutboxRow {
 function rowToSyncOp(row: OutboxRow): SyncOp {
   return {
     opId: row.op_id,
-    opType: row.op_type,
+    opType: row.op_type as SyncOp['opType'],
     deviceId: row.device_id,
     userId: row.user_id,
-    payload: row.payload,
+    payload: JSON.parse(row.payload) as unknown,
     createdAt: row.created_at,
-    pushedAt: row.pushed_at,
   };
 }
 
@@ -31,12 +30,14 @@ export class Outbox {
   }
 
   addOp(op: SyncOp): void {
+    const payloadStr =
+      typeof op.payload === 'string' ? op.payload : JSON.stringify(op.payload);
     this.db
       .prepare(
         `INSERT INTO sync_outbox (op_id, op_type, device_id, user_id, payload, created_at, pushed_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(op.opId, op.opType, op.deviceId, op.userId, op.payload, op.createdAt, op.pushedAt ?? null);
+      .run(op.opId, op.opType, op.deviceId, op.userId, payloadStr, op.createdAt, null);
   }
 
   getPending(): readonly SyncOp[] {

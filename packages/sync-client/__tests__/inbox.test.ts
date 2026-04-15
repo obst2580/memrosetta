@@ -7,11 +7,13 @@ import type { SyncPulledOp } from '../src/types.js';
 function createTestPulledOp(overrides?: Partial<SyncPulledOp>): SyncPulledOp {
   return {
     opId: `op-${Math.random().toString(36).slice(2, 8)}`,
-    opType: 'store_memory',
+    opType: 'memory_created',
     deviceId: 'device-2',
     userId: 'user-1',
-    payload: JSON.stringify({ content: 'pulled' }),
+    payload: { content: 'pulled' },
     createdAt: new Date().toISOString(),
+    cursor: 0,
+    receivedAt: new Date().toISOString(),
     ...overrides,
   };
 }

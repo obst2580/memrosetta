@@ -1,16 +1,37 @@
 import type Database from 'better-sqlite3';
-import type { SyncConfig, SyncPushResponse, ServerPushResponse, ServerPullResponse } from './types.js';
+import type {
+  SyncPushResponse,
+  SyncPullResponse,
+  SyncPushResult,
+} from './types.js';
 import { ensureSyncSchema } from './schema.js';
 import { Outbox } from './outbox.js';
 import { Inbox } from './inbox.js';
 
+/**
+ * Minimal config required by SyncClient at runtime.
+ * serverUrl and apiKey are required (unlike the optional SyncConfig
+ * from @memrosetta/types which is aimed at feature-flag configuration).
+ */
+export interface SyncClientConfig {
+  readonly serverUrl: string;
+  readonly apiKey: string;
+  readonly deviceId: string;
+}
+
+export interface SyncClientPushResponse {
+  readonly pushed: number;
+  readonly results: readonly SyncPushResult[];
+  readonly highWatermark: number;
+}
+
 export class SyncClient {
   private readonly db: Database.Database;
-  private readonly config: SyncConfig;
+  private readonly config: SyncClientConfig;
   private readonly outbox: Outbox;
   private readonly inbox: Inbox;
 
-  constructor(db: Database.Database, config: SyncConfig) {
+  constructor(db: Database.Database, config: SyncClientConfig) {
     this.db = db;
     this.config = config;
     this.outbox = new Outbox(db);
@@ -29,11 +50,21 @@ export class SyncClient {
     return this.inbox;
   }
 
-  async push(): Promise<SyncPushResponse> {
+  async push(): Promise<SyncClientPushResponse> {
     const pending = this.outbox.getPending();
     if (pending.length === 0) {
-      return { pushed: 0, acknowledged: [] };
+      return { pushed: 0, results: [], highWatermark: 0 };
     }
+
+    const baseCursorStr = this.getState('pull_cursor');
+    const baseCursor = baseCursorStr ? parseInt(baseCursorStr, 10) : 0;
+
+    // Build wire ops: payload stored as JSON string in SQLite needs to be
+    // sent as a parsed object over HTTP.
+    const wireOps = pending.map((op) => ({
+      ...op,
+      payload: typeof op.payload === 'string' ? JSON.parse(op.payload as string) : op.payload,
+    }));
 
     const url = `${this.config.serverUrl}/sync/push`;
     const response = await fetch(url, {
@@ -44,8 +75,8 @@ export class SyncClient {
       },
       body: JSON.stringify({
         deviceId: this.config.deviceId,
-        userId: this.config.userId,
-        ops: pending,
+        baseCursor,
+        ops: wireOps,
       }),
     });
 
@@ -53,26 +84,33 @@ export class SyncClient {
       throw new Error(`Push failed: ${response.status} ${response.statusText}`);
     }
 
-    const body = (await response.json()) as ServerPushResponse;
-    const acknowledged = body.acknowledged;
+    const body = (await response.json()) as SyncPushResponse;
+    const { results, highWatermark } = body.data;
 
-    this.outbox.markPushed(acknowledged);
+    // Mark accepted and duplicate ops as pushed
+    const pushedIds = results
+      .filter((r) => r.status === 'accepted' || r.status === 'duplicate')
+      .map((r) => r.opId);
+
+    this.outbox.markPushed(pushedIds);
+
+    // Advance pull_cursor to server's highWatermark
+    this.setState('pull_cursor', String(highWatermark));
 
     return {
-      pushed: acknowledged.length,
-      acknowledged,
+      pushed: pushedIds.length,
+      results,
+      highWatermark,
     };
   }
 
   async pull(): Promise<number> {
-    const cursor = this.getState('pull_cursor');
+    const cursorStr = this.getState('pull_cursor');
+    const since = cursorStr ? parseInt(cursorStr, 10) : 0;
+
     const params = new URLSearchParams({
-      deviceId: this.config.deviceId,
-      userId: this.config.userId,
+      since: String(since),
     });
-    if (cursor) {
-      params.set('cursor', cursor);
-    }
 
     const url = `${this.config.serverUrl}/sync/pull?${params.toString()}`;
     const response = await fetch(url, {
@@ -86,16 +124,15 @@ export class SyncClient {
       throw new Error(`Pull failed: ${response.status} ${response.statusText}`);
     }
 
-    const body = (await response.json()) as ServerPullResponse;
-    const ops = body.ops;
+    const body = (await response.json()) as SyncPullResponse;
+    const { ops, nextCursor, hasMore } = body.data;
 
     if (ops.length > 0) {
       this.inbox.addOps(ops);
     }
 
-    if (body.cursor) {
-      this.setState('pull_cursor', body.cursor);
-    }
+    // Advance cursor
+    this.setState('pull_cursor', String(nextCursor));
 
     return ops.length;
   }
