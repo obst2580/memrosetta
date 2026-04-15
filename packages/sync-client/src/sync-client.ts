@@ -34,6 +34,7 @@ export interface SyncStatusTimestamps {
 export interface SyncClientStatus {
   readonly enabled: true;
   readonly serverUrl: string;
+  readonly userId: string;
   readonly deviceId: string;
   readonly pendingOps: number;
   readonly lastPush: SyncStatusTimestamps;
@@ -70,6 +71,7 @@ export class SyncClient {
     return {
       enabled: true,
       serverUrl: this.config.serverUrl,
+      userId: this.config.userId,
       deviceId: this.config.deviceId,
       pendingOps: this.outbox.countPending(),
       lastPush: {

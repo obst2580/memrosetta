@@ -20,6 +20,7 @@ export interface MemRosettaConfig {
   readonly syncServerUrl?: string;
   readonly syncApiKey?: string;
   readonly syncDeviceId?: string;
+  readonly syncUserId?: string;
 }
 
 const DEFAULT_CONFIG: MemRosettaConfig = {

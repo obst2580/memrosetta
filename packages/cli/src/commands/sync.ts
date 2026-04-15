@@ -237,7 +237,7 @@ async function withSyncClient<T>(
       serverUrl: config.syncServerUrl,
       apiKey: config.syncApiKey,
       deviceId: config.syncDeviceId,
-      userId: userInfo().username,
+      userId: config.syncUserId ?? userInfo().username,
     });
     return await fn(client, db);
   } finally {
@@ -283,17 +283,24 @@ async function runEnable(options: SyncOptions): Promise<void> {
   const existing = getConfig();
   const deviceId = existing.syncDeviceId ?? `device-${randomUUID().slice(0, 8)}`;
 
+  // --user overrides the stored syncUserId. If neither flag nor existing
+  // config has a value we fall back to the OS username at runtime.
+  const userOverride = optionalOption(args, '--user');
+  const syncUserId = userOverride ?? existing.syncUserId ?? userInfo().username;
+
   writeConfig({
     ...existing,
     syncEnabled: true,
     syncServerUrl: serverUrl,
     syncApiKey: apiKey,
     syncDeviceId: deviceId,
+    syncUserId,
   });
 
   if (format === 'text') {
     process.stdout.write('Sync enabled.\n');
     process.stdout.write(`  Server:   ${serverUrl}\n`);
+    process.stdout.write(`  UserId:   ${syncUserId}\n`);
     process.stdout.write(`  DeviceId: ${deviceId}\n`);
     if (skipTest) {
       process.stdout.write('  (health check skipped)\n');
@@ -301,7 +308,10 @@ async function runEnable(options: SyncOptions): Promise<void> {
     return;
   }
 
-  output({ enabled: true, serverUrl, deviceId, healthCheckSkipped: skipTest }, format);
+  output(
+    { enabled: true, serverUrl, userId: syncUserId, deviceId, healthCheckSkipped: skipTest },
+    format,
+  );
 }
 
 function runDisable(options: SyncOptions): void {
@@ -332,6 +342,9 @@ async function runStatus(options: SyncOptions): Promise<void> {
       if (config.syncServerUrl) {
         process.stdout.write(`  Server:   ${config.syncServerUrl}\n`);
       }
+      if (config.syncUserId) {
+        process.stdout.write(`  UserId:   ${config.syncUserId}\n`);
+      }
       if (config.syncDeviceId) {
         process.stdout.write(`  DeviceId: ${config.syncDeviceId}\n`);
       }
@@ -341,6 +354,7 @@ async function runStatus(options: SyncOptions): Promise<void> {
       {
         enabled: false,
         serverUrl: config.syncServerUrl ?? null,
+        userId: config.syncUserId ?? null,
         deviceId: config.syncDeviceId ?? null,
       },
       format,
@@ -354,6 +368,7 @@ async function runStatus(options: SyncOptions): Promise<void> {
     if (format === 'text') {
       process.stdout.write('Sync: enabled\n');
       process.stdout.write(`  Server:          ${status.serverUrl}\n`);
+      process.stdout.write(`  UserId:          ${status.userId}\n`);
       process.stdout.write(`  DeviceId:        ${status.deviceId}\n`);
       process.stdout.write(`  Pending ops:     ${status.pendingOps}\n`);
       process.stdout.write(`  Current cursor:  ${status.cursor}\n`);

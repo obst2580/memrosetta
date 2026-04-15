@@ -23,6 +23,7 @@ interface MemRosettaConfig {
   readonly syncServerUrl?: string;
   readonly syncApiKey?: string;
   readonly syncDeviceId?: string;
+  readonly syncUserId?: string;
 }
 
 function readConfig(): MemRosettaConfig {
@@ -56,8 +57,11 @@ function ensureDeviceId(config: MemRosettaConfig): { readonly config: MemRosetta
   return { config: updated, deviceId };
 }
 
-function createSyncRecorder(syncClient: SyncClient, deviceId: string): SyncRecorder {
-  const userId = process.env.USER ?? process.env.USERNAME ?? 'unknown';
+function createSyncRecorder(
+  syncClient: SyncClient,
+  deviceId: string,
+  userId: string,
+): SyncRecorder {
   const outbox = syncClient.getOutbox();
 
   function enqueue(op: SyncOp): void {
@@ -177,14 +181,15 @@ async function main(): Promise<void> {
     const db = new Database(DB_PATH);
     ensureSyncSchema(db);
 
+    const syncUserId = config.syncUserId ?? process.env.USER ?? process.env.USERNAME ?? 'unknown';
     const syncClient = new SyncClient(db, {
       serverUrl: config.syncServerUrl!,
       apiKey: config.syncApiKey!,
       deviceId,
-      userId: process.env.USER ?? process.env.USERNAME ?? 'unknown',
+      userId: syncUserId,
     });
 
-    syncRecorder = createSyncRecorder(syncClient, deviceId);
+    syncRecorder = createSyncRecorder(syncClient, deviceId, syncUserId);
 
     // Background push every 5 minutes
     setInterval(async () => {

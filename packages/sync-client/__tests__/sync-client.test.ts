@@ -65,6 +65,7 @@ describe('SyncClient', () => {
       expect(client.getStatus()).toEqual({
         enabled: true,
         serverUrl: 'https://api.example.com',
+        userId: 'test-user',
         deviceId: 'device-test',
         pendingOps: 0,
         lastPush: {
@@ -324,6 +325,7 @@ describe('SyncClient', () => {
       expect(client.getStatus()).toEqual({
         enabled: true,
         serverUrl: 'https://api.example.com',
+        userId: 'test-user',
         deviceId: 'device-test',
         pendingOps: 0,
         lastPush: {

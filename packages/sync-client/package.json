@@ -1,6 +1,6 @@
 {
   "name": "@memrosetta/sync-client",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Local-first sync client for MemRosetta (outbox/inbox, push/pull)",
   "type": "module",
   "main": "./dist/index.js",

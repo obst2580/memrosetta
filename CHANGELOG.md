@@ -2,6 +2,31 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.4.5] - 2026-04-15
+
+### Fixed
+- **Devices of the same person did not see each other's memories.** The
+  sync client was picking `userId` from the OS username, so a Mac user
+  `obst` and a Windows user `jhlee13` landed in two different server-side
+  op streams despite being the same human. The server partitions by
+  `user_id`, so ops never crossed.
+- Config now tracks `syncUserId` as first-class. `SyncClient.getStatus()`
+  returns it, and both CLI (`memrosetta sync status --format text`) and
+  the MCP adapter respect it when populating the sync client.
+
+### Added
+- **`memrosetta sync enable --user <id>`**: explicitly set the logical
+  user id shared across devices. Defaults to the OS username when no
+  flag and no existing config value.
+- `sync status` now prints the active `UserId` so cross-device mismatches
+  are obvious at a glance.
+
+### Upgrade note
+- **Both devices must use the same `syncUserId`** for cross-device sync
+  to work. On each device, run:
+  `memrosetta sync enable --server https://your-sync --user <shared-id>`.
+  This rewrites `syncUserId` in `~/.memrosetta/config.json`.
+
 ## [0.4.4] - 2026-04-15
 
 ### Added

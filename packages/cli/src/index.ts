@@ -49,7 +49,11 @@ Global Options:
   --version, -v       Show version
 
 Sync Subcommands:
-  memrosetta sync enable --server <url> [key-source]
+  memrosetta sync enable --server <url> [--user <id>] [key-source]
+    --user <id>                 Logical user id shared across devices
+                                (defaults to OS username). Different
+                                devices of the same person MUST share
+                                the same --user to see each other.
     Key sources (mutually exclusive, exactly one):
       --key <value>             Direct (visible in shell history)
       --key-stdin               Read from stdin (echo key | memrosetta ...)
