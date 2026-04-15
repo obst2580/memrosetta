@@ -49,12 +49,16 @@ Global Options:
   --version, -v       Show version
 
 Sync Subcommands:
-  memrosetta sync enable --server <url>    # Enable sync, hidden API key prompt
-  memrosetta sync enable --server <url> --key-stdin   # Read API key from stdin
-  memrosetta sync disable                  # Disable sync (keeps server/key)
+  memrosetta sync enable --server <url> [key-source]
+    Key sources (mutually exclusive, exactly one):
+      --key <value>             Direct (visible in shell history)
+      --key-stdin               Read from stdin (echo key | memrosetta ...)
+      --key-file <path>         Read from file
+      MEMROSETTA_SYNC_API_KEY   Environment variable (fallback)
+      (no flag)                 POSIX TTY only: hidden prompt
+  memrosetta sync disable                  # Disable (keeps server/key)
   memrosetta sync status                   # Show sync state + pending ops
-  memrosetta sync now                      # Push + pull now
-  memrosetta sync now --push-only          # Push only
+  memrosetta sync now [--push-only | --pull-only]
   memrosetta sync device-id                # Print current device id
 
 Examples:

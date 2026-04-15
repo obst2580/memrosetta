@@ -2,6 +2,33 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.4.4] - 2026-04-15
+
+### Added
+- **`--key-file <path>`**: read the sync API key from a file. The file is
+  trimmed and control-character validated. Recommended for Windows and
+  anywhere a shell-history leak is unacceptable.
+- **`MEMROSETTA_SYNC_API_KEY` environment variable**: used automatically
+  when no explicit key source is given. Name is deliberately different from
+  the server-side `MEMROSETTA_API_KEYS` to avoid confusion.
+
+### Changed
+- **`memrosetta sync enable` key sources are now mutually exclusive.**
+  Supplying more than one of `--key`, `--key-stdin`, `--key-file` is an
+  error. Resolution order: explicit flag -> env var -> hidden prompt.
+- **Hidden prompt is POSIX TTY only.** On Windows (where PowerShell + npm
+  shims cannot reliably mask input or forward stdin) the CLI now fails fast
+  with a hint listing every supported key source.
+- `--help` and the CHANGELOG document all four key sources.
+
+### Fixed
+- Windows users who hit "Error: API key is required" or "fetch failed" in
+  0.4.1-0.4.3 now have a working path: `--key`, `--key-file`, or
+  `MEMROSETTA_SYNC_API_KEY`.
+- The control-character recovery message in `withSyncClient` now points to
+  `--key`, `--key-file`, and the env variable instead of the old
+  `--key-stdin` instructions.
+
 ## [0.4.3] - 2026-04-15
 
 ### Fixed

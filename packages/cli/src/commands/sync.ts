@@ -1,9 +1,23 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { userInfo, platform } from 'node:os';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 import { output, outputError, type OutputFormat } from '../output.js';
 import { requireOption, optionalOption, hasFlag } from '../parser.js';
 import { getConfig, writeConfig, getDefaultDbPath, type MemRosettaConfig } from '../hooks/config.js';
+
+const ENV_API_KEY = 'MEMROSETTA_SYNC_API_KEY';
+
+const KEY_SOURCE_HINT = [
+  'API key required. Use exactly one of:',
+  '  --key <value>              (direct, visible in history)',
+  '  --key-stdin                (pipe from stdin)',
+  '  --key-file <path>          (read from file)',
+  `  ${ENV_API_KEY}=<value>    (environment variable)`,
+  '',
+  'On POSIX TTYs an interactive hidden prompt is also available.',
+  'See: memrosetta sync enable --help',
+].join('\n');
 
 interface SyncOptions {
   readonly args: readonly string[];
@@ -33,19 +47,81 @@ function parseSubcommand(args: readonly string[]): Subcommand | null {
 // control character (0x00-0x1F + 0x7F) except the separators we trim below.
 const CONTROL_CHAR_REGEX = /[\x00-\x1F\x7F]/;
 
-function validateApiKey(key: string): string {
+function validateApiKey(key: string, sourceLabel: string): string {
   const trimmed = key.trim();
   if (trimmed.length === 0) {
-    throw new Error('API key is empty.');
+    throw new Error(`API key from ${sourceLabel} is empty.`);
   }
   if (CONTROL_CHAR_REGEX.test(trimmed)) {
     throw new Error(
-      'API key contains control characters. Your terminal likely does not ' +
-        'support hidden input (e.g. Windows PowerShell). Pipe the key instead:\n' +
-        '  echo <api-key> | memrosetta sync enable --server <url> --key-stdin',
+      `API key from ${sourceLabel} contains control characters. ` +
+        'Try --key-file or MEMROSETTA_SYNC_API_KEY instead.',
     );
   }
   return trimmed;
+}
+
+function readKeyFile(path: string): string {
+  try {
+    return readFileSync(path, 'utf-8');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Could not read --key-file '${path}': ${msg}`);
+  }
+}
+
+/**
+ * Resolve the API key from the first available source, enforcing that
+ * explicit flags are mutually exclusive.
+ *
+ * Order (each is tried only if no earlier source matched):
+ *   1. Exactly one of --key / --key-stdin / --key-file
+ *   2. MEMROSETTA_SYNC_API_KEY environment variable
+ *   3. Hidden prompt (POSIX TTY only)
+ */
+async function resolveApiKey(args: readonly string[]): Promise<string> {
+  const directKey = optionalOption(args, '--key');
+  const keyFile = optionalOption(args, '--key-file');
+  const useStdin = hasFlag(args, '--key-stdin');
+
+  const explicitCount = [directKey !== undefined, keyFile !== undefined, useStdin]
+    .filter(Boolean).length;
+
+  if (explicitCount > 1) {
+    throw new Error(
+      'Specify only one of --key, --key-stdin, --key-file.',
+    );
+  }
+
+  if (directKey !== undefined) {
+    return validateApiKey(directKey, '--key');
+  }
+  if (useStdin) {
+    const raw = await readStdinKey();
+    if (!raw) {
+      throw new Error(
+        '--key-stdin produced no input. ' +
+          'On Windows PowerShell, prefer --key-file or MEMROSETTA_SYNC_API_KEY.',
+      );
+    }
+    return validateApiKey(raw, '--key-stdin');
+  }
+  if (keyFile !== undefined) {
+    return validateApiKey(readKeyFile(keyFile), `--key-file ${keyFile}`);
+  }
+
+  const envKey = process.env[ENV_API_KEY];
+  if (envKey !== undefined && envKey.length > 0) {
+    return validateApiKey(envKey, ENV_API_KEY);
+  }
+
+  // Fallback: hidden prompt, POSIX TTY only.
+  if (platform() !== 'win32' && process.stdin.isTTY) {
+    const raw = await readHiddenInput('API key: ');
+    return validateApiKey(raw, 'hidden prompt');
+  }
+
+  throw new Error(KEY_SOURCE_HINT);
 }
 
 /**
@@ -147,8 +223,10 @@ async function withSyncClient<T>(
   if (CONTROL_CHAR_REGEX.test(config.syncApiKey)) {
     throw new Error(
       'Stored API key is invalid (contains control characters from a previous ' +
-        'terminal input). Re-run with --key-stdin to fix it:\n' +
-        '  echo <api-key> | memrosetta sync enable --server ' + config.syncServerUrl + ' --key-stdin',
+        'terminal input). Re-run with one of:\n' +
+        `  memrosetta sync enable --server ${config.syncServerUrl} --key <api-key>\n` +
+        `  memrosetta sync enable --server ${config.syncServerUrl} --key-file path/to/key\n` +
+        `  $env:${ENV_API_KEY}='<api-key>'; memrosetta sync enable --server ${config.syncServerUrl}`,
     );
   }
 
@@ -179,35 +257,9 @@ async function runEnable(options: SyncOptions): Promise<void> {
     return;
   }
 
-  let rawApiKey = optionalOption(args, '--key');
-  if (hasFlag(args, '--key-stdin')) {
-    rawApiKey = await readStdinKey();
-  }
-  if (!rawApiKey) {
-    if (platform() === 'win32') {
-      process.stdout.write(
-        'Note: Windows terminals do not always mask pasted input. ' +
-          'If characters appear or the key is rejected, pipe it via --key-stdin instead.\n',
-      );
-    }
-    try {
-      rawApiKey = await readHiddenInput('API key: ');
-    } catch (err) {
-      outputError(err instanceof Error ? err.message : String(err), format);
-      process.exitCode = 1;
-      return;
-    }
-  }
-
-  if (!rawApiKey) {
-    outputError('API key is required', format);
-    process.exitCode = 1;
-    return;
-  }
-
   let apiKey: string;
   try {
-    apiKey = validateApiKey(rawApiKey);
+    apiKey = await resolveApiKey(args);
   } catch (err) {
     outputError(err instanceof Error ? err.message : String(err), format);
     process.exitCode = 1;
