@@ -13,6 +13,7 @@
     },
     "./package.json": "./package.json"
   },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --external better-sqlite3",
     "start": "tsx src/index.ts",
