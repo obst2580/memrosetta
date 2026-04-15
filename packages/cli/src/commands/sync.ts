@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { userInfo } from 'node:os';
+import { userInfo, platform } from 'node:os';
+import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 import { output, outputError, type OutputFormat } from '../output.js';
 import { requireOption, optionalOption, hasFlag } from '../parser.js';
 import { getConfig, writeConfig, getDefaultDbPath, type MemRosettaConfig } from '../hooks/config.js';
@@ -28,6 +29,33 @@ function parseSubcommand(args: readonly string[]): Subcommand | null {
   return null;
 }
 
+// Characters that should never appear in a valid API key. We reject any
+// control character (0x00-0x1F + 0x7F) except the separators we trim below.
+const CONTROL_CHAR_REGEX = /[\x00-\x1F\x7F]/;
+
+function validateApiKey(key: string): string {
+  const trimmed = key.trim();
+  if (trimmed.length === 0) {
+    throw new Error('API key is empty.');
+  }
+  if (CONTROL_CHAR_REGEX.test(trimmed)) {
+    throw new Error(
+      'API key contains control characters. Your terminal likely does not ' +
+        'support hidden input (e.g. Windows PowerShell). Pipe the key instead:\n' +
+        '  echo <api-key> | memrosetta sync enable --server <url> --key-stdin',
+    );
+  }
+  return trimmed;
+}
+
+/**
+ * Read a line from the terminal without echoing the typed characters.
+ *
+ * Uses readline with a muted output stream so it works consistently across
+ * POSIX terminals and Windows ConPTY (PowerShell/cmd). The previous raw-mode
+ * implementation mis-handled Windows input and let control characters leak
+ * into the captured value (observed as U+0016 / SYN).
+ */
 async function readHiddenInput(prompt: string): Promise<string> {
   const stdin = process.stdin;
   const stdout = process.stdout;
@@ -38,41 +66,44 @@ async function readHiddenInput(prompt: string): Promise<string> {
 
   stdout.write(prompt);
 
-  const wasRaw = stdin.isRaw;
-  stdin.setRawMode(true);
-  stdin.resume();
-  stdin.setEncoding('utf-8');
+  // Mute stdout while the user is typing. Let only the final newline through.
+  const originalWrite = stdout.write.bind(stdout);
+  let muted = true;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (stdout as any).write = (chunk: any, ...rest: any[]): boolean => {
+    if (!muted) {
+      return originalWrite(chunk, ...rest);
+    }
+    const str = typeof chunk === 'string' ? chunk : chunk?.toString?.('utf-8') ?? '';
+    if (str === '\n' || str === '\r\n' || str === '\r') {
+      return originalWrite(chunk, ...rest);
+    }
+    return true;
+  };
 
-  return new Promise((resolve, reject) => {
-    let buffer = '';
-    const onData = (chunk: string): void => {
-      for (const ch of chunk) {
-        const code = ch.charCodeAt(0);
-        if (code === 0x0d || code === 0x0a) {
-          stdin.removeListener('data', onData);
-          stdin.setRawMode(wasRaw);
-          stdin.pause();
-          stdout.write('\n');
-          resolve(buffer);
-          return;
-        }
-        if (code === 0x03) {
-          stdin.removeListener('data', onData);
-          stdin.setRawMode(wasRaw);
-          stdin.pause();
-          stdout.write('\n');
-          reject(new Error('Aborted'));
-          return;
-        }
-        if (code === 0x7f || code === 0x08) {
-          buffer = buffer.slice(0, -1);
-          continue;
-        }
-        buffer += ch;
-      }
-    };
-    stdin.on('data', onData);
+  const rl: ReadlineInterface = createInterface({
+    input: stdin,
+    output: stdout,
+    terminal: true,
   });
+
+  try {
+    const answer: string = await new Promise((resolve, reject) => {
+      rl.once('close', () => {
+        // If the user hits Ctrl+C or the stream closes without input
+        reject(new Error('Aborted'));
+      });
+      rl.question('', (value) => {
+        resolve(value);
+      });
+    });
+    return answer;
+  } finally {
+    muted = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (stdout as any).write = originalWrite;
+    rl.close();
+  }
 }
 
 async function readStdinKey(): Promise<string> {
@@ -110,6 +141,17 @@ async function withSyncClient<T>(
     throw new Error('Sync is not configured. Run: memrosetta sync enable --server <url>');
   }
 
+  // Reject stored API keys that contain control characters. This is a
+  // recovery path for users whose 0.4.1 `sync enable` captured garbage from
+  // a Windows terminal.
+  if (CONTROL_CHAR_REGEX.test(config.syncApiKey)) {
+    throw new Error(
+      'Stored API key is invalid (contains control characters from a previous ' +
+        'terminal input). Re-run with --key-stdin to fix it:\n' +
+        '  echo <api-key> | memrosetta sync enable --server ' + config.syncServerUrl + ' --key-stdin',
+    );
+  }
+
   const db = new Database(dbPath);
   try {
     ensureSyncSchema(db);
@@ -137,13 +179,19 @@ async function runEnable(options: SyncOptions): Promise<void> {
     return;
   }
 
-  let apiKey = optionalOption(args, '--key');
+  let rawApiKey = optionalOption(args, '--key');
   if (hasFlag(args, '--key-stdin')) {
-    apiKey = await readStdinKey();
+    rawApiKey = await readStdinKey();
   }
-  if (!apiKey) {
+  if (!rawApiKey) {
+    if (platform() === 'win32') {
+      process.stdout.write(
+        'Note: Windows terminals do not always mask pasted input. ' +
+          'If characters appear or the key is rejected, pipe it via --key-stdin instead.\n',
+      );
+    }
     try {
-      apiKey = await readHiddenInput('API key: ');
+      rawApiKey = await readHiddenInput('API key: ');
     } catch (err) {
       outputError(err instanceof Error ? err.message : String(err), format);
       process.exitCode = 1;
@@ -151,8 +199,17 @@ async function runEnable(options: SyncOptions): Promise<void> {
     }
   }
 
-  if (!apiKey) {
+  if (!rawApiKey) {
     outputError('API key is required', format);
+    process.exitCode = 1;
+    return;
+  }
+
+  let apiKey: string;
+  try {
+    apiKey = validateApiKey(rawApiKey);
+  } catch (err) {
+    outputError(err instanceof Error ? err.message : String(err), format);
     process.exitCode = 1;
     return;
   }

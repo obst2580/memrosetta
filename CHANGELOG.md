@@ -2,6 +2,26 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.4.2] - 2026-04-15
+
+### Fixed
+- **`memrosetta sync enable` on Windows**: the previous raw-mode hidden input
+  captured control characters (e.g. U+0016 / SYN) from Windows PowerShell and
+  wrote them to `~/.memrosetta/config.json`, which then caused every sync
+  request to fail with `fetch failed` because the `Authorization` header was
+  invalid. The hidden prompt is now implemented with `readline` + a muted
+  output stream, which works consistently on POSIX and Windows.
+
+### Added
+- Control-character validation on captured API keys. If anything slips
+  through, the CLI tells the user to re-run with `--key-stdin`.
+- Windows-specific hint on `sync enable` encouraging `--key-stdin` when the
+  terminal does not mask input reliably.
+- Recovery path in `withSyncClient`: if the stored API key contains control
+  characters (upgrading from a broken 0.4.1 install), `sync now` / `sync
+  status` now returns a readable error with the exact fix command instead of
+  bubbling up `fetch failed`.
+
 ## [0.4.1] - 2026-04-15
 
 ### Added
