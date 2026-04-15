@@ -26,6 +26,7 @@ Commands:
   compress         Run compression only
   update           Update to latest version
   sync             Manage multi-device sync (enable/disable/status/now/device-id)
+  enforce          Run the enforce backend for client Stop hooks (advanced)
 
 Init Options:
   (no flag)           Initialize DB + MCP server (base setup)
@@ -194,6 +195,11 @@ async function main(): Promise<void> {
       }
       case 'sync': {
         const mod = await import('./commands/sync.js');
+        await mod.run(commandOptions);
+        break;
+      }
+      case 'enforce': {
+        const mod = await import('./commands/enforce.js');
         await mod.run(commandOptions);
         break;
       }

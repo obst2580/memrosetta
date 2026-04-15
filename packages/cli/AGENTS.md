@@ -3,13 +3,13 @@
 
 ## MemRosetta (Long-term Memory)
 
-MCP server `memrosetta` provides persistent memory across sessions.
+MCP server `memory-service` provides persistent memory across sessions.
 userId defaults to the system username -- no need to specify it.
 
-### When to search (memrosetta_search)
+### When to search (mcp__memory-service__memrosetta_search)
 When you need information not in the current context, search past memories.
 
-### When to store (memrosetta_store)
+### When to store (mcp__memory-service__memrosetta_store)
 
 **After EVERY response, run this checklist:**
 1. Did I encounter a DECISION? (tech choice, approach selection) -> store as "decision"
@@ -29,8 +29,8 @@ Do NOT store:
 - Debugging steps and attempts
 - Simple confirmations or acknowledgments
 
-### When to relate (memrosetta_relate)
+### When to relate (mcp__memory-service__memrosetta_relate)
 When new information updates or contradicts existing memories, create a relation.
 
-### Working memory (memrosetta_working_memory)
+### Working memory (mcp__memory-service__memrosetta_working_memory)
 Call this at the start of complex tasks to load relevant context.

@@ -4,6 +4,10 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolveMcpCommand } from './resolve-command.js';
 
 const SERVER_NAME = 'memory-service';
+// Older versions of memrosetta init wrote the section under a different
+// name. We still need to clean those up on reset / re-init so the user
+// does not end up with two MCP server entries pointing at the same binary.
+const LEGACY_SERVER_NAMES = ['memrosetta'] as const;
 const CODEX_CONFIG_PATH_GETTER = () => join(homedir(), '.codex', 'config.toml');
 const AGENTS_MD_MARKER = '## MemRosetta (Long-term Memory)';
 
@@ -65,38 +69,71 @@ function readCodexConfig(path: string): string {
   }
 }
 
-function escapeTomlString(s: string): string {
-  // Escape backslashes for TOML (Windows paths: C:\Users\... → C:\\Users\\...)
-  return s.replace(/\\/g, '\\\\');
+/**
+ * Quote a value as a TOML literal string (single quotes).
+ *
+ * TOML basic strings ("...") apply backslash escapes, which mangles
+ * Windows paths like `C:\Users\jhlee13\...` because `\U` is interpreted
+ * as a Unicode escape and double-escaping leaves `\\` in the parsed
+ * value. TOML literal strings ('...') take the value verbatim and have
+ * no escape processing — exactly what we want for filesystem paths.
+ *
+ * The only character a literal string cannot contain is a single quote
+ * itself; if that ever appears in a path we fall back to a basic string
+ * with full backslash + quote escaping.
+ */
+function tomlLiteral(s: string): string {
+  if (!s.includes("'")) {
+    return `'${s}'`;
+  }
+  // Fallback: basic string with proper escapes.
+  const escaped = s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return `"${escaped}"`;
 }
 
 function buildMcpServerToml(): string {
   const { command, args } = resolveMcpCommand();
-  const escapedCommand = escapeTomlString(command);
   const argsLine =
     args.length > 0
-      ? `\nargs = [${args.map((a) => `"${escapeTomlString(a)}"`).join(', ')}]`
+      ? `\nargs = [${args.map(tomlLiteral).join(', ')}]`
       : '';
-  return `\n[mcp_servers.${SERVER_NAME}]\ncommand = "${escapedCommand}"${argsLine}\n`;
+  return `\n[mcp_servers.${SERVER_NAME}]\ncommand = ${tomlLiteral(command)}${argsLine}\n`;
 }
 
 function hasMcpServer(content: string): boolean {
   return content.includes(`[mcp_servers.${SERVER_NAME}]`);
 }
 
-function removeMcpServerSection(content: string): string {
-  const marker = `[mcp_servers.${SERVER_NAME}]`;
+/**
+ * Strip a single `[mcp_servers.<name>]` block (and everything until the
+ * next top-level section or EOF) from a TOML document. Idempotent — if
+ * the marker is missing the input is returned unchanged.
+ */
+function stripSection(content: string, name: string): string {
+  const marker = `[mcp_servers.${name}]`;
   const idx = content.indexOf(marker);
   if (idx === -1) return content;
 
-  // Find the end: next [section] or end of file
   const afterMarker = content.slice(idx + marker.length);
-  const nextSectionMatch = afterMarker.match(/\n\[(?!mcp_servers\.memrosetta)/);
+  const nextSectionMatch = afterMarker.match(/\n\[/);
   const endIdx = nextSectionMatch
     ? idx + marker.length + (nextSectionMatch.index ?? afterMarker.length)
     : content.length;
 
-  return (content.slice(0, idx).trimEnd() + '\n' + content.slice(endIdx)).trim() + '\n';
+  const trimmedHead = content.slice(0, idx).trimEnd();
+  const tail = content.slice(endIdx);
+  return `${trimmedHead}\n${tail}`.trim() + '\n';
+}
+
+function removeMcpServerSection(content: string): string {
+  let next = stripSection(content, SERVER_NAME);
+  // Also clean up any legacy server names that older `memrosetta init`
+  // versions may have written. Without this, reset / re-init silently
+  // leaves duplicated [mcp_servers.memrosetta] blocks behind.
+  for (const legacy of LEGACY_SERVER_NAMES) {
+    next = stripSection(next, legacy);
+  }
+  return next;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,10 +169,11 @@ export function registerCodexMCP(): boolean {
 
   let content = readCodexConfig(configPath);
 
-  // Remove stale entry if exists, then add fresh one
-  if (hasMcpServer(content)) {
-    content = removeMcpServerSection(content);
-  }
+  // Always strip both the current section and any legacy section names
+  // before re-inserting, so older installs that wrote `[mcp_servers.memrosetta]`
+  // get cleaned up automatically on re-init.
+  content = removeMcpServerSection(content);
+
   writeFileSync(configPath, content + buildMcpServerToml(), 'utf-8');
 
   return updateAgentsMd();
@@ -143,34 +181,26 @@ export function registerCodexMCP(): boolean {
 
 /**
  * Remove MemRosetta from ~/.codex/config.toml and AGENTS.md.
+ *
+ * Cleans up both the current `[mcp_servers.memory-service]` block and
+ * any legacy `[mcp_servers.memrosetta]` blocks that older versions of
+ * `memrosetta init --codex` may have written.
  */
 export function removeCodexMCP(): boolean {
   const configPath = getCodexConfigPath();
   if (!existsSync(configPath)) return false;
 
-  const content = readCodexConfig(configPath);
-  if (!hasMcpServer(content)) return false;
+  const original = readCodexConfig(configPath);
+  const cleaned = removeMcpServerSection(original);
 
-  // Remove the [mcp_servers.memrosetta] section
-  const lines = content.split('\n');
-  const filtered: string[] = [];
-  let skipping = false;
-
-  for (const line of lines) {
-    if (line.trim() === `[mcp_servers.${SERVER_NAME}]`) {
-      skipping = true;
-      continue;
-    }
-    // Stop skipping at the next section header
-    if (skipping && line.trim().startsWith('[')) {
-      skipping = false;
-    }
-    if (!skipping) {
-      filtered.push(line);
-    }
+  if (cleaned === original) {
+    // Nothing to remove. Still try to clean AGENTS.md so reset is
+    // idempotent across the two files.
+    removeAgentsMdSection();
+    return false;
   }
 
-  writeFileSync(configPath, filtered.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n', 'utf-8');
+  writeFileSync(configPath, cleaned, 'utf-8');
   removeAgentsMdSection();
   return true;
 }
