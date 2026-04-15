@@ -1,9 +1,7 @@
 import { Hono } from 'hono';
 import type { SyncAppContext } from '../app.js';
-import { createRequire } from 'node:module';
 
-const require = createRequire(import.meta.url);
-const pkg = require('../../package.json') as { version: string };
+const VERSION = process.env.npm_package_version ?? '0.1.0';
 
 export function healthRoutes(ctx: SyncAppContext): Hono {
   const router = new Hono();
@@ -20,7 +18,7 @@ export function healthRoutes(ctx: SyncAppContext): Hono {
     const status = dbStatus === 'ok' ? 'ok' : 'degraded';
     const statusCode = dbStatus === 'ok' ? 200 : 503;
 
-    return c.json({ status, version: pkg.version, db: dbStatus }, statusCode);
+    return c.json({ status, version: VERSION, db: dbStatus }, statusCode);
   });
 
   return router;
