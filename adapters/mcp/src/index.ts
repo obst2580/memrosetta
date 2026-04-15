@@ -12,8 +12,18 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync } from 'n
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 
-const VERSION = '0.3.0';
+function resolveMcpVersion(): string {
+  try {
+    const require = createRequire(import.meta.url);
+    return (require('../package.json') as { version: string }).version;
+  } catch {
+    return 'unknown';
+  }
+}
+
+const VERSION = resolveMcpVersion();
 
 interface MemRosettaConfig {
   readonly dbPath?: string;
@@ -191,7 +201,8 @@ async function main(): Promise<void> {
 
     syncRecorder = createSyncRecorder(syncClient, deviceId, syncUserId);
 
-    // Background push every 5 minutes
+    // Background sync every 5 minutes. Push and pull are logged separately
+    // so one failure does not suppress the other direction.
     setInterval(async () => {
       try {
         const result = await syncClient.push();
@@ -200,6 +211,15 @@ async function main(): Promise<void> {
         }
       } catch (err) {
         process.stderr.write(`[sync] Push failed: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
+
+      try {
+        const pulled = await syncClient.pull();
+        if (pulled > 0) {
+          process.stderr.write(`[sync] Pulled ${pulled} ops\n`);
+        }
+      } catch (err) {
+        process.stderr.write(`[sync] Pull failed: ${err instanceof Error ? err.message : String(err)}\n`);
       }
     }, 5 * 60 * 1000);
 

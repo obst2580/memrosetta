@@ -569,8 +569,15 @@ memrosetta sync status --format text   # enabled, cursor, pending ops, last push
 memrosetta sync now                    # push then pull right now
 memrosetta sync now --push-only        # push only
 memrosetta sync device-id               # print the local device id
+memrosetta sync backfill --dry-run      # preview one-shot enqueue of existing local history
+memrosetta sync backfill                # enqueue existing memories/relations into outbox
 memrosetta sync disable                 # stop syncing (keeps config)
 ```
+
+Use `sync backfill` once on a device that already had local memories before
+you enabled sync. It enqueues the current SQLite contents into the outbox; it
+does not push automatically, so run `memrosetta sync now` after the enqueue
+step. `--dry-run` shows how many memories and relations would be queued.
 
 ### Self-hosting the sync server
 

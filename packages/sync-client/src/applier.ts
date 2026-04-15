@@ -14,6 +14,7 @@ import type { SyncPulledOp } from './types.js';
  *   - `relation_created` INSERT OR IGNORE on the (src, dst, type) PK
  *   - `memory_invalidated` UPDATE of `invalidated_at`
  *   - `feedback_given`  additive UPDATE of `use_count` / `success_count`
+ *                      plus the same salience recompute rule used by core
  *   - `memory_tier_set` UPDATE of `tier`
  */
 
@@ -73,6 +74,18 @@ function parsePayload<T>(payload: unknown): T {
   return payload as T;
 }
 
+/**
+ * Serialize keywords the same way @memrosetta/core does: a
+ * space-joined string, not JSON. Using a different format here breaks
+ * FTS keyword recall for every synced memory.
+ */
+function serializeKeywords(
+  keywords: readonly string[] | undefined,
+): string | null {
+  if (!keywords || keywords.length === 0) return null;
+  return keywords.join(' ');
+}
+
 function applyMemoryCreated(db: Database.Database, op: SyncPulledOp): void {
   const p = parsePayload<MemoryCreatedPayload>(op.payload);
   const stmt = db.prepare(
@@ -102,7 +115,7 @@ function applyMemoryCreated(db: Database.Database, op: SyncPulledOp): void {
     source_id: p.sourceId ?? null,
     confidence: p.confidence ?? 1.0,
     salience: p.salience ?? 1.0,
-    keywords: p.keywords ? JSON.stringify(p.keywords) : null,
+    keywords: serializeKeywords(p.keywords),
     event_date_start: p.eventDateStart ?? null,
     event_date_end: p.eventDateEnd ?? null,
     invalidated_at: p.invalidatedAt ?? null,
@@ -143,6 +156,21 @@ function applyFeedbackGiven(db: Database.Database, op: SyncPulledOp): void {
     db.prepare(
       'UPDATE memories SET use_count = use_count + 1 WHERE memory_id = ?',
     ).run(p.memoryId);
+  }
+
+  const row = db.prepare(
+    'SELECT use_count, success_count FROM memories WHERE memory_id = ?',
+  ).get(p.memoryId) as
+    | { use_count: number; success_count: number }
+    | undefined;
+
+  if (row && row.use_count > 0) {
+    const successRate = row.success_count / row.use_count;
+    const newSalience = Math.min(1.0, Math.max(0.1, 0.5 + 0.5 * successRate));
+    db.prepare('UPDATE memories SET salience = ? WHERE memory_id = ?').run(
+      newSalience,
+      p.memoryId,
+    );
   }
 }
 

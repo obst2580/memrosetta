@@ -5,6 +5,54 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.4.7 — 2026-04-15
+
+**Highlights**
+- CLI write paths now participate in sync, not just the MCP adapter.
+- Added `memrosetta sync backfill` for one-shot enqueue of existing local
+  memories into the sync outbox.
+
+**Added**
+- CLI `store`, `relate`, `invalidate`, and `feedback` now enqueue sync ops
+  after the local SQLite write succeeds.
+- `memrosetta sync backfill [--dry-run]` to enqueue current local memories
+  and relations for first-time migration to a sync-enabled setup.
+
+**Notes**
+- `sync backfill` is a local enqueue step. Run `memrosetta sync now`
+  afterwards to push the queued ops to your server.
+
+---
+
+## v0.4.6 — 2026-04-15
+
+**Highlights**
+- Sync is now genuinely bidirectional. Pulled ops are applied into the local
+  `memories` graph instead of stopping at the inbox.
+
+**Fixed**
+- `pull()` now performs `inbox -> apply -> markApplied`, so memories pulled
+  from another device become searchable locally.
+- Existing unapplied inbox rows are retried on the next pull rather than
+  being stranded permanently.
+
+---
+
+## v0.4.5 — 2026-04-15
+
+**Highlights**
+- MCP-originated writes now enter the sync outbox automatically.
+
+**Added**
+- MCP adapter wires a `SyncRecorder` so `store`, `relate`, `invalidate`,
+  and `feedback` enqueue sync ops when sync is enabled.
+
+**Notes**
+- This closed the MCP write path, but CLI writes still remained local-only
+  until v0.4.7.
+
+---
+
 ## v0.4.4 — 2026-04-15
 
 **Highlights**

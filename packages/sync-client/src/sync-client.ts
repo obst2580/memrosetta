@@ -178,16 +178,33 @@ export class SyncClient {
     //    memories / relations tables. This covers both the batch we just
     //    received and any leftovers from a prior failed pull.
     const pending = this.inbox.getPending();
+    let skippedCount = 0;
     if (pending.length > 0) {
       const result = applyInboxOps(this.db, pending);
       if (result.applied.length > 0) {
         this.inbox.markApplied(result.applied);
       }
+      skippedCount = result.skipped.length;
+      if (skippedCount > 0) {
+        for (const s of result.skipped) {
+          process.stderr.write(
+            `[sync] apply skipped op ${s.opId}: ${s.reason}\n`,
+          );
+        }
+      }
     }
 
-    // 3. Advance cursor + timestamps.
+    // 3. Advance cursor so we don't re-download the same batch. Skipped
+    //    ops stay pending in sync_inbox — a future pull or explicit
+    //    applyPendingInbox() will retry them.
     this.setCursor(nextCursor);
-    this.setState('last_pull_success_at', new Date().toISOString());
+
+    // 4. Only claim a clean success when every applied op landed. If any
+    //    were skipped we leave last_pull_success_at untouched so
+    //    `memrosetta sync status` reflects the partial state.
+    if (skippedCount === 0) {
+      this.setState('last_pull_success_at', new Date().toISOString());
+    }
 
     return ops.length;
   }

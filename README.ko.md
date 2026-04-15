@@ -556,8 +556,16 @@ memrosetta sync status --format text   # 활성화 여부, cursor, pending ops, 
 memrosetta sync now                    # 즉시 push + pull
 memrosetta sync now --push-only        # push만
 memrosetta sync device-id               # 현재 기기 ID 출력
+memrosetta sync backfill --dry-run      # 기존 로컬 히스토리 enqueue 미리보기
+memrosetta sync backfill                # 기존 memories/relations를 outbox에 enqueue
 memrosetta sync disable                 # 동기화 끄기 (설정은 유지)
 ```
+
+`sync backfill`은 sync를 켜기 전에 이미 로컬 메모리가 많이 쌓여 있던
+기기에서 한 번 실행하는 용도입니다. 현재 SQLite 상태를 outbox에
+enqueue만 하고 자동 push는 하지 않으므로, enqueue 후에는
+`memrosetta sync now`를 직접 실행하세요. `--dry-run`으로 메모리와
+관계가 몇 개 들어갈지 먼저 확인할 수 있습니다.
 
 ### Sync 서버 셀프 호스팅
 

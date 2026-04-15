@@ -9,7 +9,9 @@ import {
   openCliSyncContext,
   buildMemoryCreatedOp,
   buildRelationCreatedOp,
+  deterministicOpId,
 } from '../sync/cli-sync.js';
+import type { SyncOp } from '@memrosetta/types';
 
 const ENV_API_KEY = 'MEMROSETTA_SYNC_API_KEY';
 
@@ -538,41 +540,44 @@ async function runBackfill(options: SyncOptions): Promise<void> {
       let relationsQueued = 0;
       const memoryIdSet = new Set<string>();
 
-      if (!dryRun) {
-        for (const row of memRows) {
-          memoryIdSet.add(row.memory_id);
-          sync.enqueue(
-            buildMemoryCreatedOp(sync, {
-              memoryId: row.memory_id,
-              userId: row.user_id,
-              namespace: row.namespace ?? undefined,
-              memoryType: row.memory_type as import('@memrosetta/types').MemoryType,
-              content: row.content,
-              rawText: row.raw_text ?? undefined,
-              documentDate: row.document_date ?? undefined,
-              sourceId: row.source_id ?? undefined,
-              confidence: row.confidence,
-              salience: row.salience,
-              keywords: row.keywords ? (JSON.parse(row.keywords) as readonly string[]) : undefined,
-              eventDateStart: row.event_date_start ?? undefined,
-              eventDateEnd: row.event_date_end ?? undefined,
-              invalidatedAt: row.invalidated_at ?? undefined,
-              learnedAt: row.learned_at,
-              // Fields unused by the payload but present on Memory type:
-              isLatest: true,
-              tier: 'warm',
-              activationScore: 1,
-              accessCount: 0,
-              useCount: 0,
-              successCount: 0,
-            } as import('@memrosetta/types').Memory),
-          );
-          memoriesQueued++;
-        }
-      } else {
-        memoriesQueued = memRows.length;
-        for (const row of memRows) memoryIdSet.add(row.memory_id);
+      for (const row of memRows) {
+        memoryIdSet.add(row.memory_id);
+        if (dryRun) continue;
+
+        // Backfill MUST use a deterministic opId keyed on the memory_id so
+        // re-running backfill is a no-op at the server log level. Using
+        // randomUUID would bloat the outbox and re-publish every memory.
+        const op: SyncOp = {
+          opId: deterministicOpId('memory_created', row.memory_id),
+          opType: 'memory_created',
+          deviceId: sync.deviceId,
+          userId: sync.userId,
+          createdAt: row.learned_at,
+          payload: {
+            memoryId: row.memory_id,
+            userId: row.user_id,
+            namespace: row.namespace ?? undefined,
+            memoryType: row.memory_type,
+            content: row.content,
+            rawText: row.raw_text ?? undefined,
+            documentDate: row.document_date ?? undefined,
+            sourceId: row.source_id ?? undefined,
+            confidence: row.confidence,
+            salience: row.salience,
+            // core stores keywords as a space-joined string, not JSON.
+            keywords: row.keywords
+              ? row.keywords.split(' ').filter((k) => k.length > 0)
+              : undefined,
+            eventDateStart: row.event_date_start ?? undefined,
+            eventDateEnd: row.event_date_end ?? undefined,
+            invalidatedAt: row.invalidated_at ?? undefined,
+            learnedAt: row.learned_at,
+          },
+        };
+        sync.enqueue(op);
+        memoriesQueued++;
       }
+      if (dryRun) memoriesQueued = memRows.length;
 
       if (includeRelations) {
         const relRows = readDb
@@ -595,15 +600,22 @@ async function runBackfill(options: SyncOptions): Promise<void> {
             continue;
           }
           if (!dryRun) {
-            sync.enqueue(
-              buildRelationCreatedOp(sync, {
+            const relKey = `${row.src_memory_id}|${row.dst_memory_id}|${row.relation_type}`;
+            const op: SyncOp = {
+              opId: deterministicOpId('relation_created', relKey),
+              opType: 'relation_created',
+              deviceId: sync.deviceId,
+              userId: sync.userId,
+              createdAt: row.created_at,
+              payload: {
                 srcMemoryId: row.src_memory_id,
                 dstMemoryId: row.dst_memory_id,
-                relationType: row.relation_type as import('@memrosetta/types').RelationType,
+                relationType: row.relation_type,
                 createdAt: row.created_at,
                 reason: row.reason ?? undefined,
-              }),
-            );
+              },
+            };
+            sync.enqueue(op);
           }
           relationsQueued++;
         }

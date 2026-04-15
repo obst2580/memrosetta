@@ -173,7 +173,36 @@ describe('SyncClient', () => {
   });
 
   describe('pull', () => {
-    it('fetches ops from server and stores in inbox', async () => {
+    it('fetches ops from server and applies them to local memories', async () => {
+      // The sync-client test file opens a fresh :memory: SQLite, so we
+      // mirror the minimal memories schema the applier writes into.
+      const db = (client as unknown as { db: Database.Database }).db;
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memories (
+          memory_id       TEXT PRIMARY KEY,
+          user_id         TEXT NOT NULL,
+          namespace       TEXT,
+          memory_type     TEXT NOT NULL,
+          content         TEXT NOT NULL,
+          raw_text        TEXT,
+          document_date   TEXT,
+          learned_at      TEXT NOT NULL,
+          source_id       TEXT,
+          confidence      REAL DEFAULT 1.0,
+          salience        REAL DEFAULT 1.0,
+          is_latest       INTEGER NOT NULL DEFAULT 1,
+          keywords        TEXT,
+          event_date_start TEXT,
+          event_date_end   TEXT,
+          invalidated_at   TEXT,
+          tier             TEXT DEFAULT 'warm',
+          activation_score REAL DEFAULT 1.0,
+          access_count     INTEGER DEFAULT 0,
+          use_count        INTEGER DEFAULT 0,
+          success_count    INTEGER DEFAULT 0
+        );
+      `);
+
       const mockResponse: SyncPullResponse = {
         success: true,
         data: {
@@ -184,7 +213,15 @@ describe('SyncClient', () => {
               opType: 'memory_created',
               deviceId: 'other-device',
               userId: 'user-test',
-              payload: { content: 'from server' },
+              payload: {
+                memoryId: 'mem-remote-1',
+                userId: 'user-test',
+                memoryType: 'fact',
+                content: 'from server',
+                confidence: 1.0,
+                salience: 1.0,
+                learnedAt: '2025-01-01T00:00:00.000Z',
+              },
               createdAt: '2025-01-01T00:00:00Z',
               receivedAt: '2025-01-01T00:00:01Z',
             },
@@ -204,10 +241,16 @@ describe('SyncClient', () => {
       const count = await client.pull();
       expect(count).toBe(1);
 
+      // After pull the op lands in the inbox, is applied to memories,
+      // and is then marked applied — no leftovers.
       const inbox = client.getInbox();
       const pending = inbox.getPending();
-      expect(pending).toHaveLength(1);
-      expect(pending[0].opId).toBe('remote-1');
+      expect(pending).toHaveLength(0);
+
+      const row = db
+        .prepare('SELECT memory_id, content FROM memories WHERE memory_id = ?')
+        .get('mem-remote-1') as { memory_id: string; content: string } | undefined;
+      expect(row?.content).toBe('from server');
 
       expect(client.getState('last_cursor')).toBe('121');
       expect(client.getState('pull_cursor')).toBe('121');
@@ -265,6 +308,124 @@ describe('SyncClient', () => {
       expect(count).toBe(0);
       expect(client.getState('last_pull_attempt_at')).toBeTruthy();
       expect(client.getState('last_pull_success_at')).toBeTruthy();
+    });
+
+    it('recomputes salience when applying feedback_given', async () => {
+      const db = (client as unknown as { db: Database.Database }).db;
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memories (
+          memory_id       TEXT PRIMARY KEY,
+          user_id         TEXT NOT NULL,
+          namespace       TEXT,
+          memory_type     TEXT NOT NULL,
+          content         TEXT NOT NULL,
+          raw_text        TEXT,
+          document_date   TEXT,
+          learned_at      TEXT NOT NULL,
+          source_id       TEXT,
+          confidence      REAL DEFAULT 1.0,
+          salience        REAL DEFAULT 0.2,
+          is_latest       INTEGER NOT NULL DEFAULT 1,
+          keywords        TEXT,
+          event_date_start TEXT,
+          event_date_end   TEXT,
+          invalidated_at   TEXT,
+          tier             TEXT DEFAULT 'warm',
+          activation_score REAL DEFAULT 1.0,
+          access_count     INTEGER DEFAULT 0,
+          use_count        INTEGER DEFAULT 0,
+          success_count    INTEGER DEFAULT 0
+        );
+      `);
+      db.prepare(`
+        INSERT INTO memories (
+          memory_id, user_id, memory_type, content, learned_at, salience, is_latest
+        ) VALUES (?, ?, ?, ?, ?, ?, 1)
+      `).run('mem-1', 'test-user', 'fact', 'hello', '2025-01-01T00:00:00.000Z', 0.2);
+
+      const mockResponse: SyncPullResponse = {
+        success: true,
+        data: {
+          ops: [
+            {
+              cursor: 1,
+              opId: 'remote-feedback-1',
+              opType: 'feedback_given',
+              deviceId: 'other-device',
+              userId: 'test-user',
+              payload: {
+                memoryId: 'mem-1',
+                helpful: true,
+                recordedAt: '2025-01-01T00:00:01.000Z',
+              },
+              createdAt: '2025-01-01T00:00:01.000Z',
+              receivedAt: '2025-01-01T00:00:02.000Z',
+            },
+          ],
+          nextCursor: 1,
+          hasMore: false,
+        },
+      };
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response(JSON.stringify(mockResponse), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+
+      await client.pull();
+
+      const row = db.prepare(
+        'SELECT use_count, success_count, salience FROM memories WHERE memory_id = ?',
+      ).get('mem-1') as { use_count: number; success_count: number; salience: number };
+
+      expect(row).toEqual({
+        use_count: 1,
+        success_count: 1,
+        salience: 1,
+      });
+    });
+
+    it('does not record pull success when some ops were skipped', async () => {
+      const mockResponse: SyncPullResponse = {
+        success: true,
+        data: {
+          ops: [
+            {
+              cursor: 9,
+              opId: 'remote-unknown-1',
+              opType: 'unknown_type' as never,
+              deviceId: 'other-device',
+              userId: 'test-user',
+              payload: {},
+              createdAt: '2025-01-01T00:00:00Z',
+              receivedAt: '2025-01-01T00:00:01Z',
+            },
+          ],
+          nextCursor: 9,
+          hasMore: false,
+        },
+      };
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response(JSON.stringify(mockResponse), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+
+      const count = await client.pull();
+
+      expect(count).toBe(1);
+      expect(client.getState('last_cursor')).toBe('9');
+      expect(client.getState('last_pull_attempt_at')).toBeTruthy();
+      expect(client.getState('last_pull_success_at')).toBeNull();
+      expect(client.getInbox().getPending()).toHaveLength(1);
+      expect(stderrSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[sync] apply skipped op remote-unknown-1'),
+      );
     });
 
     it('throws on non-ok response', async () => {

@@ -32,9 +32,12 @@ export class Outbox {
   addOp(op: SyncOp): void {
     const payloadStr =
       typeof op.payload === 'string' ? op.payload : JSON.stringify(op.payload);
+    // INSERT OR IGNORE so deterministic op ids (used by `sync backfill`)
+    // silently deduplicate on re-run instead of raising UNIQUE constraint
+    // errors.
     this.db
       .prepare(
-        `INSERT INTO sync_outbox (op_id, op_type, device_id, user_id, payload, created_at, pushed_at)
+        `INSERT OR IGNORE INTO sync_outbox (op_id, op_type, device_id, user_id, payload, created_at, pushed_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(op.opId, op.opType, op.deviceId, op.userId, payloadStr, op.createdAt, null);

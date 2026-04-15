@@ -2,6 +2,41 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.4.8] - 2026-04-15
+
+### Fixed
+- **Pulled / backfilled keywords were stored as JSON** while the rest of
+  `@memrosetta/core` stores them as a space-joined string, breaking FTS
+  recall for synced memories. Both the applier and `sync backfill` now
+  use the canonical space-joined format.
+- **`memrosetta sync backfill` blew up on real local DBs** because it
+  did `JSON.parse` on `memories.keywords`. Switched to the same
+  space-split path the engine uses, so backfill actually runs.
+- **Re-running `sync backfill` inflated outbox / server log.** Backfill
+  now generates deterministic op ids
+  (`op-<sha256(memory_id)[:16]>`,
+   `op-<sha256(src|dst|type)[:16]>`) and `Outbox.addOp` switched to
+  `INSERT OR IGNORE`, so re-runs are no-ops.
+- **Pulled `feedback_given` ops did not recompute salience.** The
+  applier now mirrors `engine.feedback()`'s salience formula
+  (`0.5 + 0.5 * success_rate`, clamped to `[0.1, 1.0]`), so
+  cross-device ranking does not drift.
+- **`SyncClient.pull()` overstated success when apply skipped ops.** It
+  still advances the cursor (so we don't redownload), but
+  `last_pull_success_at` is only updated when zero ops were skipped, and
+  every skip is logged to stderr. Skipped ops stay pending in
+  `sync_inbox` for retry.
+- **MCP background sync only pushed.** The 5-minute interval now runs
+  push *and* pull sequentially with separated logging, so MCP-only
+  devices receive remote updates without manual `sync now`.
+- **MCP server reported a stale `0.3.0` version.** Now resolves the
+  version from `@memrosetta/mcp/package.json` via `createRequire`.
+
+### Docs
+- README / README.ko.md: added `sync backfill` to the multi-device sync
+  section.
+- RELEASE_NOTES.md: filled in v0.4.5 / v0.4.6 / v0.4.7 entries.
+
 ## [0.4.7] - 2026-04-15
 
 ### Added

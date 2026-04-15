@@ -12,7 +12,7 @@
  * local-first.
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { userInfo } from 'node:os';
 import type {
   Memory,
@@ -20,6 +20,17 @@ import type {
   SyncOp,
 } from '@memrosetta/types';
 import { getConfig, type MemRosettaConfig } from '../hooks/config.js';
+
+/**
+ * Deterministic opId helper used by backfill: same (kind, key) always
+ * hashes to the same id so re-running backfill does not inflate the
+ * outbox or the server log.
+ */
+export function deterministicOpId(kind: string, key: string): string {
+  const hash = createHash('sha256').update(`${kind}:${key}`).digest('hex');
+  // Format as op-<16-hex> so it is visually distinct from uuid-v4 ops.
+  return `op-${hash.slice(0, 16)}`;
+}
 
 export interface CliSyncContext {
   readonly enabled: boolean;
