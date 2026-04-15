@@ -8,6 +8,7 @@ const TEST_CONFIG: SyncClientConfig = {
   serverUrl: 'https://api.example.com',
   apiKey: 'test-api-key',
   deviceId: 'device-test',
+  userId: 'test-user',
 };
 
 describe('SyncClient', () => {
@@ -59,12 +60,32 @@ describe('SyncClient', () => {
       client.setState('cursor', 'v2');
       expect(client.getState('cursor')).toBe('v2');
     });
+
+    it('getStatus returns config and empty sync state by default', () => {
+      expect(client.getStatus()).toEqual({
+        enabled: true,
+        serverUrl: 'https://api.example.com',
+        deviceId: 'device-test',
+        pendingOps: 0,
+        lastPush: {
+          attemptAt: null,
+          successAt: null,
+        },
+        lastPull: {
+          attemptAt: null,
+          successAt: null,
+        },
+        cursor: 0,
+      });
+    });
   });
 
   describe('push', () => {
     it('returns empty result when no pending ops', async () => {
       const result = await client.push();
       expect(result).toEqual({ pushed: 0, results: [], highWatermark: 0 });
+      expect(client.getState('last_push_attempt_at')).toBeTruthy();
+      expect(client.getState('last_push_success_at')).toBeTruthy();
     });
 
     it('sends pending ops to server and marks them pushed', async () => {
@@ -104,6 +125,10 @@ describe('SyncClient', () => {
 
       const pending = outbox.getPending();
       expect(pending).toHaveLength(0);
+      expect(client.getState('last_cursor')).toBe('121');
+      expect(client.getState('pull_cursor')).toBe('121');
+      expect(client.getState('last_push_attempt_at')).toBeTruthy();
+      expect(client.getState('last_push_success_at')).toBeTruthy();
 
       const fetchCall = vi.mocked(fetch).mock.calls[0];
       expect(fetchCall[0]).toBe('https://api.example.com/sync/push');
@@ -141,6 +166,8 @@ describe('SyncClient', () => {
       );
 
       await expect(client.push()).rejects.toThrow('Push failed: 401 Unauthorized');
+      expect(client.getState('last_push_attempt_at')).toBeTruthy();
+      expect(client.getState('last_push_success_at')).toBeNull();
     });
   });
 
@@ -181,11 +208,14 @@ describe('SyncClient', () => {
       expect(pending).toHaveLength(1);
       expect(pending[0].opId).toBe('remote-1');
 
+      expect(client.getState('last_cursor')).toBe('121');
       expect(client.getState('pull_cursor')).toBe('121');
+      expect(client.getState('last_pull_attempt_at')).toBeTruthy();
+      expect(client.getState('last_pull_success_at')).toBeTruthy();
     });
 
     it('sends since param in pull request', async () => {
-      client.setState('pull_cursor', '100');
+      client.setState('last_cursor', '100');
 
       const mockResponse: SyncPullResponse = {
         success: true,
@@ -208,8 +238,8 @@ describe('SyncClient', () => {
       const fetchCall = vi.mocked(fetch).mock.calls[0];
       const url = fetchCall[0] as string;
       expect(url).toContain('since=100');
-      // No userId or cursor params (old protocol)
-      expect(url).not.toContain('userId=');
+      expect(url).toContain('userId=test-user');
+      // No bare cursor param (old protocol)
       expect(url).not.toContain('cursor=');
     });
 
@@ -232,6 +262,8 @@ describe('SyncClient', () => {
 
       const count = await client.pull();
       expect(count).toBe(0);
+      expect(client.getState('last_pull_attempt_at')).toBeTruthy();
+      expect(client.getState('last_pull_success_at')).toBeTruthy();
     });
 
     it('throws on non-ok response', async () => {
@@ -240,6 +272,70 @@ describe('SyncClient', () => {
       );
 
       await expect(client.pull()).rejects.toThrow('Pull failed: 500 Internal Server Error');
+      expect(client.getState('last_pull_attempt_at')).toBeTruthy();
+      expect(client.getState('last_pull_success_at')).toBeNull();
+    });
+
+    it('getStatus reports pending ops and timestamps after sync activity', async () => {
+      const outbox = client.getOutbox();
+      outbox.addOp({
+        opId: 'op-1',
+        opType: 'memory_created',
+        deviceId: TEST_CONFIG.deviceId,
+        userId: 'user-test',
+        payload: { content: 'hello' },
+        createdAt: '2025-01-01T00:00:00Z',
+      });
+
+      const pushResponse: SyncPushResponse = {
+        success: true,
+        data: {
+          results: [{ opId: 'op-1', status: 'accepted', cursor: 10 }],
+          highWatermark: 10,
+        },
+      };
+
+      const pullResponse: SyncPullResponse = {
+        success: true,
+        data: {
+          ops: [],
+          nextCursor: 10,
+          hasMore: false,
+        },
+      };
+
+      vi.spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(pushResponse), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify(pullResponse), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+
+      await client.push();
+      await client.pull();
+
+      expect(client.getStatus()).toEqual({
+        enabled: true,
+        serverUrl: 'https://api.example.com',
+        deviceId: 'device-test',
+        pendingOps: 0,
+        lastPush: {
+          attemptAt: expect.any(String),
+          successAt: expect.any(String),
+        },
+        lastPull: {
+          attemptAt: expect.any(String),
+          successAt: expect.any(String),
+        },
+        cursor: 10,
+      });
     });
   });
 });

@@ -17,12 +17,28 @@ export interface SyncClientConfig {
   readonly serverUrl: string;
   readonly apiKey: string;
   readonly deviceId: string;
+  readonly userId: string;
 }
 
 export interface SyncClientPushResponse {
   readonly pushed: number;
   readonly results: readonly SyncPushResult[];
   readonly highWatermark: number;
+}
+
+export interface SyncStatusTimestamps {
+  readonly attemptAt: string | null;
+  readonly successAt: string | null;
+}
+
+export interface SyncClientStatus {
+  readonly enabled: true;
+  readonly serverUrl: string;
+  readonly deviceId: string;
+  readonly pendingOps: number;
+  readonly lastPush: SyncStatusTimestamps;
+  readonly lastPull: SyncStatusTimestamps;
+  readonly cursor: number;
 }
 
 export class SyncClient {
@@ -50,14 +66,35 @@ export class SyncClient {
     return this.inbox;
   }
 
+  getStatus(): SyncClientStatus {
+    return {
+      enabled: true,
+      serverUrl: this.config.serverUrl,
+      deviceId: this.config.deviceId,
+      pendingOps: this.outbox.countPending(),
+      lastPush: {
+        attemptAt: this.getState('last_push_attempt_at'),
+        successAt: this.getState('last_push_success_at'),
+      },
+      lastPull: {
+        attemptAt: this.getState('last_pull_attempt_at'),
+        successAt: this.getState('last_pull_success_at'),
+      },
+      cursor: this.getCursor(),
+    };
+  }
+
   async push(): Promise<SyncClientPushResponse> {
+    const now = new Date().toISOString();
+    this.setState('last_push_attempt_at', now);
+
     const pending = this.outbox.getPending();
     if (pending.length === 0) {
+      this.setState('last_push_success_at', now);
       return { pushed: 0, results: [], highWatermark: 0 };
     }
 
-    const baseCursorStr = this.getState('pull_cursor');
-    const baseCursor = baseCursorStr ? parseInt(baseCursorStr, 10) : 0;
+    const baseCursor = this.getCursor();
 
     // Build wire ops: payload stored as JSON string in SQLite needs to be
     // sent as a parsed object over HTTP.
@@ -94,8 +131,9 @@ export class SyncClient {
 
     this.outbox.markPushed(pushedIds);
 
-    // Advance pull_cursor to server's highWatermark
-    this.setState('pull_cursor', String(highWatermark));
+    // Advance cursor to server's highWatermark
+    this.setCursor(highWatermark);
+    this.setState('last_push_success_at', new Date().toISOString());
 
     return {
       pushed: pushedIds.length,
@@ -105,11 +143,12 @@ export class SyncClient {
   }
 
   async pull(): Promise<number> {
-    const cursorStr = this.getState('pull_cursor');
-    const since = cursorStr ? parseInt(cursorStr, 10) : 0;
+    this.setState('last_pull_attempt_at', new Date().toISOString());
+    const since = this.getCursor();
 
     const params = new URLSearchParams({
       since: String(since),
+      userId: this.config.userId,
     });
 
     const url = `${this.config.serverUrl}/sync/pull?${params.toString()}`;
@@ -132,7 +171,8 @@ export class SyncClient {
     }
 
     // Advance cursor
-    this.setState('pull_cursor', String(nextCursor));
+    this.setCursor(nextCursor);
+    this.setState('last_pull_success_at', new Date().toISOString());
 
     return ops.length;
   }
@@ -149,5 +189,19 @@ export class SyncClient {
     this.db
       .prepare('INSERT OR REPLACE INTO sync_state (key, value) VALUES (?, ?)')
       .run(key, value);
+  }
+
+  private getCursor(): number {
+    const cursorStr =
+      this.getState('last_cursor') ??
+      this.getState('pull_cursor');
+
+    return cursorStr ? parseInt(cursorStr, 10) : 0;
+  }
+
+  private setCursor(cursor: number): void {
+    const value = String(cursor);
+    this.setState('last_cursor', value);
+    this.setState('pull_cursor', value);
   }
 }

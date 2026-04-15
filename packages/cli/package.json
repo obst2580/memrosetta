@@ -1,6 +1,6 @@
 {
   "name": "@memrosetta/cli",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -14,7 +14,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/hooks/on-stop.ts src/hooks/on-prompt.ts --format esm --external better-sqlite3 --external @memrosetta/core --external @memrosetta/embeddings --external @memrosetta/types --external @memrosetta/llm --external @huggingface/transformers --external sqlite-vec --external onnxruntime-node",
+    "build": "tsup src/index.ts src/hooks/on-stop.ts src/hooks/on-prompt.ts --format esm --external better-sqlite3 --external @memrosetta/core --external @memrosetta/embeddings --external @memrosetta/sync-client --external @memrosetta/types --external @memrosetta/llm --external @huggingface/transformers --external sqlite-vec --external onnxruntime-node",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -23,6 +23,7 @@
   "dependencies": {
     "@memrosetta/core": "workspace:*",
     "@memrosetta/embeddings": "workspace:*",
+    "@memrosetta/sync-client": "workspace:*",
     "@memrosetta/types": "workspace:*",
     "better-sqlite3": "^11.0.0"
   },

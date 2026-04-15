@@ -162,6 +162,9 @@ importers:
       '@memrosetta/embeddings':
         specifier: workspace:*
         version: link:../embeddings
+      '@memrosetta/sync-client':
+        specifier: workspace:*
+        version: link:../sync-client
       '@memrosetta/types':
         specifier: workspace:*
         version: link:../types

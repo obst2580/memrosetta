@@ -25,6 +25,7 @@ Commands:
   maintain         Run maintenance (recompute scores, update tiers, compress)
   compress         Run compression only
   update           Update to latest version
+  sync             Manage multi-device sync (enable/disable/status/now/device-id)
 
 Init Options:
   (no flag)           Initialize DB + MCP server (base setup)
@@ -47,6 +48,15 @@ Global Options:
   --help, -h          Show help
   --version, -v       Show version
 
+Sync Subcommands:
+  memrosetta sync enable --server <url>    # Enable sync, hidden API key prompt
+  memrosetta sync enable --server <url> --key-stdin   # Read API key from stdin
+  memrosetta sync disable                  # Disable sync (keeps server/key)
+  memrosetta sync status                   # Show sync state + pending ops
+  memrosetta sync now                      # Push + pull now
+  memrosetta sync now --push-only          # Push only
+  memrosetta sync device-id                # Print current device id
+
 Examples:
   memrosetta init                          # DB + MCP server
   memrosetta init --claude-code            # DB + MCP + Claude Code hooks
@@ -58,6 +68,8 @@ Examples:
   memrosetta reset --all                   # Remove all integrations
   memrosetta store --user obst --content "Prefers TypeScript" --type preference
   memrosetta search --user obst --query "language preference" --format text
+  memrosetta sync enable --server https://your-sync.example.com
+  memrosetta sync status --format text
 `;
 
 async function main(): Promise<void> {
@@ -167,6 +179,11 @@ async function main(): Promise<void> {
       case 'update': {
         const mod = await import('./commands/update.js');
         await mod.run();
+        break;
+      }
+      case 'sync': {
+        const mod = await import('./commands/sync.js');
+        await mod.run(commandOptions);
         break;
       }
       default:

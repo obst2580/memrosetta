@@ -1,6 +1,6 @@
 {
   "name": "@memrosetta/mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -13,7 +13,11 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --external better-sqlite3",
     "start": "tsx src/index.ts",

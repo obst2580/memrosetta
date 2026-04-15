@@ -48,6 +48,14 @@ export class Outbox {
     return rows.map(rowToSyncOp);
   }
 
+  countPending(): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) as count FROM sync_outbox WHERE pushed_at IS NULL')
+      .get() as { count: number };
+
+    return row.count;
+  }
+
   markPushed(opIds: readonly string[]): void {
     if (opIds.length === 0) return;
 

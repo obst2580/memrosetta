@@ -181,6 +181,7 @@ async function main(): Promise<void> {
       serverUrl: config.syncServerUrl!,
       apiKey: config.syncApiKey!,
       deviceId,
+      userId: process.env.USER ?? process.env.USERNAME ?? 'unknown',
     });
 
     syncRecorder = createSyncRecorder(syncClient, deviceId);

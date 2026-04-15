@@ -2,6 +2,27 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.4.1] - 2026-04-15
+
+### Added
+- **`memrosetta sync` CLI**: `enable`, `disable`, `status`, `now`, `device-id`
+  subcommands. Hidden API key prompt (TTY raw mode), `--key-stdin` for
+  automation, `--no-test` to skip the health check, `--push-only`/`--pull-only`
+  for `sync now`.
+- **`SyncClient.getStatus()`** and sync timestamp tracking
+  (`last_push_attempt_at`, `last_push_success_at`, `last_pull_attempt_at`,
+  `last_pull_success_at`, `last_cursor`).
+
+### Fixed
+- **`SyncClientConfig.userId` required**: pull was failing with HTTP 400
+  because the server query schema requires `userId`. The client now sends it
+  and the CLI/MCP adapter both supply the current OS user.
+
+### Security
+- CLI `writeConfig` now also applies `0600` permissions on
+  `~/.memrosetta/config.json` and `0700` on the parent directory (MCP adapter
+  already did this in 0.4.0; now they are consistent).
+
 ## [0.4.0] - 2026-04-15
 
 ### Added
