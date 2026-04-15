@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { IMemoryEngine, RelationType } from '@memrosetta/types';
+import type { SyncRecorder } from './sync-recorder.js';
 import { z } from 'zod';
 
 function getDefaultUserId(): string {
@@ -210,7 +211,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
 export const TOOL_NAMES: readonly string[] = TOOL_DEFINITIONS.map((t) => t.name);
 
 /** Register all MemRosetta tools on the given MCP server. */
-export function registerTools(server: Server, engine: IMemoryEngine): void {
+export function registerTools(server: Server, engine: IMemoryEngine, syncRecorder?: SyncRecorder): void {
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [...TOOL_DEFINITIONS],
   }));
@@ -226,7 +227,7 @@ export function registerTools(server: Server, engine: IMemoryEngine): void {
     }
 
     try {
-      const result = await handleToolCall(engine, name, args);
+      const result = await handleToolCall(engine, name, args, syncRecorder);
       return result as typeof result & { [key: string]: unknown };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -246,6 +247,7 @@ export async function handleToolCall(
   engine: IMemoryEngine,
   name: string,
   args: Record<string, unknown>,
+  syncRecorder?: SyncRecorder,
 ): Promise<ToolResponse> {
   switch (name) {
     case 'memrosetta_store': {
@@ -258,6 +260,7 @@ export async function handleToolCall(
         namespace: validated.namespace,
         confidence: validated.confidence,
       });
+      syncRecorder?.recordMemoryCreated(memory);
       return {
         content: [{ type: 'text', text: JSON.stringify(memory) }],
       };
@@ -290,6 +293,7 @@ export async function handleToolCall(
         validated.relationType as RelationType,
         validated.reason,
       );
+      syncRecorder?.recordRelationCreated(relation);
       return {
         content: [{ type: 'text', text: JSON.stringify(relation) }],
       };
@@ -328,10 +332,12 @@ export async function handleToolCall(
 
     case 'memrosetta_invalidate': {
       const validated = invalidateSchema.parse(args);
+      const now = new Date().toISOString();
       await engine.invalidate(
         validated.memoryId,
         validated.reason,
       );
+      syncRecorder?.recordMemoryInvalidated(validated.memoryId, now, validated.reason);
       return {
         content: [
           {
@@ -344,7 +350,9 @@ export async function handleToolCall(
 
     case 'memrosetta_feedback': {
       const validated = feedbackSchema.parse(args);
+      const now = new Date().toISOString();
       await engine.feedback(validated.memoryId, validated.helpful);
+      syncRecorder?.recordFeedbackGiven(validated.memoryId, validated.helpful, now);
       return {
         content: [
           {

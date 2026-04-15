@@ -29,6 +29,9 @@ importers:
       '@memrosetta/embeddings':
         specifier: workspace:*
         version: link:../../packages/embeddings
+      '@memrosetta/sync-client':
+        specifier: workspace:*
+        version: link:../../packages/sync-client
       '@memrosetta/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -39,6 +42,9 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
     devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.0
+        version: 7.6.13
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)
