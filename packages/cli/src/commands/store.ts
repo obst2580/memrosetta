@@ -1,8 +1,9 @@
 import type { MemoryInput, MemoryType } from '@memrosetta/types';
-import { getEngine } from '../engine.js';
+import { getEngine, resolveDbPath } from '../engine.js';
 import { output, outputError, type OutputFormat } from '../output.js';
 import { requireOption, optionalOption, hasFlag } from '../parser.js';
 import { getDefaultUserId } from '../hooks/config.js';
+import { openCliSyncContext, buildMemoryCreatedOp } from '../sync/cli-sync.js';
 
 const VALID_TYPES = new Set(['fact', 'preference', 'decision', 'event']);
 
@@ -93,5 +94,13 @@ export async function run(options: StoreOptions): Promise<void> {
 
   const engine = await getEngine({ db, noEmbeddings });
   const memory = await engine.store(input);
+
+  // Optional sync outbox enqueue. No-op unless sync is configured.
+  const sync = await openCliSyncContext(resolveDbPath(db));
+  if (sync.enabled) {
+    sync.enqueue(buildMemoryCreatedOp(sync, memory));
+    sync.close();
+  }
+
   output(memory, format);
 }

@@ -60,6 +60,11 @@ export function getDefaultDbPath(): string {
   return DEFAULT_DB;
 }
 
+export function resolveDbPath(dbOverride?: string): string {
+  const config = getConfig();
+  return dbOverride ?? config.dbPath ?? DEFAULT_DB;
+}
+
 export async function closeEngine(): Promise<void> {
   if (cachedEngine) {
     await cachedEngine.close();

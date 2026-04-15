@@ -64,6 +64,9 @@ Sync Subcommands:
   memrosetta sync status                   # Show sync state + pending ops
   memrosetta sync now [--push-only | --pull-only]
   memrosetta sync device-id                # Print current device id
+  memrosetta sync backfill [--user <id>] [--namespace <ns>] [--memories-only] [--dry-run]
+                                           # Enqueue existing local memories
+                                           # + relations into the outbox.
 
 Examples:
   memrosetta init                          # DB + MCP server

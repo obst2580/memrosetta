@@ -1,7 +1,8 @@
 import type { RelationType } from '@memrosetta/types';
-import { getEngine } from '../engine.js';
+import { getEngine, resolveDbPath } from '../engine.js';
 import { output, outputError, type OutputFormat } from '../output.js';
 import { requireOption, optionalOption } from '../parser.js';
+import { openCliSyncContext, buildRelationCreatedOp } from '../sync/cli-sync.js';
 
 const VALID_RELATION_TYPES = new Set([
   'updates',
@@ -42,6 +43,12 @@ export async function run(options: RelateOptions): Promise<void> {
     relationType as RelationType,
     reason,
   );
+
+  const sync = await openCliSyncContext(resolveDbPath(db));
+  if (sync.enabled) {
+    sync.enqueue(buildRelationCreatedOp(sync, relation));
+    sync.close();
+  }
 
   output(relation, format);
 }

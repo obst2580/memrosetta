@@ -2,6 +2,25 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.4.7] - 2026-04-15
+
+### Added
+- **CLI write commands now feed the sync outbox.** `memrosetta store`,
+  `relate`, `invalidate`, and `feedback` enqueue the appropriate op into
+  `sync_outbox` when sync is enabled, matching the existing MCP path.
+  Previously anything stored via the CLI was silently excluded from sync.
+- **`memrosetta sync backfill`**: one-shot ingestion of the existing local
+  history into the outbox. Supports `--user`, `--namespace`,
+  `--memories-only`, and `--dry-run`. Only emits `relation_created` ops
+  whose endpoints are both in the filtered backfill set so remote apply
+  does not break on missing foreign keys.
+- Shared `packages/cli/src/sync/cli-sync.ts` module with `openCliSyncContext`
+  and op builder helpers used by every write command.
+
+### Changed
+- `SqliteMemoryEngine.invalidate(memoryId, reason?)`: CLI `invalidate`
+  command now passes an optional `--reason`, symmetric with the MCP tool.
+
 ## [0.4.6] - 2026-04-15
 
 ### Fixed

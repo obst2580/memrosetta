@@ -12,6 +12,7 @@ vi.mock('../../src/engine.js', () => ({
   })),
   closeEngine: vi.fn(),
   getDefaultDbPath: vi.fn().mockReturnValue('/tmp/test.db'),
+  resolveDbPath: vi.fn().mockReturnValue('/tmp/test.db'),
 }));
 
 import { run } from '../../src/commands/invalidate.js';
@@ -46,7 +47,7 @@ describe('invalidate command', () => {
     });
 
     expect(process.exitCode).toBeUndefined();
-    expect(mockInvalidate).toHaveBeenCalledWith('mem-abc-123');
+    expect(mockInvalidate).toHaveBeenCalledWith('mem-abc-123', undefined);
     const written = stdoutSpy.mock.calls[0]?.[0] as string;
     const parsed = JSON.parse(written);
     expect(parsed.memoryId).toBe('mem-abc-123');
@@ -76,7 +77,7 @@ describe('invalidate command', () => {
       noEmbeddings: true,
     });
 
-    expect(mockInvalidate).toHaveBeenCalledWith('mem-target-456');
+    expect(mockInvalidate).toHaveBeenCalledWith('mem-target-456', undefined);
   });
 
   it('should fail when only flags are provided (no positional arg)', async () => {

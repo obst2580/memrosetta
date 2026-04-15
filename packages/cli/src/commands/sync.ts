@@ -5,6 +5,11 @@ import { createInterface, type Interface as ReadlineInterface } from 'node:readl
 import { output, outputError, type OutputFormat } from '../output.js';
 import { requireOption, optionalOption, hasFlag } from '../parser.js';
 import { getConfig, writeConfig, getDefaultDbPath, type MemRosettaConfig } from '../hooks/config.js';
+import {
+  openCliSyncContext,
+  buildMemoryCreatedOp,
+  buildRelationCreatedOp,
+} from '../sync/cli-sync.js';
 
 const ENV_API_KEY = 'MEMROSETTA_SYNC_API_KEY';
 
@@ -26,7 +31,7 @@ interface SyncOptions {
   readonly noEmbeddings: boolean;
 }
 
-type Subcommand = 'enable' | 'disable' | 'status' | 'now' | 'device-id';
+type Subcommand = 'enable' | 'disable' | 'status' | 'now' | 'device-id' | 'backfill';
 
 function parseSubcommand(args: readonly string[]): Subcommand | null {
   const first = args[0];
@@ -36,7 +41,8 @@ function parseSubcommand(args: readonly string[]): Subcommand | null {
     first === 'disable' ||
     first === 'status' ||
     first === 'now' ||
-    first === 'device-id'
+    first === 'device-id' ||
+    first === 'backfill'
   ) {
     return first;
   }
@@ -454,18 +460,202 @@ function runDeviceId(options: SyncOptions): void {
   output({ deviceId: config.syncDeviceId }, format);
 }
 
+/**
+ * Enqueue every existing memory and relation into the sync outbox as
+ * memory_created / relation_created ops. Used once, after sync is enabled
+ * on a device that already has local history, to push legacy memories up
+ * to the sync hub.
+ *
+ * Idempotent at the server via (user_id, op_id); the client still generates
+ * fresh op_ids each call, so re-running backfill inflates the outbox. Use
+ * with care, and prefer --dry-run first.
+ */
+async function runBackfill(options: SyncOptions): Promise<void> {
+  const { args, format, db } = options;
+  const config = getConfig();
+  const dbPath = db ?? config.dbPath ?? getDefaultDbPath();
+
+  if (!config.syncEnabled) {
+    outputError('Sync is disabled. Run: memrosetta sync enable --server <url>', format);
+    process.exitCode = 1;
+    return;
+  }
+
+  const dryRun = hasFlag(args, '--dry-run');
+  const userFilter = optionalOption(args, '--user');
+  const namespaceFilter = optionalOption(args, '--namespace');
+  const includeRelations = !hasFlag(args, '--memories-only');
+
+  const sync = await openCliSyncContext(dbPath);
+  if (!sync.enabled) {
+    outputError('Sync is not fully configured. Run: memrosetta sync enable', format);
+    process.exitCode = 1;
+    return;
+  }
+
+  try {
+    const { default: Database } = await import('better-sqlite3');
+    const readDb = new Database(dbPath, { readonly: true });
+    try {
+      const params: string[] = [];
+      let where = '1=1';
+      if (userFilter) {
+        where += ' AND user_id = ?';
+        params.push(userFilter);
+      }
+      if (namespaceFilter) {
+        where += ' AND namespace = ?';
+        params.push(namespaceFilter);
+      }
+
+      const memRows = readDb
+        .prepare(
+          `SELECT memory_id, user_id, namespace, memory_type, content, raw_text,
+                  document_date, source_id, confidence, salience, keywords,
+                  event_date_start, event_date_end, invalidated_at, learned_at
+           FROM memories
+           WHERE ${where}`,
+        )
+        .all(...params) as readonly {
+          readonly memory_id: string;
+          readonly user_id: string;
+          readonly namespace: string | null;
+          readonly memory_type: string;
+          readonly content: string;
+          readonly raw_text: string | null;
+          readonly document_date: string | null;
+          readonly source_id: string | null;
+          readonly confidence: number;
+          readonly salience: number;
+          readonly keywords: string | null;
+          readonly event_date_start: string | null;
+          readonly event_date_end: string | null;
+          readonly invalidated_at: string | null;
+          readonly learned_at: string;
+        }[];
+
+      let memoriesQueued = 0;
+      let relationsQueued = 0;
+      const memoryIdSet = new Set<string>();
+
+      if (!dryRun) {
+        for (const row of memRows) {
+          memoryIdSet.add(row.memory_id);
+          sync.enqueue(
+            buildMemoryCreatedOp(sync, {
+              memoryId: row.memory_id,
+              userId: row.user_id,
+              namespace: row.namespace ?? undefined,
+              memoryType: row.memory_type as import('@memrosetta/types').MemoryType,
+              content: row.content,
+              rawText: row.raw_text ?? undefined,
+              documentDate: row.document_date ?? undefined,
+              sourceId: row.source_id ?? undefined,
+              confidence: row.confidence,
+              salience: row.salience,
+              keywords: row.keywords ? (JSON.parse(row.keywords) as readonly string[]) : undefined,
+              eventDateStart: row.event_date_start ?? undefined,
+              eventDateEnd: row.event_date_end ?? undefined,
+              invalidatedAt: row.invalidated_at ?? undefined,
+              learnedAt: row.learned_at,
+              // Fields unused by the payload but present on Memory type:
+              isLatest: true,
+              tier: 'warm',
+              activationScore: 1,
+              accessCount: 0,
+              useCount: 0,
+              successCount: 0,
+            } as import('@memrosetta/types').Memory),
+          );
+          memoriesQueued++;
+        }
+      } else {
+        memoriesQueued = memRows.length;
+        for (const row of memRows) memoryIdSet.add(row.memory_id);
+      }
+
+      if (includeRelations) {
+        const relRows = readDb
+          .prepare(
+            'SELECT src_memory_id, dst_memory_id, relation_type, created_at, reason FROM memory_relations',
+          )
+          .all() as readonly {
+            readonly src_memory_id: string;
+            readonly dst_memory_id: string;
+            readonly relation_type: string;
+            readonly created_at: string;
+            readonly reason: string | null;
+          }[];
+
+        for (const row of relRows) {
+          // Only emit relations whose both endpoints are in the backfill set.
+          // Otherwise the remote apply will silently drop them when the
+          // memory_id foreign key is missing on the other device.
+          if (!memoryIdSet.has(row.src_memory_id) || !memoryIdSet.has(row.dst_memory_id)) {
+            continue;
+          }
+          if (!dryRun) {
+            sync.enqueue(
+              buildRelationCreatedOp(sync, {
+                srcMemoryId: row.src_memory_id,
+                dstMemoryId: row.dst_memory_id,
+                relationType: row.relation_type as import('@memrosetta/types').RelationType,
+                createdAt: row.created_at,
+                reason: row.reason ?? undefined,
+              }),
+            );
+          }
+          relationsQueued++;
+        }
+      }
+
+      const result = {
+        memoriesQueued,
+        relationsQueued,
+        dryRun,
+        userFilter: userFilter ?? null,
+        namespaceFilter: namespaceFilter ?? null,
+      };
+
+      if (format === 'text') {
+        process.stdout.write(
+          `${dryRun ? 'Dry run: would enqueue' : 'Enqueued'} ${memoriesQueued} memories` +
+            (includeRelations ? ` and ${relationsQueued} relations` : '') +
+            '.\n',
+        );
+        if (userFilter || namespaceFilter) {
+          process.stdout.write(
+            `  Filters: user=${userFilter ?? '*'} namespace=${namespaceFilter ?? '*'}\n`,
+          );
+        }
+        if (!dryRun) {
+          process.stdout.write('Run `memrosetta sync now` to push to the server.\n');
+        }
+        return;
+      }
+
+      output(result, format);
+    } finally {
+      readDb.close();
+    }
+  } finally {
+    sync.close();
+  }
+}
+
 export async function run(options: SyncOptions): Promise<void> {
   const sub = parseSubcommand(options.args);
 
   if (!sub) {
     outputError(
-      'Usage: memrosetta sync <enable|disable|status|now|device-id>\n' +
+      'Usage: memrosetta sync <enable|disable|status|now|device-id|backfill>\n' +
         '\n' +
-        '  enable    --server <url> [--key <key> | --key-stdin] [--no-test]\n' +
+        '  enable    --server <url> [--key <key> | --key-stdin | --key-file <p>]\n' +
         '  disable\n' +
         '  status\n' +
         '  now       [--push-only | --pull-only]\n' +
-        '  device-id\n',
+        '  device-id\n' +
+        '  backfill  [--user <id>] [--namespace <ns>] [--memories-only] [--dry-run]\n',
       options.format,
     );
     process.exitCode = 1;
@@ -490,6 +680,9 @@ export async function run(options: SyncOptions): Promise<void> {
       return;
     case 'device-id':
       runDeviceId(rest);
+      return;
+    case 'backfill':
+      await runBackfill(rest);
       return;
   }
 }

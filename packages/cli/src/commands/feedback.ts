@@ -1,6 +1,7 @@
-import { getEngine } from '../engine.js';
+import { getEngine, resolveDbPath } from '../engine.js';
 import { output, outputError, type OutputFormat } from '../output.js';
 import { hasFlag } from '../parser.js';
+import { openCliSyncContext, buildFeedbackGivenOp } from '../sync/cli-sync.js';
 
 interface FeedbackOptions {
   readonly args: readonly string[];
@@ -37,6 +38,14 @@ export async function run(options: FeedbackOptions): Promise<void> {
   }
 
   const engine = await getEngine({ db, noEmbeddings });
+  const now = new Date().toISOString();
   await engine.feedback(memoryId, helpful);
+
+  const sync = await openCliSyncContext(resolveDbPath(db));
+  if (sync.enabled) {
+    sync.enqueue(buildFeedbackGivenOp(sync, memoryId, helpful, now));
+    sync.close();
+  }
+
   output({ memoryId, helpful }, format);
 }

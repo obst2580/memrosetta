@@ -12,6 +12,7 @@ vi.mock('../../src/engine.js', () => ({
   })),
   closeEngine: vi.fn(),
   getDefaultDbPath: vi.fn().mockReturnValue('/tmp/test.db'),
+  resolveDbPath: vi.fn().mockReturnValue('/tmp/test.db'),
 }));
 
 import { run } from '../../src/commands/relate.js';
