@@ -56,13 +56,15 @@ export function Hero({ lang }: HeroProps) {
                 <GitHubIcon />
                 <span>GitHub</span>
               </a>
-              <a
-                href="https://login.liliplanet.net?redirect=https://memrosetta.liliplanet.net/auth/callback"
-                className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90"
-                style={{ backgroundColor: 'oklch(0.52 0.14 65)' }}
-              >
-                Login / Sign Up
-              </a>
+              {!localStorage.getItem('memrosetta_token') && (
+                <a
+                  href="https://login.liliplanet.net?redirect=https://memrosetta.liliplanet.net/auth/callback"
+                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90"
+                  style={{ backgroundColor: 'oklch(0.52 0.14 65)' }}
+                >
+                  Login / Sign Up
+                </a>
+              )}
             </div>
           </div>
 
