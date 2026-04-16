@@ -551,14 +551,44 @@ Global flags: `--db <path>` `--format json|text` `--no-embeddings`
 ## Multi-Device Sync (Optional)
 
 MemRosetta is local-first. The CLI, MCP server, and SQLite engine all run
-without any server. If you want to use the same memory graph from multiple
-machines, you can run your own sync hub.
+without any server. If you want the same memory graph across multiple
+machines, there are **two paths**:
 
-**Key points:**
+### Path A: Liliplanet Cloud (managed)
+
+Zero-setup hosted sync. Log in with your existing Google, Kakao, Naver, or
+email account. Memories sync automatically across all your devices.
+
+```bash
+memrosetta sync login                     # opens browser, log in once
+memrosetta sync now                       # push + pull in one command
+```
+
+This is the recommended path for most users. The sync hub, database, and
+backups are managed for you. A free tier is available; paid plans remove
+usage limits.
+
+> Liliplanet Cloud is a hosted convenience service. It is not required to
+> use MemRosetta. Your local SQLite file works fully offline without it.
+
+### Path B: Self-Hosted (full control)
+
+Run your own sync hub on your own PostgreSQL. You control the
+infrastructure; no external account needed.
+
+```bash
+memrosetta sync enable \
+  --server https://your-sync-server.example.com \
+  --key your-api-key \
+  --user alice         # same logical user id on every device
+```
+
+See [Self-hosting the sync server](#self-hosting-the-sync-server) below
+for setup instructions.
+
+### Shared features (both paths)
 
 - Disabled by default. Existing installs behave exactly as before.
-- No public sync service. You self-host `@memrosetta/sync-server` and point
-  each device at your own URL.
 - Every device keeps a full local SQLite copy. Sync is an append-only
   operation log — works offline, pushes when connected.
 - **Genuinely bidirectional since v0.4.6.** `pull()` writes remote ops
@@ -567,11 +597,11 @@ machines, you can run your own sync hub.
 - **All write paths participate since v0.4.7.** CLI `store / relate /
   invalidate / feedback` and the MCP adapter all enqueue ops to the
   sync outbox after the local SQLite write succeeds.
-- **Same person, different OS usernames.** Set `--user <id>` explicitly
-  (see below) so a Mac account `alice` and a Windows account `alice-w`
-  end up on the same server-side op stream.
+- **Same person, different OS usernames.** Use the same `--user <id>`
+  (self-host) or log in with the same account (cloud) so all devices
+  end up on the same sync partition.
 
-### Enable sync on a device
+### Enable sync (self-host, API key)
 
 ```bash
 # 1. Set the key (pick the one that fits your environment)

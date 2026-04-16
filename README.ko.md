@@ -543,24 +543,43 @@ POST /api/memories/mem-abc123/invalidate
 
 ## 멀티 디바이스 동기화 (옵션)
 
-MemRosetta는 local-first입니다. CLI, MCP, SQLite 엔진 모두 서버 없이 동작합니다. 여러 기기에서 같은 기억 그래프를 쓰고 싶을 때는, 본인이 직접 sync 서버를 띄우면 됩니다.
+MemRosetta 는 local-first 입니다. CLI, MCP, SQLite 엔진 모두 서버 없이 동작합니다. 여러 기기에서 같은 기억 그래프를 쓰고 싶을 때 **두 가지 경로**가 있습니다.
 
-**핵심 원칙:**
+### 경로 A: Liliplanet Cloud (관리형)
 
-- 기본 비활성화. 켜지 않으면 기존 버전과 완전히 동일.
-- 공용 sync 서버 없음. `@memrosetta/sync-server`를 직접 호스팅하고, 각 기기가 자기 서버 URL을 바라봄.
-- 모든 기기가 로컬 SQLite 전체를 가짐. sync는 append-only 연산 로그 기반 — 오프라인에서 작동하고, 연결되면 push.
-- **v0.4.6부터 진짜 양방향.** `pull()`이 원격 ops를 inbox에 멈추지 않고
-  로컬 `memories` 그래프까지 INSERT합니다. 다른 기기에서 저장한 기억이
-  pull 직후 바로 검색됩니다.
-- **v0.4.7부터 모든 write 경로가 sync 참여.** CLI `store / relate /
-  invalidate / feedback`과 MCP 어댑터 전부 로컬 SQLite 쓰기 성공 후
-  sync outbox에 ops를 enqueue합니다.
-- **같은 사람, 다른 OS 계정.** `--user <id>`를 명시적으로 지정해
-  (아래 예시 참고) Mac의 `obst`와 Windows의 `jhlee13`이 서버에서 같은
-  op 스트림으로 모이도록 하세요.
+설정 없는 호스팅 sync. Google, 카카오, 네이버, 이메일 계정으로 로그인하면 모든 기기에서 기억이 자동 동기화됩니다.
 
-### 기기에서 sync 활성화
+```bash
+memrosetta sync login                     # 브라우저 열림, 한 번 로그인
+memrosetta sync now                       # push + pull 한 번에
+```
+
+대부분의 사용자에게 권장하는 경로입니다. sync 허브, 데이터베이스, 백업이 관리됩니다. 무료 티어 제공, 유료 플랜은 사용량 제한 해제.
+
+> Liliplanet Cloud 는 호스팅 편의 서비스입니다. MemRosetta 사용에 필수가 아닙니다. 로컬 SQLite 파일은 클라우드 없이 완전히 오프라인으로 동작합니다.
+
+### 경로 B: 직접 호스팅 (완전한 통제)
+
+본인의 PostgreSQL 에 sync 허브를 직접 운영합니다. 인프라를 직접 통제하며, 외부 계정 불필요.
+
+```bash
+memrosetta sync enable \
+  --server https://your-sync-server.example.com \
+  --key your-api-key \
+  --user obst          # 모든 기기에서 같은 논리적 사용자 id
+```
+
+설정 방법은 아래 [직접 호스팅](#sync-서버-직접-호스팅) 섹션 참고.
+
+### 공통 특성 (양쪽 경로 모두)
+
+- 기본 비활성화. 켜지 않으면 기존 버전과 동일.
+- 모든 기기가 로컬 SQLite 전체를 가짐. sync 는 append-only 연산 로그 기반 — 오프라인에서 작동하고, 연결되면 push.
+- **v0.4.6 부터 진짜 양방향.** `pull()` 이 원격 ops 를 로컬 `memories` 그래프까지 INSERT. 다른 기기에서 저장한 기억이 pull 직후 바로 검색됩니다.
+- **v0.4.7 부터 모든 write 경로가 sync 참여.** CLI `store / relate / invalidate / feedback` 과 MCP 어댑터 전부 로컬 SQLite 쓰기 성공 후 sync outbox 에 enqueue.
+- **같은 사람, 다른 OS 계정.** 같은 `--user <id>` (self-host) 또는 같은 계정으로 로그인 (cloud) 하면 모든 기기가 같은 sync 파티션에 모입니다.
+
+### 기기에서 sync 활성화 (self-host, API key)
 
 ```bash
 # 1. 키 지정 (환경에 맞는 방식 하나 선택)
