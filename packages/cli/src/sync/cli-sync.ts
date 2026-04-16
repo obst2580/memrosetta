@@ -54,8 +54,11 @@ const DISABLED: CliSyncContext = {
  */
 export async function openCliSyncContext(dbPath: string): Promise<CliSyncContext> {
   const config = getConfig() as MemRosettaConfig;
+  const bearer = config.syncAuthMode === 'oauth'
+    ? config.syncAccessToken
+    : config.syncApiKey;
 
-  if (!config.syncEnabled || !config.syncServerUrl || !config.syncApiKey || !config.syncDeviceId) {
+  if (!config.syncEnabled || !config.syncServerUrl || !bearer || !config.syncDeviceId) {
     return DISABLED;
   }
 
@@ -71,7 +74,7 @@ export async function openCliSyncContext(dbPath: string): Promise<CliSyncContext
 
     const client = new SyncClient(db, {
       serverUrl: config.syncServerUrl,
-      apiKey: config.syncApiKey,
+      apiKey: bearer,
       deviceId,
       userId,
     });

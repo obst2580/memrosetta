@@ -21,6 +21,12 @@ export interface MemRosettaConfig {
   readonly syncApiKey?: string;
   readonly syncDeviceId?: string;
   readonly syncUserId?: string;
+  readonly syncAuthMode?: 'api_key' | 'oauth';
+  readonly syncAccessToken?: string;
+  readonly syncRefreshToken?: string;
+  readonly syncTokenExpiresAt?: string;
+  readonly syncAccountEmail?: string;
+  readonly syncProvider?: 'github' | 'google';
 }
 
 const DEFAULT_CONFIG: MemRosettaConfig = {
