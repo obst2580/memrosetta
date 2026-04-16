@@ -12,67 +12,66 @@ export function Hero({ lang }: HeroProps) {
   const t = content[lang].hero
 
   return (
-    <section className="relative overflow-hidden px-6 pt-28 pb-16 md:px-8 md:pt-36 md:pb-24">
+    <section className="relative overflow-hidden px-6 pt-28 pb-20 md:px-8 md:pt-40 md:pb-32">
       {/* Background illustration */}
       <div
-        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-50"
+        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-35"
         style={{ backgroundImage: 'url(/hero-bg.png)' }}
       />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/50 via-white/70 to-white" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/40 via-white/80 to-white" />
 
-      <div className="relative mx-auto max-w-3xl">
-        {/* Badge */}
-        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-zinc-300 bg-white/80 px-3 py-1 text-xs font-medium text-zinc-600 backdrop-blur-sm">
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-          {t.badge}
-        </div>
+      <div className="relative mx-auto max-w-5xl">
+        <div className="grid gap-12 md:grid-cols-[1fr_auto] md:items-end">
+          {/* Left column — asymmetric, left-aligned */}
+          <div className="max-w-2xl">
+            {/* Badge */}
+            <div className="mb-6 inline-flex items-center gap-2 border-b border-amber-400/40 pb-1 text-xs font-medium tracking-wide text-amber-700 uppercase">
+              <span className="h-1 w-4 bg-amber-500" />
+              {t.badge}
+            </div>
 
-        {/* Title */}
-        <h1 className="mb-4 text-5xl font-extrabold tracking-tight text-zinc-900 drop-shadow-sm md:text-7xl">
-          Mem
-          <span className="bg-gradient-to-r from-amber-500 to-amber-700 bg-clip-text text-transparent">Rosetta</span>
-        </h1>
+            {/* Title — solid color, no gradient */}
+            <h1 className="mb-6 font-[Bricolage_Grotesque] text-5xl font-extrabold tracking-tight md:text-7xl lg:text-8xl" style={{ color: 'oklch(0.22 0.01 85)' }}>
+              Mem<span style={{ color: 'oklch(0.52 0.14 65)' }}>Rosetta</span>
+            </h1>
 
-        {/* Subtitle */}
-        <p className="mb-8 max-w-xl text-lg font-medium text-zinc-700 md:text-xl">
-          {t.subtitle}
-        </p>
+            {/* Subtitle — serif body */}
+            <p className="mb-10 max-w-lg text-xl leading-relaxed font-medium" style={{ color: 'oklch(0.40 0.01 85)' }}>
+              {t.subtitle}
+            </p>
 
-        {/* Install command */}
-        <div className="mb-6">
-          <InlineCode copyable>{t.install}</InlineCode>
-        </div>
+            {/* Install command */}
+            <div className="mb-5">
+              <InlineCode copyable>{t.install}</InlineCode>
+            </div>
 
-        {/* GitHub link - prominent button style */}
-        <div className="mb-12">
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2.5 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition-all hover:border-zinc-400 hover:bg-zinc-50 hover:shadow-md"
-          >
-            <GitHubIcon />
-            <span>View on GitHub</span>
-            <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs text-zinc-500">
-              obst2580/memrosetta
-            </span>
-          </a>
-        </div>
+            {/* Actions row */}
+            <div className="flex flex-wrap items-center gap-4">
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition-all hover:border-zinc-400 hover:shadow-sm"
+              >
+                <GitHubIcon />
+                <span>GitHub</span>
+              </a>
+              <a
+                href="https://login.liliplanet.net?redirect=https://memrosetta.liliplanet.net/auth/callback"
+                className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90"
+                style={{ backgroundColor: 'oklch(0.52 0.14 65)' }}
+              >
+                Login / Sign Up
+              </a>
+            </div>
+          </div>
 
-        {/* Stats */}
-        <div className="flex flex-wrap gap-8 rounded-lg border border-zinc-200 bg-white/80 px-6 py-4 backdrop-blur-sm">
-          <StatItem
-            value={t.stats.mrr.value}
-            label={t.stats.mrr.label}
-          />
-          <StatItem
-            value={t.stats.cost.value}
-            label={t.stats.cost.label}
-          />
-          <StatItem
-            value={t.stats.setup.value}
-            label={t.stats.setup.label}
-          />
+          {/* Right column — compact stats, vertical */}
+          <div className="hidden md:flex md:flex-col md:gap-6 md:border-l md:border-zinc-200 md:pl-8">
+            <StatItem value={t.stats.mrr.value} label={t.stats.mrr.label} />
+            <StatItem value={t.stats.cost.value} label={t.stats.cost.label} />
+            <StatItem value={t.stats.setup.value} label={t.stats.setup.label} />
+          </div>
         </div>
       </div>
     </section>

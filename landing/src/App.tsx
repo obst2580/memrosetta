@@ -13,12 +13,19 @@ import { Features } from './components/Features'
 import { Architecture } from './components/Architecture'
 import { Comparison } from './components/Comparison'
 import { Footer } from './components/Footer'
+import { AuthCallback } from './components/AuthCallback'
 
 function App() {
   const [lang, setLang] = useState<Lang>('en')
 
+  // Simple hash-based routing for auth callback
+  const path = window.location.pathname
+  if (path === '/auth/callback') {
+    return <AuthCallback />
+  }
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen" style={{ backgroundColor: 'oklch(0.985 0.005 85)' }}>
       <Header lang={lang} onLangChange={setLang} />
       <Hero lang={lang} />
       <Usage lang={lang} />

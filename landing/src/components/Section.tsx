@@ -25,11 +25,11 @@ interface SectionTitleProps {
 export function SectionTitle({ children, subtitle }: SectionTitleProps) {
   return (
     <div className="mb-12">
-      <h2 className="mb-3 text-2xl font-semibold tracking-tight text-zinc-900 md:text-3xl">
+      <h2 className="mb-3 font-[Bricolage_Grotesque] text-2xl font-bold tracking-tight md:text-3xl" style={{ color: 'oklch(0.22 0.01 85)' }}>
         {children}
       </h2>
       {subtitle && (
-        <p className="max-w-2xl text-base leading-relaxed text-zinc-500">
+        <p className="max-w-2xl text-base leading-relaxed" style={{ color: 'oklch(0.45 0.01 85)' }}>
           {subtitle}
         </p>
       )}
