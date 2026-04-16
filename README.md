@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">MemRosetta</h1>
-  <p align="center">One persistent memory shared across all your AI tools. Local SQLite by default, optional self-hosted sync for multiple devices.</p>
+  <p align="center">Your brain, on every device. One memory shared across all your AI tools and machines.</p>
 </p>
 
 > 한국어 버전: [README.ko.md](README.ko.md)
@@ -11,39 +11,51 @@ npm install -g memrosetta && memrosetta init --claude-code
 
 ---
 
-## What Actually Happens
+## Your Brain, Everywhere
 
 ```
-Monday morning — Claude Code session:
-
-  You: "Let's use OAuth2 with PKCE for auth. JWT refresh tokens rotate on every use."
-  Claude: (stores decision via MCP → ~/.memrosetta/memories.db)
-
-  You: "API rate limit should be 100 req/min per user."
-  Claude: (stores fact via MCP)
-
-  Session ends. You close the terminal.
-
----
-
-Tuesday — new Claude Code session, completely fresh context:
-
-  You: "What did we decide about auth?"
-  Claude: (searches MemRosetta via MCP)
-  Claude: "We decided on OAuth2 with PKCE. JWT refresh tokens rotate on every use."
-         → Found from Monday's session, automatically.
-
----
-
-Tuesday afternoon — switch to Cursor for frontend work:
-
-  You: "What's the auth setup for the API?"
-  Cursor AI: (searches same MemRosetta DB)
-  Cursor AI: "OAuth2 with PKCE, rate limit 100 req/min."
-             → Same memories. Same DB. Different tool.
+  +---------------------------+
+  |     All Your Devices      |
+  +---------------------------+
+  |                           |
+  |  Home Mac -- Claude Code  |       Every device has its own
+  |  Work PC --- Codex        |       local SQLite. Your AI tools
+  |  Laptop ---- Cursor       |       store and recall memories
+  |  Phone ----- App/Browser  |       through one shared brain.
+  |                           |
+  +------------+--------------+
+               |
+               v  (optional sync)
+  +---------------------------+
+  |     Self-Hosted Hub       |
+  |  sync.your-domain.net     |
+  +---------------------------+
+  |  store / search / recall  |
+  |  PostgreSQL op-log        |
+  |  push + pull (1000/batch) |
+  +------------+--------------+
+               |
+               v
+  +---------------------------+
+  |    memrosetta core        |
+  |    (LLM-free engine)      |
+  +---------------------------+
 ```
 
-**One SQLite file. All your AI tools share it. Local-first. Optional self-hosted sync when you need multiple devices.**
+**What you decided at 2 AM on your home Mac? Your work PC's AI assistant knows it the next morning.**
+
+```
+Monday — Claude Code on Mac:
+  You: "Use OAuth2 with PKCE for auth. JWT refresh tokens rotate."
+  Claude: stores decision --> syncs to hub
+
+Tuesday — Codex on Windows at work:
+  You: "What's the auth setup?"
+  Codex: searches memory --> "OAuth2 with PKCE, JWT rotating refresh."
+         Found from Monday. Different machine. Different AI tool. Same brain.
+```
+
+**Local-first by default. Optional self-hosted sync for multiple devices. Your memories never leave infrastructure you control.**
 
 ---
 
@@ -159,14 +171,18 @@ Adds instructions to your global CLAUDE.md telling Claude:
 
 ## Works With
 
-All tools share the same local database. Memories stored from one tool are instantly available in another.
+All tools on the same device share one SQLite file. With sync enabled, all your devices share the same brain.
 
 ```
-Claude Code ----+
-Claude Desktop --+--> ~/.memrosetta/memories.db <--+-- Cursor
-Windsurf -------+     (one local SQLite file)      +-- Cline
-Codex ----------+                                  +-- Continue
-Gemini ---------+
+  Home Mac                              Work PC
+  --------                              -------
+  Claude Code --+                       Codex ------+
+  Cursor -------+--> memories.db        Cursor -----+--> memories.db
+  Claude Desktop+         |                         |         |
+                          v (sync)                  v (sync)
+                    +--sync hub--+
+                    | PostgreSQL |
+                    +------------+
 ```
 
 | Tool | MCP | Setup |
@@ -181,15 +197,15 @@ Gemini ---------+
 | Continue | Yes | `memrosetta init` |
 | ChatGPT / Copilot | -- | No MCP support. Use CLI or REST API. |
 
-### Cross-Tool Memory Sharing
+### Cross-Tool, Cross-Device Memory
 
 ```
-Morning   Claude Code: debug auth system         --> memories saved
-Afternoon Cursor: build login UI                  --> searches "auth" --> finds morning's decisions
-Evening   Codex: refactor auth middleware          --> has full context from both sessions
+Morning   Home Mac + Claude Code:  debug auth system    --> memories saved + synced
+Afternoon Work PC + Codex:         "auth setup?"         --> finds morning's decisions
+Evening   Home Mac + Cursor:       refactor middleware   --> full context from both sessions
 ```
 
-Local-first by default. Optional self-hosted sync. No cloud required.
+Every decision, fact, and preference follows you. Not through copy-paste, not through markdown files -- through one synchronized memory that every AI tool on every machine can search.
 
 ## How It Works
 
@@ -798,9 +814,84 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] Codex CLI Stop hook auto-registration (v0.5.1)
 - [x] Canonical `user_id` migration + `duplicates report` (v0.5.2)
 - [x] Korean natural-language FTS5 preprocessing (v0.5.2)
+- [x] Pull pagination for large sync backlogs (v0.5.3)
+- [ ] OAuth authentication (GitHub + Google device-code flow, v0.6.0)
+- [ ] Duplicate memory collapse (exact-content dedupe, v0.5.x)
 - [ ] Sync server 1.0 (promotion from 0.1.x after production validation)
 - [ ] Profile builder (stable + dynamic user profiles)
 - [ ] Stable/volatile memory classification
+- [ ] Ingest pipeline (URL, PDF, transcript extraction)
+- [ ] Wiki synthesis (periodic cron-based summarization)
+- [ ] Mobile/web client for browser-based recall
+
+## Architecture Overview
+
+```
++------------------------------------------------------------------+
+|                        Your Devices                               |
++------------------------------------------------------------------+
+|  Mac (Claude Code, Cursor)  |  PC (Codex, Cursor)  |  Phone/Web  |
++-----------------------------+----------------------+-------------+
+              |                          |                   |
+              v                          v                   v
+       +-------------+          +-------------+      +-----------+
+       | MCP Server  |          | MCP Server  |      | REST API  |
+       | (6 tools)   |          | (6 tools)   |      | (Hono)    |
+       +------+------+          +------+------+      +-----+-----+
+              |                          |                   |
+              v                          v                   v
+       +-------------+          +-------------+      +-----------+
+       | SQLite      |          | SQLite      |      | SQLite    |
+       | memories.db |          | memories.db |      | or PG     |
+       +------+------+          +------+------+      +-----------+
+              |                          |
+              +----------+   +-----------+
+                         |   |
+                         v   v
+                 +------------------+
+                 |   Sync Hub       |
+                 |   (self-hosted)  |
+                 +------------------+
+                 | PostgreSQL       |
+                 | push/pull ops    |
+                 | 1000 ops/batch   |
+                 +------------------+
+                         |
+                         v
+                 +------------------+
+                 | memrosetta core  |
+                 +------------------+
+                 | SQLite + FTS5    |
+                 | bge-small embed  |
+                 | NLI contradict   |
+                 | ACT-R forgetting |
+                 | Hot/Warm/Cold    |
+                 | 0 LLM calls     |
+                 +------------------+
+```
+
+### Package Structure
+
+| Package | Role |
+|---------|------|
+| `@memrosetta/core` | Memory engine: store, search, relate, compress. SQLite + FTS5 + sqlite-vec. Zero LLM dependency. |
+| `@memrosetta/embeddings` | Local ML: bge-small-en-v1.5 (33MB) for vectors, nli-deberta-v3-xsmall (71MB) for contradictions. CPU only. |
+| `@memrosetta/cli` | CLI tool: store, search, relate, maintain, compress, ingest, sync, migrate, enforce, init/reset. |
+| `@memrosetta/mcp` | MCP server: 6 tools (store, search, working_memory, relate, invalidate, count). |
+| `@memrosetta/sync-client` | Local-first sync: outbox/inbox in SQLite, push/pull through your sync hub. |
+| `@memrosetta/sync-server` | Self-hosted hub: Hono + PostgreSQL, op-log replication, cursor-based pagination. |
+| `@memrosetta/api` | REST API: Hono HTTP server for same-machine or LAN access. |
+| `@memrosetta/types` | Shared TypeScript interfaces. |
+| `@memrosetta/extractor` | Optional: Propositionizer-mT5 for multilingual fact decomposition. |
+| `memrosetta` | Umbrella npm package: installs core + cli + mcp + all binaries. |
+
+### Design Principles
+
+1. **Core is LLM-free.** The memory engine never calls an API. Memory extraction is the client's job. Your AI tool decides what to store; MemRosetta decides how to store and retrieve it.
+2. **Local-first.** Everything works offline with one SQLite file. Sync is opt-in. Your data never leaves your infrastructure.
+3. **Non-destructive.** Nothing is ever hard-deleted. Old versions live behind `isLatest` flags and relation edges. `invalidatedAt` marks retired facts.
+4. **Neuroscience-inspired.** Storage, association, compression, and forgetting mirror how human memory works: ACT-R activation decay, hierarchical consolidation (Hot/Warm/Cold), working memory as a priority window.
+5. **One identity, all devices.** A canonical `syncUserId` follows you across machines. Pin it once, and every AI tool on every device writes to the same brain.
 
 ## License
 

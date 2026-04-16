@@ -9,12 +9,12 @@ export const content = {
     hero: {
       badge: 'Open source -- MIT License',
       title: 'MemRosetta',
-      subtitle: 'One persistent memory for all your AI tools. Local-first SQLite. Optional self-hosted sync.',
+      subtitle: 'Your brain, on every device. One memory shared across all your AI tools and machines.',
       install: 'npm install -g memrosetta',
       stats: {
-        mrr: { value: '+324%', label: 'MRR improvement' },
-        cost: { value: '1 DB', label: 'shared by all AI tools' },
-        setup: { value: '1', label: 'command to start' },
+        mrr: { value: '18k+', label: 'memories synced' },
+        cost: { value: '1 brain', label: 'all devices, all AI tools' },
+        setup: { value: '1 cmd', label: 'to start' },
       },
     },
     problem: {
@@ -322,6 +322,12 @@ memrosetta maintain`,
           description:
             '`memrosetta enforce stop` turns end-of-session capture into a structural hook pipeline. `memrosetta init --claude-code` wires the Stop hook automatically, and sync `push()` now chunks large backfills into 400-op batches so multi-thousand-memory devices sync cleanly.',
         },
+        {
+          badge: 'v0.5.1-v0.5.4',
+          title: 'Identity, Sync & Cross-Platform Fixes',
+          description:
+            'Codex Stop hook auto-registration (v0.5.1). Canonical `user_id` migration collapses 30+ legacy partitions into one brain, Korean FTS5 preprocessing (v0.5.2). `pull()` paginates through all pages so new devices catch up in one sync run (v0.5.3). Windows CRLF fix in TOML config generation (v0.5.4).',
+        },
       ],
     },
     architecture: {
@@ -454,12 +460,12 @@ memrosetta maintain`,
     hero: {
       badge: '오픈소스 -- MIT 라이선스',
       title: 'MemRosetta',
-      subtitle: '모든 AI 도구가 공유하는 하나의 영구 기억. 로컬 우선 SQLite. 필요하면 자체 호스팅 동기화.',
+      subtitle: '나의 뇌를 모든 기기에서 공유. AI 도구와 장비에 관계없이 하나의 기억.',
       install: 'npm install -g memrosetta',
       stats: {
-        mrr: { value: '+324%', label: 'MRR 향상' },
-        cost: { value: '1 DB', label: '모든 AI 도구 공유' },
-        setup: { value: '1', label: '명령어로 시작' },
+        mrr: { value: '18k+', label: '동기화된 기억' },
+        cost: { value: '1 뇌', label: '모든 기기, 모든 AI 도구' },
+        setup: { value: '1 명령', label: '으로 시작' },
       },
     },
     problem: {
@@ -766,6 +772,12 @@ memrosetta maintain`,
           title: 'Hook 기반 강제 캡처',
           description:
             '`memrosetta enforce stop`이 세션 종료 시 기억 추출을 "하면 좋다"가 아니라 구조적 hook 파이프라인으로 바꿉니다. `memrosetta init --claude-code`가 Stop hook을 자동 등록하고, sync `push()`는 대용량 backfill을 400-op 배치로 나눠 보내 수천 건 규모의 장치도 깔끔히 동기화됩니다.',
+        },
+        {
+          badge: 'v0.5.1-v0.5.4',
+          title: 'ID 통합, sync 개선, 크로스 플랫폼 수정',
+          description:
+            'Codex Stop hook 자동 등록 (v0.5.1). canonical `user_id` 마이그레이션으로 30개 이상의 레거시 파티션을 하나로 통합, 한글 FTS5 전처리 (v0.5.2). `pull()`이 모든 페이지를 순회하여 새 기기가 한 번의 sync로 동기화 완료 (v0.5.3). Windows CRLF TOML 설정 생성 버그 수정 (v0.5.4).',
         },
       ],
     },

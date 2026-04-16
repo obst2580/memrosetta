@@ -5,6 +5,30 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.5.4 — 2026-04-16
+
+**Fixed: Windows CRLF in TOML config generation.**
+
+The `where` command on Windows outputs `\r\n` line endings.
+`resolve-command.ts` split on `\n` only, leaving `\r` inside a TOML
+literal string. The closing quote landed on the next line, producing an
+invalid config file. Fixed with `.split(/\r?\n/)[0]?.trim()`.
+
+---
+
+## v0.5.3 — 2026-04-16
+
+**Fixed: pull pagination for large sync backlogs.**
+
+Bumped to `@memrosetta/sync-client@0.1.7`. `pull()` previously fetched
+only the first 500 ops and returned, so a new device joining a hub with
+37 k+ ops needed ~74 manual `sync now` runs to converge. `pull()` now
+loops through all pages (`PULL_PAGE_SIZE=1000`, `while hasMore`) in a
+single call, applying each page before requesting the next. One
+`memrosetta sync now` is enough for a fresh device.
+
+---
+
 ## v0.5.2 — 2026-04-16
 
 **Headline: Single-brain identity + Korean search fix.**

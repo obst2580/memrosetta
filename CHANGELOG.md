@@ -2,6 +2,29 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.5.4] - 2026-04-16
+
+### Fixed
+- **Windows CRLF bug in `resolve-command.ts`.** The `where` command on
+  Windows emits `\r\n` line endings. `.split('\n')[0]` left `\r` inside
+  a TOML literal string, pushing the closing quote to the next line and
+  producing an invalid config file. Fixed with `.split(/\r?\n/)[0]?.trim()`.
+
+## [0.5.3] - 2026-04-16
+
+### Changed
+- Bumped `@memrosetta/cli` and the `memrosetta` umbrella package to pick
+  up `@memrosetta/sync-client@0.1.7`.
+
+### Fixed
+- **`SyncClient.pull()` fetched only the first page.** The previous
+  implementation returned after the first 500 ops, so a new device
+  joining a hub with >500 ops (e.g. 37 k) required dozens of manual
+  `sync now` runs to catch up. `pull()` now loops through all pages
+  (`PULL_PAGE_SIZE=1000`, `while hasMore`) and applies each page before
+  requesting the next. New devices reach a consistent state in a single
+  `memrosetta sync now`.
+
 ## [0.5.2] - 2026-04-16
 
 ### Added
