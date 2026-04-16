@@ -1530,8 +1530,9 @@ describe('applyThreeFactorReranking', () => {
 
     expect(reranked).toHaveLength(1);
     // Single result: all factors normalize to 1.0
-    // score = 1.0 * 1.0 + 1.0 * 1.0 + 1.0 * 1.0 = 3.0
-    expect(reranked[0].score).toBeCloseTo(3.0, 1);
+    // score = 2.0 * 1.0 + 1.0 * 1.0 + 1.0 * 1.0 = 4.0
+    // (recency default weight bumped to 2.0 for freshness priority)
+    expect(reranked[0].score).toBeCloseTo(4.0, 1);
   });
 
   it('returns empty for empty input', () => {

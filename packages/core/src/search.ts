@@ -737,9 +737,14 @@ function applyActivationWeighting(
  * Generative Agents-inspired 3-factor reranking.
  * final_score = w_recency * recency + w_importance * importance + w_relevance * relevance
  *
- * - recency: exponential decay from learnedAt (0.995^hours)
+ * - recency: exponential decay from learnedAt (0.99^hours)
  * - importance: memory.salience (0-1)
  * - relevance: original search score (from FTS/vector/RRF)
+ *
+ * Recency is weighted 2x by default so recent memories surface first
+ * when keyword relevance is similar. The decay rate of 0.99 per hour
+ * means a 3-day-old memory retains ~49% and a 10-day-old ~9%,
+ * providing strong but not absolute preference for freshness.
  *
  * All three are min-max normalized before combining.
  */
@@ -750,7 +755,7 @@ export function applyThreeFactorReranking(
   if (results.length === 0) return results;
 
   const w = {
-    recency: weights?.recency ?? 1.0,
+    recency: weights?.recency ?? 2.0,
     importance: weights?.importance ?? 1.0,
     relevance: weights?.relevance ?? 1.0,
   };
@@ -758,9 +763,13 @@ export function applyThreeFactorReranking(
   const now = Date.now();
 
   const scored = results.map(r => {
-    // Recency: exponential decay, 0.995^hours_since_learned
+    // Recency: exponential decay, 0.99^hours_since_learned
+    // 1 day  = 0.99^24  ≈ 0.79
+    // 3 days = 0.99^72  ≈ 0.49
+    // 7 days = 0.99^168 ≈ 0.19
+    // 30 days= 0.99^720 ≈ 0.0007
     const hoursSince = (now - new Date(r.memory.learnedAt).getTime()) / (1000 * 60 * 60);
-    const recency = Math.pow(0.995, Math.max(0, hoursSince));
+    const recency = Math.pow(0.99, Math.max(0, hoursSince));
 
     // Importance: salience field (default 1.0)
     const importance = r.memory.salience ?? 1.0;
