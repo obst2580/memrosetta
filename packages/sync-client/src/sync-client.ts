@@ -22,6 +22,14 @@ import { applyInboxOps, type ApplyResult } from './applier.js';
 const MAX_OPS_PER_PUSH = 400;
 
 /**
+ * Limit passed to /sync/pull per round-trip. The server caps at 1000
+ * (MAX_LIMIT in sync-server pull route) so we request the maximum to
+ * minimize round-trips when a new device needs to catch up on tens of
+ * thousands of ops. pull() loops until `hasMore` is false.
+ */
+const PULL_PAGE_SIZE = 1000;
+
+/**
  * Minimal config required by SyncClient at runtime.
  * serverUrl and apiKey are required (unlike the optional SyncConfig
  * from @memrosetta/types which is aimed at feature-flag configuration).
@@ -180,66 +188,68 @@ export class SyncClient {
 
   async pull(): Promise<number> {
     this.setState('last_pull_attempt_at', new Date().toISOString());
-    const since = this.getCursor();
 
-    const params = new URLSearchParams({
-      since: String(since),
-      userId: this.config.userId,
-    });
+    let totalPulled = 0;
+    let totalSkipped = 0;
+    let hasMore = true;
 
-    const url = `${this.config.serverUrl}/sync/pull?${params.toString()}`;
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-    });
+    // Loop until the server says there are no more pages. Each page
+    // is applied immediately so a mid-run failure still advances the
+    // cursor to the last successful page boundary.
+    while (hasMore) {
+      const since = this.getCursor();
 
-    if (!response.ok) {
-      throw new Error(`Pull failed: ${response.status} ${response.statusText}`);
-    }
+      const params = new URLSearchParams({
+        since: String(since),
+        userId: this.config.userId,
+        limit: String(PULL_PAGE_SIZE),
+      });
 
-    const body = (await response.json()) as SyncPullResponse;
-    const { ops, nextCursor } = body.data;
+      const url = `${this.config.serverUrl}/sync/pull?${params.toString()}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+      });
 
-    // 1. Land incoming ops in the inbox (idempotent INSERT OR IGNORE by op_id).
-    if (ops.length > 0) {
-      this.inbox.addOps(ops);
-    }
-
-    // 2. Apply any inbox ops that have not yet been folded into the local
-    //    memories / relations tables. This covers both the batch we just
-    //    received and any leftovers from a prior failed pull.
-    const pending = this.inbox.getPending();
-    let skippedCount = 0;
-    if (pending.length > 0) {
-      const result = applyInboxOps(this.db, pending);
-      if (result.applied.length > 0) {
-        this.inbox.markApplied(result.applied);
+      if (!response.ok) {
+        throw new Error(`Pull failed: ${response.status} ${response.statusText}`);
       }
-      skippedCount = result.skipped.length;
-      if (skippedCount > 0) {
-        for (const s of result.skipped) {
-          process.stderr.write(
-            `[sync] apply skipped op ${s.opId}: ${s.reason}\n`,
-          );
+
+      const body = (await response.json()) as SyncPullResponse;
+      const { ops, nextCursor } = body.data;
+      hasMore = body.data.hasMore ?? false;
+
+      if (ops.length > 0) {
+        this.inbox.addOps(ops);
+      }
+
+      const pending = this.inbox.getPending();
+      if (pending.length > 0) {
+        const result = applyInboxOps(this.db, pending);
+        if (result.applied.length > 0) {
+          this.inbox.markApplied(result.applied);
+        }
+        totalSkipped += result.skipped.length;
+        if (result.skipped.length > 0) {
+          for (const s of result.skipped) {
+            process.stderr.write(
+              `[sync] apply skipped op ${s.opId}: ${s.reason}\n`,
+            );
+          }
         }
       }
+
+      this.setCursor(nextCursor);
+      totalPulled += ops.length;
     }
 
-    // 3. Advance cursor so we don't re-download the same batch. Skipped
-    //    ops stay pending in sync_inbox — a future pull or explicit
-    //    applyPendingInbox() will retry them.
-    this.setCursor(nextCursor);
-
-    // 4. Only claim a clean success when every applied op landed. If any
-    //    were skipped we leave last_pull_success_at untouched so
-    //    `memrosetta sync status` reflects the partial state.
-    if (skippedCount === 0) {
+    if (totalSkipped === 0) {
       this.setState('last_pull_success_at', new Date().toISOString());
     }
 
-    return ops.length;
+    return totalPulled;
   }
 
   /** For tests / advanced callers: apply currently-pending inbox ops manually. */

@@ -542,6 +542,85 @@ describe('SyncClient', () => {
       expect(client.getState('last_pull_success_at')).toBeNull();
     });
 
+    it('loops through multiple pages when hasMore is true', async () => {
+      const db = (client as unknown as { db: Database.Database }).db;
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memories (
+          memory_id       TEXT PRIMARY KEY,
+          user_id         TEXT NOT NULL,
+          namespace       TEXT,
+          memory_type     TEXT NOT NULL,
+          content         TEXT NOT NULL,
+          raw_text        TEXT,
+          document_date   TEXT,
+          learned_at      TEXT NOT NULL,
+          source_id       TEXT,
+          confidence      REAL DEFAULT 1.0,
+          salience        REAL DEFAULT 1.0,
+          is_latest       INTEGER NOT NULL DEFAULT 1,
+          keywords        TEXT,
+          event_date_start TEXT,
+          event_date_end   TEXT,
+          invalidated_at   TEXT,
+          tier             TEXT DEFAULT 'warm',
+          activation_score REAL DEFAULT 1.0,
+          access_count     INTEGER DEFAULT 0,
+          use_count        INTEGER DEFAULT 0,
+          success_count    INTEGER DEFAULT 0
+        );
+      `);
+
+      let callNum = 0;
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        callNum += 1;
+        if (callNum === 1) {
+          const resp: SyncPullResponse = {
+            success: true,
+            data: {
+              ops: [{
+                cursor: 1, opId: 'r-1', opType: 'memory_created', deviceId: 'other',
+                userId: 'test-user', createdAt: '2025-01-01T00:00:00Z',
+                receivedAt: '2025-01-01T00:00:01Z',
+                payload: { memoryId: 'mem-p1', userId: 'test-user', memoryType: 'fact',
+                  content: 'page one', confidence: 1, salience: 1, learnedAt: '2025-01-01T00:00:00Z' },
+              }],
+              nextCursor: 1,
+              hasMore: true,
+            },
+          };
+          return new Response(JSON.stringify(resp), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        // Page 2: no more
+        const resp: SyncPullResponse = {
+          success: true,
+          data: {
+            ops: [{
+              cursor: 2, opId: 'r-2', opType: 'memory_created', deviceId: 'other',
+              userId: 'test-user', createdAt: '2025-01-02T00:00:00Z',
+              receivedAt: '2025-01-02T00:00:01Z',
+              payload: { memoryId: 'mem-p2', userId: 'test-user', memoryType: 'fact',
+                content: 'page two', confidence: 1, salience: 1, learnedAt: '2025-01-02T00:00:00Z' },
+            }],
+            nextCursor: 2,
+            hasMore: false,
+          },
+        };
+        return new Response(JSON.stringify(resp), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      });
+
+      const count = await client.pull();
+      expect(count).toBe(2);
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+      // Both pages applied.
+      const rows = db.prepare('SELECT memory_id FROM memories ORDER BY memory_id').all() as { memory_id: string }[];
+      expect(rows.map(r => r.memory_id)).toEqual(['mem-p1', 'mem-p2']);
+      // Cursor advanced to the last page.
+      expect(client.getState('last_cursor')).toBe('2');
+      // Second call includes limit parameter.
+      const url2 = vi.mocked(fetch).mock.calls[1][0] as string;
+      expect(url2).toContain('limit=1000');
+    });
+
     it('getStatus reports pending ops and timestamps after sync activity', async () => {
       const outbox = client.getOutbox();
       outbox.addOp({
