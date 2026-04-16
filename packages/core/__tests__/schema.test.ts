@@ -61,7 +61,31 @@ describe('ensureSchema', () => {
     ensureSchema(db);
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(6);
+    expect(row.version).toBe(7);
+  });
+
+  it('creates v7 brain-inspired tables (memory_coaccess + encoding context columns)', () => {
+    ensureSchema(db);
+
+    // memory_coaccess table exists
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='memory_coaccess'")
+      .all() as readonly { name: string }[];
+    expect(tables).toHaveLength(1);
+
+    // project + activity_type columns exist on memories
+    const cols = db
+      .prepare('PRAGMA table_info(memories)')
+      .all() as readonly { name: string }[];
+    const colNames = cols.map((c) => c.name);
+    expect(colNames).toContain('project');
+    expect(colNames).toContain('activity_type');
+
+    // Indexes exist
+    const indexes = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_memory_coaccess%'")
+      .all() as readonly { name: string }[];
+    expect(indexes.length).toBeGreaterThanOrEqual(2);
   });
 
   it('creates migration_version and memory_legacy_scope tables at v6', () => {
@@ -86,7 +110,7 @@ describe('ensureSchema', () => {
     expect(() => ensureSchema(db)).not.toThrow();
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(6);
+    expect(row.version).toBe(7);
   });
 
   it('FTS5 syncs with memories table on insert', () => {

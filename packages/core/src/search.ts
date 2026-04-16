@@ -854,6 +854,181 @@ export function applyKeywordBoost(
   }).sort((a, b) => b.score - a.score);
 }
 
+// ---------------------------------------------------------------------------
+// Context-dependent retrieval boost
+// ---------------------------------------------------------------------------
+
+export interface SearchContextFilters {
+  readonly project?: string;
+  readonly namespace?: string;
+  readonly sessionId?: string;
+}
+
+/**
+ * Apply lightweight context-dependent retrieval boosts.
+ *
+ * The current Memory type does not yet expose every context field, so this
+ * function reads the required metadata directly from SQLite. If the schema
+ * has not been upgraded yet (for example, `project` does not exist), it
+ * gracefully falls back to no boost.
+ */
+export function applyContextBoost(
+  db: Database.Database,
+  results: readonly SearchResult[],
+  contextFilters?: SearchContextFilters,
+): readonly SearchResult[] {
+  if (!contextFilters || results.length === 0) {
+    return results;
+  }
+
+  const hasProject = typeof contextFilters.project === 'string' && contextFilters.project.length > 0;
+  const hasNamespace = typeof contextFilters.namespace === 'string' && contextFilters.namespace.length > 0;
+  const hasSessionId = typeof contextFilters.sessionId === 'string' && contextFilters.sessionId.length > 0;
+
+  if (!hasProject && !hasNamespace && !hasSessionId) {
+    return results;
+  }
+
+  const ids = results.map(r => r.memory.memoryId);
+  const placeholders = ids.map(() => '?').join(',');
+
+  try {
+    const rows = db.prepare(`
+      SELECT memory_id, namespace, project
+      FROM memories
+      WHERE memory_id IN (${placeholders})
+    `).all(...ids) as readonly {
+      memory_id: string;
+      namespace: string | null;
+      project: string | null;
+    }[];
+
+    const contextById = new Map(rows.map(row => [row.memory_id, row]));
+
+    return results.map(result => {
+      const row = contextById.get(result.memory.memoryId);
+      if (!row) return result;
+
+      let boostedScore = result.score;
+
+      if (hasProject && row.project === contextFilters.project) {
+        boostedScore += 0.25;
+      }
+      if (hasNamespace && row.namespace === contextFilters.namespace) {
+        boostedScore += 0.15;
+      }
+      if (hasSessionId && row.namespace === contextFilters.sessionId) {
+        boostedScore += 0.10;
+      }
+
+      if (boostedScore === result.score) {
+        return result;
+      }
+
+      return {
+        ...result,
+        score: boostedScore,
+      };
+    }).sort((a, b) => b.score - a.score);
+  } catch {
+    // Schema may not yet contain context columns (e.g. pre-v0.7.0 DB).
+    return results;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hebbian co-access boost
+// ---------------------------------------------------------------------------
+
+const COACCESS_WEIGHT = 0.15;
+const COACCESS_SEED_COUNT = 5;
+
+/**
+ * Boost candidates that are strongly co-accessed with already top-ranked
+ * seed memories. Graceful fallback when the co-access table is absent.
+ */
+export function applyCoAccessBoost(
+  db: Database.Database,
+  results: readonly SearchResult[],
+): readonly SearchResult[] {
+  if (results.length < 2) {
+    return results;
+  }
+
+  const seedIds = results
+    .slice(0, COACCESS_SEED_COUNT)
+    .map(r => r.memory.memoryId);
+  const candidateIds = results.map(r => r.memory.memoryId);
+
+  const seedPlaceholders = seedIds.map(() => '?').join(',');
+  const candidatePlaceholders = candidateIds.map(() => '?').join(',');
+
+  try {
+    const rows = db.prepare(`
+      SELECT memory_a_id, memory_b_id, strength
+      FROM memory_coaccess
+      WHERE (
+        memory_a_id IN (${seedPlaceholders})
+        AND memory_b_id IN (${candidatePlaceholders})
+      ) OR (
+        memory_b_id IN (${seedPlaceholders})
+        AND memory_a_id IN (${candidatePlaceholders})
+      )
+    `).all(...seedIds, ...candidateIds, ...seedIds, ...candidateIds) as readonly {
+      memory_a_id: string;
+      memory_b_id: string;
+      strength: number | null;
+    }[];
+
+    if (rows.length === 0) {
+      return results;
+    }
+
+    const seedSet = new Set(seedIds);
+    const boostById = new Map<string, number>();
+
+    for (const row of rows) {
+      const strength = row.strength ?? 0;
+      if (strength <= 0) continue;
+
+      const aIsSeed = seedSet.has(row.memory_a_id);
+      const bIsSeed = seedSet.has(row.memory_b_id);
+
+      if (aIsSeed && row.memory_b_id !== row.memory_a_id) {
+        boostById.set(
+          row.memory_b_id,
+          (boostById.get(row.memory_b_id) ?? 0) + strength * COACCESS_WEIGHT,
+        );
+      }
+      if (bIsSeed && row.memory_a_id !== row.memory_b_id) {
+        boostById.set(
+          row.memory_a_id,
+          (boostById.get(row.memory_a_id) ?? 0) + strength * COACCESS_WEIGHT,
+        );
+      }
+    }
+
+    if (boostById.size === 0) {
+      return results;
+    }
+
+    return results.map(result => {
+      const boost = boostById.get(result.memory.memoryId) ?? 0;
+      if (boost === 0) {
+        return result;
+      }
+
+      return {
+        ...result,
+        score: result.score + boost,
+      };
+    }).sort((a, b) => b.score - a.score);
+  } catch {
+    // Pre-v0.7.0 DBs will not have memory_coaccess.
+    return results;
+  }
+}
+
 /**
  * Extract meaningful tokens from a query string (same logic as buildFtsQuery).
  * Exported for use in keyword boosting.
@@ -901,6 +1076,7 @@ export function searchMemories(
   queryVec?: Float32Array,
   useVecTable: boolean = true,
   skipAccessTracking: boolean = false,
+  contextFilters?: SearchContextFilters,
 ): SearchResponse {
   const startTime = performance.now();
 
@@ -916,7 +1092,9 @@ export function searchMemories(
   if (!queryVec) {
     const weighted = applyThreeFactorReranking(ftsResults);
     const boosted = applyKeywordBoost(weighted, queryTokens);
-    finalResults = deduplicateResults(boosted);
+    const contextBoosted = applyContextBoost(db, boosted, contextFilters);
+    const coAccessBoosted = applyCoAccessBoost(db, contextBoosted);
+    finalResults = deduplicateResults(coAccessBoosted);
 
     // Update access tracking for returned results
     if (!skipAccessTracking) {
@@ -948,12 +1126,16 @@ export function searchMemories(
 
     const weighted = applyThreeFactorReranking(vecOnly);
     const boosted = applyKeywordBoost(weighted, queryTokens);
-    finalResults = deduplicateResults(boosted);
+    const contextBoosted = applyContextBoost(db, boosted, contextFilters);
+    const coAccessBoosted = applyCoAccessBoost(db, contextBoosted);
+    finalResults = deduplicateResults(coAccessBoosted);
   } else if (vecResults.length === 0) {
     // If vector returned nothing, return FTS-only
     const weighted = applyThreeFactorReranking(ftsResults);
     const boosted = applyKeywordBoost(weighted, queryTokens);
-    finalResults = deduplicateResults(boosted);
+    const contextBoosted = applyContextBoost(db, boosted, contextFilters);
+    const coAccessBoosted = applyCoAccessBoost(db, contextBoosted);
+    finalResults = deduplicateResults(coAccessBoosted);
   } else {
     // Convex combination fusion: principled score-level merge
     const limit = query.limit ?? DEFAULT_LIMIT;
@@ -961,7 +1143,9 @@ export function searchMemories(
 
     const weighted = applyThreeFactorReranking(merged);
     const boosted = applyKeywordBoost(weighted, queryTokens);
-    finalResults = deduplicateResults(boosted);
+    const contextBoosted = applyContextBoost(db, boosted, contextFilters);
+    const coAccessBoosted = applyCoAccessBoost(db, contextBoosted);
+    finalResults = deduplicateResults(coAccessBoosted);
   }
 
   // Update access tracking for returned results

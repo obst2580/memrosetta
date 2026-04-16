@@ -117,6 +117,43 @@ CREATE INDEX IF NOT EXISTS idx_memory_legacy_scope_user_ns
   ON memory_legacy_scope(legacy_user_id, legacy_namespace);
 `;
 
+/**
+ * v7: Brain-inspired retrieval enhancements (v0.7.0).
+ *
+ * 1. Encoding context columns on `memories` — stores the project and
+ *    activity type at encoding time so context-dependent retrieval
+ *    (Tulving 1973) can boost memories whose encoding context matches
+ *    the current search context.
+ *
+ * 2. `memory_coaccess` table — Hebbian co-access graph. When two
+ *    memories appear together in search results, their co-access
+ *    strength is incremented. Future searches boost co-accessed
+ *    neighbors. This builds an implicit associative layer on top of
+ *    the sparse explicit relation graph.
+ */
+const SCHEMA_V7 = `
+ALTER TABLE memories ADD COLUMN project TEXT;
+ALTER TABLE memories ADD COLUMN activity_type TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project);
+
+CREATE TABLE IF NOT EXISTS memory_coaccess (
+  memory_a_id         TEXT NOT NULL,
+  memory_b_id         TEXT NOT NULL,
+  co_access_count     INTEGER NOT NULL DEFAULT 1,
+  last_co_accessed_at TEXT NOT NULL,
+  strength            REAL NOT NULL DEFAULT 1.0,
+  PRIMARY KEY (memory_a_id, memory_b_id),
+  FOREIGN KEY (memory_a_id) REFERENCES memories(memory_id),
+  FOREIGN KEY (memory_b_id) REFERENCES memories(memory_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_coaccess_a
+  ON memory_coaccess(memory_a_id, strength DESC);
+CREATE INDEX IF NOT EXISTS idx_memory_coaccess_b
+  ON memory_coaccess(memory_b_id, strength DESC);
+`;
+
 export interface SchemaOptions {
   readonly vectorEnabled?: boolean;
   readonly embeddingDimension?: number;
@@ -163,10 +200,10 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
       version = 2;
     }
     // Fresh databases already include v3 + v4 + v5 columns in SCHEMA_V1.
-    // v6 adds supporting tables (migration_version, memory_legacy_scope)
-    // so we still need to run it explicitly on fresh installs.
+    // v6 adds migration tables, v7 adds brain-inspired retrieval tables.
     db.exec(SCHEMA_V6);
-    version = 6;
+    db.exec(SCHEMA_V7);
+    version = 7;
     db.prepare('INSERT INTO schema_version (version, embedding_dimension) VALUES (?, ?)').run(version, dim);
     return;
   }
@@ -212,12 +249,25 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
   }
 
   if (currentVersion < 6) {
-    // v6 creates migration_version + memory_legacy_scope. Uses
-    // CREATE TABLE IF NOT EXISTS internally so running it on a
-    // database that already has the tables (e.g. manual recovery)
-    // is safe.
     db.exec(SCHEMA_V6);
     db.prepare('UPDATE schema_version SET version = ?').run(6);
+  }
+
+  if (currentVersion < 7) {
+    // v7 adds encoding context columns (project, activity_type) to
+    // memories and the memory_coaccess Hebbian co-access table.
+    // ALTER TABLE for pre-v7 databases only; fresh installs already
+    // have these from SCHEMA_V1 + SCHEMA_V7 in the fresh-install
+    // path above.
+    if (currentVersion >= 1) {
+      try {
+        db.exec(SCHEMA_V7);
+      } catch {
+        // Columns/tables may already exist from a partial upgrade
+        // or manual intervention — safe to ignore.
+      }
+    }
+    db.prepare('UPDATE schema_version SET version = ?').run(7);
   }
 
   // Ensure vec_memories exists when vector is enabled (handles DB created without vectors)

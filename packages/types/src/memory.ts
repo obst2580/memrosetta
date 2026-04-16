@@ -27,6 +27,10 @@ export interface MemoryInput {
   readonly eventDateEnd?: string;
   /** ISO 8601 - when this fact became invalid */
   readonly invalidatedAt?: string;
+  /** Encoding context: project identifier (derived from cwd at store time) */
+  readonly project?: string;
+  /** Encoding context: activity type at store time (debugging, implementation, review, etc.) */
+  readonly activityType?: string;
 }
 
 export interface Memory extends MemoryInput {

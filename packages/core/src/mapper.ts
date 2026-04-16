@@ -27,6 +27,8 @@ export interface MemoryRow {
   readonly compressed_from: string | null;
   readonly use_count: number | null;
   readonly success_count: number | null;
+  readonly project: string | null;
+  readonly activity_type: string | null;
 }
 
 export function rowToMemory(row: MemoryRow): Memory {
@@ -55,6 +57,8 @@ export function rowToMemory(row: MemoryRow): Memory {
     ...(row.compressed_from != null ? { compressedFrom: row.compressed_from } : {}),
     useCount: row.use_count ?? 0,
     successCount: row.success_count ?? 0,
+    ...(row.project != null ? { project: row.project } : {}),
+    ...(row.activity_type != null ? { activityType: row.activity_type } : {}),
   };
 }
 

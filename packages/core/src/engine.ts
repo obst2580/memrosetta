@@ -23,6 +23,7 @@ import {
   type PreparedStatements,
 } from './store.js';
 import { searchMemories, bruteForceVectorSearch } from './search.js';
+import { recordCoAccess } from './coaccess.js';
 import {
   createRelationStatements,
   createRelation,
@@ -176,7 +177,17 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     if (this.options.embedder) {
       queryVec = await this.options.embedder.embed(query.query);
     }
-    return searchMemories(this.db!, query, queryVec, this.vectorEnabled);
+    const response = searchMemories(this.db!, query, queryVec, this.vectorEnabled);
+
+    // Hebbian co-access: record that these memories were retrieved
+    // together so future searches can boost co-accessed neighbors.
+    // Only top results (up to 10) to avoid flooding the table.
+    if (response.results.length >= 2) {
+      const topIds = response.results.slice(0, 10).map((r) => r.memory.memoryId);
+      recordCoAccess(this.db!, topIds);
+    }
+
+    return response;
   }
 
   async relate(
@@ -384,6 +395,8 @@ export class SqliteMemoryEngine implements IMemoryEngine {
           rows[0].memory_id, // compressed_from
           0, // use_count
           0, // success_count
+          null, // project
+          null, // activity_type
         );
         compressed++;
 
