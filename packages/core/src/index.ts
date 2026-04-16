@@ -16,3 +16,5 @@ export { computeActivation, computeEbbinghaus } from './activation.js';
 export { determineTier, estimateTokens, DEFAULT_TIER_CONFIG } from './tiers.js';
 export { recordCoAccess, getCoAccessNeighbors, decayCoAccess } from './coaccess.js';
 export { spreadActivation } from './spreading.js';
+export { scanDuplicateGroups, collapseExactDuplicates } from './dedupe.js';
+export type { DuplicateGroup, DuplicateMember, DedupeResult } from './dedupe.js';

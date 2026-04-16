@@ -24,6 +24,7 @@ Commands:
   working-memory   Show working memory for a user
   maintain         Run maintenance (recompute scores, update tiers, compress)
   compress         Run compression only
+  dedupe           Collapse exact duplicates (invalidate losers + relate)
   update           Update to latest version
   sync             Manage multi-device sync (enable/disable/status/now/device-id)
   enforce          Run the enforce backend for client Stop hooks (advanced)
@@ -170,6 +171,11 @@ async function main(): Promise<void> {
       }
       case 'compress': {
         const mod = await import('./commands/compress.js');
+        await mod.run(commandOptions);
+        break;
+      }
+      case 'dedupe': {
+        const mod = await import('./commands/dedupe.js');
         await mod.run(commandOptions);
         break;
       }

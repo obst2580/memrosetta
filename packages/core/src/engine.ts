@@ -43,6 +43,12 @@ export interface SqliteEngineOptions {
   readonly contradictionThreshold?: number;  // Default: 0.7. Min NLI score to auto-create contradicts relation.
 }
 
+interface AutoRelateCandidateRow {
+  readonly memory_id: string;
+  readonly keywords: string | null;
+  readonly embedding: Buffer | null;
+}
+
 export class SqliteMemoryEngine implements IMemoryEngine {
   private db: Database.Database | null = null;
   private stmts: PreparedStatements | null = null;
@@ -698,27 +704,39 @@ export class SqliteMemoryEngine implements IMemoryEngine {
    * Graceful: errors are silently swallowed.
    */
   private async autoRelate(newMemory: Memory): Promise<void> {
-    if (!newMemory.keywords || newMemory.keywords.length === 0) return;
+    if ((!newMemory.keywords || newMemory.keywords.length === 0) && !newMemory.embedding) return;
 
     try {
-      const keywordList = newMemory.keywords;
+      const keywordList = (newMemory.keywords ?? []).map((keyword) => keyword.toLowerCase());
+      const newEmbedding = newMemory.embedding ? new Float32Array(newMemory.embedding) : null;
 
-      const existing = this.db!.prepare(`
-        SELECT memory_id, keywords FROM memories
-        WHERE user_id = ? AND is_latest = 1 AND memory_id != ?
-        AND invalidated_at IS NULL
-        ORDER BY learned_at DESC LIMIT 10
-      `).all(newMemory.userId, newMemory.memoryId) as readonly {
-        memory_id: string;
-        keywords: string | null;
-      }[];
+      const existing = newMemory.namespace
+        ? this.db!.prepare(`
+          SELECT memory_id, keywords, embedding FROM memories
+          WHERE user_id = ? AND namespace = ? AND is_latest = 1 AND memory_id != ?
+          AND invalidated_at IS NULL
+          ORDER BY learned_at DESC LIMIT 50
+        `).all(newMemory.userId, newMemory.namespace, newMemory.memoryId) as readonly AutoRelateCandidateRow[]
+        : this.db!.prepare(`
+          SELECT memory_id, keywords, embedding FROM memories
+          WHERE user_id = ? AND is_latest = 1 AND memory_id != ?
+          AND invalidated_at IS NULL
+          ORDER BY learned_at DESC LIMIT 50
+        `).all(newMemory.userId, newMemory.memoryId) as readonly AutoRelateCandidateRow[];
 
       for (const row of existing) {
-        if (!row.keywords) continue;
-        const existingKeywords = row.keywords.split(' ').map(k => k.trim().toLowerCase());
-        const overlap = keywordList.filter(k => existingKeywords.includes(k.toLowerCase()));
+        const existingKeywords = row.keywords
+          ? row.keywords.split(' ').map((keyword) => keyword.trim().toLowerCase()).filter(Boolean)
+          : [];
+        const overlap = keywordList.filter((keyword) => existingKeywords.includes(keyword));
+        const similarity = newEmbedding && row.embedding
+          ? cosineSimilarity(
+            newEmbedding,
+            new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4),
+          )
+          : 0;
 
-        if (overlap.length >= 3) {
+        if (overlap.length >= 2 || similarity > 0.7) {
           // Check if any relation already exists between these memories
           // (e.g., from checkDuplicates creating an 'updates' relation)
           const existingRelation = this.db!.prepare(
@@ -738,7 +756,9 @@ export class SqliteMemoryEngine implements IMemoryEngine {
               newMemory.memoryId,
               row.memory_id,
               'extends',
-              `Auto: ${overlap.length} shared keywords (${overlap.join(', ')})`,
+              overlap.length >= 2
+                ? `Auto: ${overlap.length} shared keywords (${overlap.join(', ')})`
+                : `Auto: cosine similarity ${similarity.toFixed(3)}`,
             );
           } catch {
             // Relation may already exist
@@ -755,6 +775,23 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       throw new Error('Engine not initialized. Call initialize() first.');
     }
   }
+}
+
+function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+
+  if (normA === 0 || normB === 0) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 // Factory function for convenience

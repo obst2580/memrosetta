@@ -33,6 +33,7 @@ const COMMANDS = new Set([
   'enforce',
   'migrate',
   'duplicates',
+  'dedupe',
 ]);
 
 function findFlag(args: readonly string[], flag: string): boolean {

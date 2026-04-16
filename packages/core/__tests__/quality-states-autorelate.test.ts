@@ -429,7 +429,7 @@ describe('Auto-relate on store (keyword overlap)', () => {
     await engine.close();
   });
 
-  it('auto-creates extends relation for 3+ shared keywords', async () => {
+  it('auto-creates extends relation for 2+ shared keywords', async () => {
     const m1 = await engine.store(
       makeInput({
         content: 'React hooks use state management patterns',
@@ -439,7 +439,7 @@ describe('Auto-relate on store (keyword overlap)', () => {
     const m2 = await engine.store(
       makeInput({
         content: 'Custom React hooks for state patterns',
-        keywords: ['react', 'hooks', 'state', 'custom'],
+        keywords: ['react', 'hooks', 'custom'],
       }),
     );
 
@@ -452,7 +452,7 @@ describe('Auto-relate on store (keyword overlap)', () => {
     expect(extends_[0].reason).toContain('shared keywords');
   });
 
-  it('does not auto-create relation for fewer than 3 shared keywords', async () => {
+  it('does not auto-create relation for fewer than 2 shared keywords', async () => {
     const m1 = await engine.store(
       makeInput({
         content: 'TypeScript language features',
@@ -541,5 +541,95 @@ describe('Auto-relate on store (keyword overlap)', () => {
     );
 
     expect(autoExtends.length).toBe(0);
+  });
+
+  it('checks beyond the most recent 10 memories', async () => {
+    const base = await engine.store(
+      makeInput({
+        content: 'Hermes GitHub repository link and issue tracker',
+        keywords: ['hermes', 'github', 'repo'],
+      }),
+    );
+
+    for (let i = 0; i < 15; i++) {
+      await engine.store(
+        makeInput({
+          content: `Filler memory ${i}`,
+          keywords: [`filler-${i}`],
+        }),
+      );
+    }
+
+    const related = await engine.store(
+      makeInput({
+        content: 'Hermes GitHub repo discussion and docs',
+        keywords: ['hermes', 'github', 'docs'],
+      }),
+    );
+
+    const relations = await engine.getRelations(related.memoryId);
+    expect(
+      relations.some(
+        (relation) => relation.relationType === 'extends' && relation.dstMemoryId === base.memoryId,
+      ),
+    ).toBe(true);
+  });
+
+  it('auto-creates extends relation for cosine similarity above threshold', async () => {
+    class ModeratelySimilarEmbedder {
+      readonly dimension = 384;
+
+      async initialize(): Promise<void> {}
+      async close(): Promise<void> {}
+
+      async embed(text: string): Promise<Float32Array> {
+        const vec = new Float32Array(384);
+        if (text.includes('base')) {
+          vec[0] = 1;
+          return vec;
+        }
+        if (text.includes('related')) {
+          vec[0] = 0.8;
+          vec[1] = 0.6;
+          return vec;
+        }
+        vec[1] = 1;
+        return vec;
+      }
+
+      async embedBatch(texts: readonly string[]): Promise<readonly Float32Array[]> {
+        const results: Float32Array[] = [];
+        for (const text of texts) {
+          results.push(await this.embed(text));
+        }
+        return results;
+      }
+    }
+
+    await engine.close();
+    engine = new SqliteMemoryEngine({ dbPath: ':memory:', embedder: new ModeratelySimilarEmbedder() });
+    await engine.initialize();
+
+    const base = await engine.store(
+      makeInput({
+        content: 'base vector memory',
+        keywords: ['alpha'],
+      }),
+    );
+
+    const related = await engine.store(
+      makeInput({
+        content: 'related vector memory',
+        keywords: ['beta'],
+      }),
+    );
+
+    const relations = await engine.getRelations(related.memoryId);
+    const autoExtends = relations.filter(
+      (relation) => relation.relationType === 'extends' && relation.dstMemoryId === base.memoryId,
+    );
+
+    expect(autoExtends).toHaveLength(1);
+    expect(autoExtends[0].reason).toContain('cosine similarity');
   });
 });

@@ -10,6 +10,7 @@ const VALID_RELATION_TYPES = new Set([
   'derives',
   'contradicts',
   'supports',
+  'duplicates',
 ]);
 
 interface RelateOptions {
@@ -29,7 +30,7 @@ export async function run(options: RelateOptions): Promise<void> {
 
   if (!VALID_RELATION_TYPES.has(relationType)) {
     outputError(
-      `Invalid relation type: ${relationType}. Must be one of: updates, extends, derives, contradicts, supports`,
+      `Invalid relation type: ${relationType}. Must be one of: updates, extends, derives, contradicts, supports, duplicates`,
       format,
     );
     process.exitCode = 1;

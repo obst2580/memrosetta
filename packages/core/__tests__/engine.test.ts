@@ -276,8 +276,8 @@ describe('SqliteMemoryEngine', () => {
 
   describe('relate', () => {
     it('creates relation between memories', async () => {
-      const m1 = await engine.store(makeInput({ content: 'Fact version 1' }));
-      const m2 = await engine.store(makeInput({ content: 'Fact version 2' }));
+      const m1 = await engine.store(makeInput({ content: 'Fact version 1', keywords: undefined }));
+      const m2 = await engine.store(makeInput({ content: 'Fact version 2', keywords: undefined }));
 
       const relation = await engine.relate(
         m2.memoryId,

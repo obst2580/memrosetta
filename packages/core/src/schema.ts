@@ -45,7 +45,7 @@ CREATE INDEX idx_memories_activation ON memories(activation_score);
 CREATE TABLE memory_relations (
   src_memory_id   TEXT NOT NULL,
   dst_memory_id   TEXT NOT NULL,
-  relation_type   TEXT NOT NULL CHECK(relation_type IN ('updates', 'extends', 'derives', 'contradicts', 'supports')),
+  relation_type   TEXT NOT NULL CHECK(relation_type IN ('updates', 'extends', 'derives', 'contradicts', 'supports', 'duplicates')),
   created_at      TEXT NOT NULL,
   reason          TEXT,
   PRIMARY KEY (src_memory_id, dst_memory_id, relation_type),
@@ -154,6 +154,32 @@ CREATE INDEX IF NOT EXISTS idx_memory_coaccess_b
   ON memory_coaccess(memory_b_id, strength DESC);
 `;
 
+/**
+ * v8: allow explicit duplicate relations for the destructive dedupe pass.
+ *
+ * SQLite cannot ALTER an existing CHECK constraint, so we rebuild the
+ * `memory_relations` table in-place for upgraded databases.
+ */
+const SCHEMA_V8 = `
+CREATE TABLE memory_relations_v8 (
+  src_memory_id   TEXT NOT NULL,
+  dst_memory_id   TEXT NOT NULL,
+  relation_type   TEXT NOT NULL CHECK(relation_type IN ('updates', 'extends', 'derives', 'contradicts', 'supports', 'duplicates')),
+  created_at      TEXT NOT NULL,
+  reason          TEXT,
+  PRIMARY KEY (src_memory_id, dst_memory_id, relation_type),
+  FOREIGN KEY (src_memory_id) REFERENCES memories(memory_id),
+  FOREIGN KEY (dst_memory_id) REFERENCES memories(memory_id)
+);
+
+INSERT INTO memory_relations_v8 (src_memory_id, dst_memory_id, relation_type, created_at, reason)
+SELECT src_memory_id, dst_memory_id, relation_type, created_at, reason
+FROM memory_relations;
+
+DROP TABLE memory_relations;
+ALTER TABLE memory_relations_v8 RENAME TO memory_relations;
+`;
+
 export interface SchemaOptions {
   readonly vectorEnabled?: boolean;
   readonly embeddingDimension?: number;
@@ -200,10 +226,11 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
       version = 2;
     }
     // Fresh databases already include v3 + v4 + v5 columns in SCHEMA_V1.
-    // v6 adds migration tables, v7 adds brain-inspired retrieval tables.
+    // v6 adds migration tables, v7 adds brain-inspired retrieval tables,
+    // v8 expands relation_type to include duplicates.
     db.exec(SCHEMA_V6);
     db.exec(SCHEMA_V7);
-    version = 7;
+    version = 8;
     db.prepare('INSERT INTO schema_version (version, embedding_dimension) VALUES (?, ?)').run(version, dim);
     return;
   }
@@ -268,6 +295,11 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
       }
     }
     db.prepare('UPDATE schema_version SET version = ?').run(7);
+  }
+
+  if (currentVersion < 8) {
+    db.exec(SCHEMA_V8);
+    db.prepare('UPDATE schema_version SET version = ?').run(8);
   }
 
   // Ensure vec_memories exists when vector is enabled (handles DB created without vectors)

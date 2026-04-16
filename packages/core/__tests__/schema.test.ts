@@ -57,11 +57,11 @@ describe('ensureSchema', () => {
     expect(indexNames).toContain('idx_memories_activation');
   });
 
-  it('sets schema version to 6 for fresh database', () => {
+  it('sets schema version to 8 for fresh database', () => {
     ensureSchema(db);
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(7);
+    expect(row.version).toBe(8);
   });
 
   it('creates v7 brain-inspired tables (memory_coaccess + encoding context columns)', () => {
@@ -110,7 +110,7 @@ describe('ensureSchema', () => {
     expect(() => ensureSchema(db)).not.toThrow();
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(7);
+    expect(row.version).toBe(8);
   });
 
   it('FTS5 syncs with memories table on insert', () => {
