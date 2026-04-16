@@ -328,6 +328,12 @@ memrosetta maintain`,
           description:
             'Codex Stop hook auto-registration (v0.5.1). Canonical `user_id` migration collapses 30+ legacy partitions into one brain, Korean FTS5 preprocessing (v0.5.2). `pull()` paginates through all pages so new devices catch up in one sync run (v0.5.3). Windows CRLF fix in TOML config generation (v0.5.4).',
         },
+        {
+          badge: 'v0.7.0-v0.8.0',
+          title: 'Brain-Inspired Retrieval',
+          description:
+            'Context-dependent retrieval boosts memories from the same project/session (Tulving 1973). Hebbian co-access strengthens memories that appear together in search results (Hebb 1949). Spreading activation propagates relevance through relation and co-access edges with hop decay.',
+        },
       ],
     },
     architecture: {
@@ -778,6 +784,12 @@ memrosetta maintain`,
           title: 'ID 통합, sync 개선, 크로스 플랫폼 수정',
           description:
             'Codex Stop hook 자동 등록 (v0.5.1). canonical `user_id` 마이그레이션으로 30개 이상의 레거시 파티션을 하나로 통합, 한글 FTS5 전처리 (v0.5.2). `pull()`이 모든 페이지를 순회하여 새 기기가 한 번의 sync로 동기화 완료 (v0.5.3). Windows CRLF TOML 설정 생성 버그 수정 (v0.5.4).',
+        },
+        {
+          badge: 'v0.7.0-v0.8.0',
+          title: '뇌과학 기반 검색',
+          description:
+            '맥락 의존 인출로 같은 프로젝트/세션의 기억을 부스트합니다 (Tulving 1973). Hebbian 동시 접근은 함께 검색된 기억을 강화합니다 (Hebb 1949). 확산 활성화가 relation 및 co-access 엣지를 통해 관련성을 전파하며 hop decay를 적용합니다.',
         },
       ],
     },

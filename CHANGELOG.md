@@ -2,6 +2,48 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.8.0] - 2026-04-16
+
+### Added
+- **Spreading Activation Lite** on relation + co-access graph
+  (HippoRAG-inspired). After search, top-5 seed results spread activation
+  through explicit relations (`supports` +0.35, `extends` +0.25,
+  `derives` +0.20, `updates` +0.10, `contradicts` -0.40) and co-access
+  edges (`strength * 0.15`). Hop decay: 1-hop 0.5x, 2-hop 0.2x.
+- `spreading.ts`: `spreadActivation()` function.
+- v0.8.0-lite boosts existing results only (no new candidate fetch --
+  that is planned for v0.9.0).
+- Search pipeline order: rerank -> keyword -> context -> co-access ->
+  spreading -> dedup.
+
+### Changed
+- **Version bumps**: `@memrosetta/core` 0.5.0 -> 0.6.0,
+  `@memrosetta/cli` 0.7.0 -> 0.8.0, `memrosetta` 0.7.0 -> 0.8.0.
+
+## [0.7.0] - 2026-04-16
+
+### Added
+- **Context-Dependent Retrieval** (Tulving 1973): memories encoded in a
+  specific project/session context are boosted when searched from the
+  same context. `MemoryInput` gains `project` and `activityType` fields.
+  `searchMemories()` accepts `contextFilters: { project?, namespace?,
+  sessionId? }`. Boost: same project +0.25, same namespace +0.15, same
+  session +0.10.
+- **Hebbian Co-access** (Hebb 1949): when memories appear together in
+  search results, pair-wise co-access strength increments in
+  `memory_coaccess` table. Future searches boost co-accessed neighbors
+  (`strength * 0.15`). Separate from the semantic relation graph.
+- **Schema v7**: `project TEXT` and `activity_type TEXT` columns on
+  `memories` + `memory_coaccess` table with indexes.
+- `coaccess.ts`: `recordCoAccess`, `getCoAccessNeighbors`,
+  `decayCoAccess`.
+- Search pipeline order: rerank -> keyword -> context boost -> co-access
+  boost -> dedup.
+
+### Changed
+- **Version bumps**: `@memrosetta/core` 0.4.1 -> 0.5.0,
+  `@memrosetta/cli` 0.5.4 -> 0.7.0, `memrosetta` 0.5.4 -> 0.7.0.
+
 ## [0.5.4] - 2026-04-16
 
 ### Fixed

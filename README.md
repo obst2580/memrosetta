@@ -815,6 +815,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] Canonical `user_id` migration + `duplicates report` (v0.5.2)
 - [x] Korean natural-language FTS5 preprocessing (v0.5.2)
 - [x] Pull pagination for large sync backlogs (v0.5.3)
+- [x] Context-Dependent Retrieval + Hebbian Co-access (v0.7.0)
+- [x] Spreading Activation Lite on relation + co-access graph (v0.8.0)
 - [ ] OAuth authentication (GitHub + Google device-code flow, v0.6.0)
 - [ ] Duplicate memory collapse (exact-content dedupe, v0.5.x)
 - [ ] Sync server 1.0 (promotion from 0.1.x after production validation)

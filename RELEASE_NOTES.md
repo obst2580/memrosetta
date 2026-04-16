@@ -5,6 +5,49 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.8.0 — 2026-04-16
+
+**Spreading Activation Lite on relation + co-access graph.**
+
+After search, top-5 seed results spread activation through explicit
+relations (supports +0.35, extends +0.25, derives +0.20, updates +0.10,
+contradicts -0.40) and co-access edges (strength * 0.15). Hop decay:
+1-hop 0.5x, 2-hop 0.2x. v0.8.0-lite boosts existing results only; new
+candidate fetch is planned for v0.9.0.
+
+**Key changes**
+- `spreading.ts`: `spreadActivation()` function.
+- Pipeline: rerank -> keyword -> context -> co-access -> spreading -> dedup.
+
+**Version bumps**: `@memrosetta/core` 0.5.0 -> 0.6.0,
+`@memrosetta/cli` 0.7.0 -> 0.8.0, `memrosetta` 0.7.0 -> 0.8.0.
+
+---
+
+## v0.7.0 — 2026-04-16
+
+**Brain-inspired retrieval: Context-Dependent Retrieval + Hebbian Co-access.**
+
+Memories encoded in a specific project/session context are boosted when
+searched from the same context (Tulving 1973). When memories appear
+together in search results, pair-wise co-access strength increments in
+`memory_coaccess` (Hebb 1949), boosting co-accessed neighbors in future
+searches.
+
+**Key changes**
+- `MemoryInput` gains `project` and `activityType` fields.
+- `searchMemories()` accepts `contextFilters: { project?, namespace?, sessionId? }`.
+  Boost: same project +0.25, same namespace +0.15, same session +0.10.
+- Schema v7: `project TEXT` and `activity_type TEXT` columns on `memories` +
+  `memory_coaccess` table with indexes.
+- `coaccess.ts`: `recordCoAccess`, `getCoAccessNeighbors`, `decayCoAccess`.
+- Pipeline: rerank -> keyword -> context boost -> co-access boost -> dedup.
+
+**Version bumps**: `@memrosetta/core` 0.4.1 -> 0.5.0,
+`@memrosetta/cli` 0.5.4 -> 0.7.0, `memrosetta` 0.5.4 -> 0.7.0.
+
+---
+
 ## v0.5.4 — 2026-04-16
 
 **Fixed: Windows CRLF in TOML config generation.**
