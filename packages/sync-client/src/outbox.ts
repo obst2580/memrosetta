@@ -43,18 +43,43 @@ export class Outbox {
       .run(op.opId, op.opType, op.deviceId, op.userId, payloadStr, op.createdAt, null);
   }
 
-  getPending(): readonly SyncOp[] {
-    const rows = this.db
-      .prepare('SELECT * FROM sync_outbox WHERE pushed_at IS NULL ORDER BY created_at ASC')
-      .all() as readonly OutboxRow[];
+  /**
+   * Return pending outbox ops in chronological order.
+   *
+   * When `userId` is supplied, only ops belonging to that user are
+   * returned. This is the v0.5.2 hardening that prevents a
+   * cross-user fragmentation: if an older client wrote ops under a
+   * legacy `user_id` and the current `SyncClient` is configured with
+   * a canonical user, the transport will no longer silently pick up
+   * the legacy ops and ship them to the hub. The legacy queue is
+   * cleared by `memrosetta migrate legacy-user-ids` before the first
+   * post-migration push so this filter is defense-in-depth, not the
+   * primary fix.
+   */
+  getPending(userId?: string): readonly SyncOp[] {
+    const rows =
+      userId && userId.length > 0
+        ? (this.db
+            .prepare(
+              'SELECT * FROM sync_outbox WHERE pushed_at IS NULL AND user_id = ? ORDER BY created_at ASC',
+            )
+            .all(userId) as readonly OutboxRow[])
+        : (this.db
+            .prepare('SELECT * FROM sync_outbox WHERE pushed_at IS NULL ORDER BY created_at ASC')
+            .all() as readonly OutboxRow[]);
 
     return rows.map(rowToSyncOp);
   }
 
-  countPending(): number {
-    const row = this.db
-      .prepare('SELECT COUNT(*) as count FROM sync_outbox WHERE pushed_at IS NULL')
-      .get() as { count: number };
+  countPending(userId?: string): number {
+    const row =
+      userId && userId.length > 0
+        ? (this.db
+            .prepare('SELECT COUNT(*) as count FROM sync_outbox WHERE pushed_at IS NULL AND user_id = ?')
+            .get(userId) as { count: number })
+        : (this.db
+            .prepare('SELECT COUNT(*) as count FROM sync_outbox WHERE pushed_at IS NULL')
+            .get() as { count: number });
 
     return row.count;
   }

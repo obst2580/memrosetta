@@ -746,6 +746,8 @@ pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 - [x] `memrosetta enforce` + Stop hook 기반 구조적 기억 캡처 (v0.5.0)
 - [x] 대용량 backfill을 위한 sync push 청크 분할 (v0.5.0)
 - [x] Codex CLI Stop hook 자동 등록 (v0.5.1)
+- [x] 단일 canonical `user_id` 마이그레이션 + `duplicates report` (v0.5.2)
+- [x] 한글 자연어 FTS5 쿼리 전처리 (v0.5.2)
 - [ ] Sync server 1.0 (프로덕션 검증 후 0.1.x → 1.0 승격)
 - [ ] 프로필 빌더 (stable + dynamic 사용자 프로필)
 - [ ] Stable/volatile 기억 분류

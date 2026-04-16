@@ -203,6 +203,16 @@ async function main(): Promise<void> {
         await mod.run(commandOptions);
         break;
       }
+      case 'migrate': {
+        const mod = await import('./commands/migrate.js');
+        await mod.run(commandOptions);
+        break;
+      }
+      case 'duplicates': {
+        const mod = await import('./commands/duplicates.js');
+        await mod.run(commandOptions);
+        break;
+      }
       default:
         outputError(`Unknown command: ${command}`, opts.format);
         process.exitCode = 1;

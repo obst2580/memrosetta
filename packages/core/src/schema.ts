@@ -81,6 +81,42 @@ ALTER TABLE memories ADD COLUMN use_count INTEGER DEFAULT 0;
 ALTER TABLE memories ADD COLUMN success_count INTEGER DEFAULT 0;
 `;
 
+/**
+ * v6: supporting tables for v0.5.2 legacy user_id migration.
+ *
+ * `migration_version` is a lightweight audit log so repeatable
+ * one-shot data fixups (not schema DDL) can be marked as applied
+ * without piggy-backing on `schema_version`.
+ *
+ * `memory_legacy_scope` preserves the original `user_id` that was
+ * written when `resolveUserId(cwd)` derived `personal/<dir>` or
+ * `work/<dir>` style partitions from the current working directory.
+ * When `memrosetta migrate legacy-user-ids` rewrites `memories.user_id`
+ * to the canonical user, this table remembers what the row used to
+ * look like so future tooling can re-derive project scope without
+ * touching the `namespace` column (which already holds `session-XXXX`).
+ */
+const SCHEMA_V6 = `
+CREATE TABLE IF NOT EXISTS migration_version (
+  name        TEXT PRIMARY KEY,
+  applied_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS memory_legacy_scope (
+  memory_id         TEXT PRIMARY KEY,
+  legacy_user_id    TEXT NOT NULL,
+  legacy_namespace  TEXT,
+  migrated_at       TEXT NOT NULL,
+  FOREIGN KEY (memory_id) REFERENCES memories(memory_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_legacy_scope_user
+  ON memory_legacy_scope(legacy_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_memory_legacy_scope_user_ns
+  ON memory_legacy_scope(legacy_user_id, legacy_namespace);
+`;
+
 export interface SchemaOptions {
   readonly vectorEnabled?: boolean;
   readonly embeddingDimension?: number;
@@ -126,8 +162,11 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
       db.exec(schemaV2(dim));
       version = 2;
     }
-    // Fresh databases already include v3 + v4 + v5 columns in SCHEMA_V1
-    version = 5;
+    // Fresh databases already include v3 + v4 + v5 columns in SCHEMA_V1.
+    // v6 adds supporting tables (migration_version, memory_legacy_scope)
+    // so we still need to run it explicitly on fresh installs.
+    db.exec(SCHEMA_V6);
+    version = 6;
     db.prepare('INSERT INTO schema_version (version, embedding_dimension) VALUES (?, ?)').run(version, dim);
     return;
   }
@@ -170,6 +209,15 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
       db.exec(SCHEMA_V5);
     }
     db.prepare('UPDATE schema_version SET version = ?').run(5);
+  }
+
+  if (currentVersion < 6) {
+    // v6 creates migration_version + memory_legacy_scope. Uses
+    // CREATE TABLE IF NOT EXISTS internally so running it on a
+    // database that already has the tables (e.g. manual recovery)
+    // is safe.
+    db.exec(SCHEMA_V6);
+    db.prepare('UPDATE schema_version SET version = ?').run(6);
   }
 
   // Ensure vec_memories exists when vector is enabled (handles DB created without vectors)

@@ -4,7 +4,7 @@ import { rowToMemory, type MemoryRow } from './mapper.js';
 
 // Characters that have special meaning in FTS5 query syntax, plus common
 // punctuation that should be stripped for clean token matching.
-const FTS5_SPECIAL_CHARS = /["\*\(\):^{}\[\]?!.,;'\\]/g;
+const FTS5_SPECIAL_CHARS = /["\*\(\):^{}\[\]?!.,;'\\/]/g;
 
 // Common English stop words that add noise to FTS queries.
 const STOP_WORDS = new Set([
@@ -23,6 +23,49 @@ const STOP_WORDS = new Set([
   'go', 'went', 'going', 'get', 'got', 'getting',
 ]);
 
+// Low-signal Korean question / request tokens that often appear in
+// natural-language search prompts but rarely occur in stored memories.
+const KOREAN_LOW_SIGNAL_TOKENS = new Set([
+  '뭐지',
+  '뭐야',
+  '뭔지',
+  '어디',
+  '왜',
+  '어떻게',
+  '언제',
+  '누구',
+  '알려줘',
+]);
+
+/**
+ * Normalize a raw user query into FTS-friendly tokens.
+ *
+ * - NFKC normalization to reduce unicode variants
+ * - lowercase for stable matching
+ * - strip punctuation / FTS syntax characters
+ * - filter English stop words and low-signal Korean question tokens
+ * - fall back to the full token list when every token is low-signal
+ */
+export function preprocessQuery(rawQuery: string): readonly string[] {
+  const normalized = rawQuery
+    .normalize('NFKC')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(t => t.length > 0)
+    .map(t => t.replace(FTS5_SPECIAL_CHARS, ''))
+    .filter(t => t.length > 0);
+
+  if (normalized.length === 0) {
+    return [];
+  }
+
+  const meaningful = normalized.filter(
+    t => !STOP_WORDS.has(t) && !KOREAN_LOW_SIGNAL_TOKENS.has(t),
+  );
+
+  return meaningful.length > 0 ? meaningful : normalized;
+}
+
 /**
  * Build an FTS5 MATCH query from a raw user query string.
  *
@@ -34,32 +77,18 @@ const STOP_WORDS = new Set([
  * the original tokens to avoid returning empty results.
  */
 export function buildFtsQuery(rawQuery: string): string {
-  const allTokens = rawQuery
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(t => t.length > 0)
-    .map(t => t.replace(FTS5_SPECIAL_CHARS, ''))
-    .filter(t => t.length > 0);
-
-  if (allTokens.length === 0) {
-    return '';
-  }
-
-  // Filter stop words for better relevance
-  const meaningful = allTokens.filter(t => !STOP_WORDS.has(t));
-
-  // Fall back to all tokens if every token was a stop word
-  const tokens = meaningful.length > 0 ? meaningful : allTokens;
+  const tokens = preprocessQuery(rawQuery);
 
   if (tokens.length === 0) return '';
   if (tokens.length === 1) return `"${tokens[0]}"`;
 
-  // Short queries (2-4 tokens): AND mode for higher precision
-  // Long queries (5+ tokens): OR mode to avoid overly restrictive matching
-  if (tokens.length <= 4) {
+  // Two-token queries still benefit from precision.
+  if (tokens.length === 2) {
     return tokens.map(t => `"${t}"`).join(' AND ');
   }
 
+  // Three or more tokens come from natural-language prompts often enough
+  // that OR recall is safer than forcing every token to match.
   return tokens.map(t => `"${t}"`).join(' OR ');
 }
 
@@ -830,15 +859,7 @@ export function applyKeywordBoost(
  * Exported for use in keyword boosting.
  */
 export function extractQueryTokens(rawQuery: string): readonly string[] {
-  const allTokens = rawQuery
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(t => t.length > 0)
-    .map(t => t.replace(FTS5_SPECIAL_CHARS, ''))
-    .filter(t => t.length > 0);
-
-  const meaningful = allTokens.filter(t => !STOP_WORDS.has(t));
-  return meaningful.length > 0 ? meaningful : allTokens;
+  return preprocessQuery(rawQuery);
 }
 
 /**

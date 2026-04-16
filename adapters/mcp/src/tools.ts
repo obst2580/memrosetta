@@ -8,8 +8,16 @@ import type { IMemoryEngine, RelationType } from '@memrosetta/types';
 import type { SyncRecorder } from './sync-recorder.js';
 import { z } from 'zod';
 
+/**
+ * Canonical user identity for this MCP server instance. Resolved once
+ * at startup from `config.syncUserId ?? userInfo().username` (see
+ * `registerTools`), so every tool handler defaults to the same user
+ * even when the OS username does not match the user's chosen identity.
+ */
+let canonicalUserId: string = userInfo().username;
+
 function getDefaultUserId(): string {
-  return userInfo().username;
+  return canonicalUserId;
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +219,20 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
 export const TOOL_NAMES: readonly string[] = TOOL_DEFINITIONS.map((t) => t.name);
 
 /** Register all MemRosetta tools on the given MCP server. */
-export function registerTools(server: Server, engine: IMemoryEngine, syncRecorder?: SyncRecorder): void {
+export function registerTools(
+  server: Server,
+  engine: IMemoryEngine,
+  syncRecorder?: SyncRecorder,
+  options: { readonly canonicalUserId?: string } = {},
+): void {
+  // Pin the canonical user for this server instance. All tool handlers
+  // default to this id when the caller did not supply `userId`
+  // explicitly, so memories stay on a single identity even on hosts
+  // where the OS username differs from the user's chosen id.
+  if (options.canonicalUserId && options.canonicalUserId.trim().length > 0) {
+    canonicalUserId = options.canonicalUserId.trim();
+  }
+
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [...TOOL_DEFINITIONS],
   }));

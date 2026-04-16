@@ -31,6 +31,8 @@ const COMMANDS = new Set([
   'feedback',
   'sync',
   'enforce',
+  'migrate',
+  'duplicates',
 ]);
 
 function findFlag(args: readonly string[], flag: string): boolean {

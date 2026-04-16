@@ -95,7 +95,7 @@ describe('SyncClient', () => {
         opId: 'op-1',
         opType: 'memory_created',
         deviceId: TEST_CONFIG.deviceId,
-        userId: 'user-test',
+        userId: 'test-user',
         payload: { content: 'hello' },
         createdAt: '2025-01-01T00:00:00Z',
       });
@@ -157,7 +157,7 @@ describe('SyncClient', () => {
         opId: 'op-1',
         opType: 'memory_created',
         deviceId: TEST_CONFIG.deviceId,
-        userId: 'user-test',
+        userId: 'test-user',
         payload: {},
         createdAt: '2025-01-01T00:00:00Z',
       });
@@ -179,7 +179,7 @@ describe('SyncClient', () => {
           opId: `op-${i}`,
           opType: 'memory_created',
           deviceId: TEST_CONFIG.deviceId,
-          userId: 'user-test',
+          userId: 'test-user',
           payload: { content: `hello-${i}` },
           createdAt: `2025-01-01T00:00:${String(i).padStart(2, '0')}Z`,
         });
@@ -234,7 +234,7 @@ describe('SyncClient', () => {
           opId: `op-${i}`,
           opType: 'memory_created',
           deviceId: TEST_CONFIG.deviceId,
-          userId: 'user-test',
+          userId: 'test-user',
           payload: { content: `hello-${i}` },
           createdAt: `2025-01-01T00:00:${String(i).padStart(2, '0')}Z`,
         });
@@ -316,10 +316,10 @@ describe('SyncClient', () => {
               opId: 'remote-1',
               opType: 'memory_created',
               deviceId: 'other-device',
-              userId: 'user-test',
+              userId: 'test-user',
               payload: {
                 memoryId: 'mem-remote-1',
-                userId: 'user-test',
+                userId: 'test-user',
                 memoryType: 'fact',
                 content: 'from server',
                 confidence: 1.0,
@@ -548,7 +548,7 @@ describe('SyncClient', () => {
         opId: 'op-1',
         opType: 'memory_created',
         deviceId: TEST_CONFIG.deviceId,
-        userId: 'user-test',
+        userId: 'test-user',
         payload: { content: 'hello' },
         createdAt: '2025-01-01T00:00:00Z',
       });

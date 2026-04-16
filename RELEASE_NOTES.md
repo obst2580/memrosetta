@@ -5,6 +5,86 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.5.2 — 2026-04-16
+
+**Headline: Single-brain identity + Korean search fix.**
+
+Two bugs caused by early-era design decisions landed at once:
+
+1. **`memrosetta search` returned no results for natural-language
+   Korean queries** like `"hermes github 주소가 뭐지 ?"` because FTS5
+   treated every token as AND and required `주소가` / `뭐지` to appear
+   in every hit. Core now preprocesses queries (NFKC, punctuation
+   strip, Korean stopword removal) and relaxes 3+ token queries to
+   OR so reranking handles precision.
+2. **One user's memories were scattered across ~35 `user_id`
+   partitions** on a single device because pre-v0.4
+   `resolveUserId(cwd)` wrote `personal/<dir>` / `work/<dir>` /
+   `general` as the user identity. The new
+   `memrosetta migrate legacy-user-ids` command folds them all back
+   onto the canonical user without touching `namespace`, clears the
+   sync transport queues, and leaves a non-destructive snapshot
+   behind in the new `memory_legacy_scope` table.
+
+**New commands**
+- `memrosetta migrate legacy-user-ids [--dry-run] [--canonical <user>] [--yes]`
+  — one-shot, idempotent, client-only. Dry-run prints an impact
+  report (legacy rows, distinct partitions, queue pending,
+  cross-partition duplicate groups). Apply with `--yes` to skip the
+  interactive confirm.
+- `memrosetta duplicates report [--format json|text] [--limit <n>] [--verbose]`
+  — read-only audit of exact-content duplicate groups across
+  `user_id` partitions. Feeds the v0.5.3 destructive dedupe pass.
+
+**Added**
+- Schema v6 in `@memrosetta/core`: `migration_version` table (so
+  one-shot data fixups can track themselves without piggy-backing on
+  `schema_version`) and `memory_legacy_scope` supporting table. Fresh
+  installs start at v6; existing installs run v5 → v6 on first open.
+- `resolveCanonicalUserId(explicit?, configLoader?)` helper in
+  `@memrosetta/cli`. Priority: explicit arg > `config.syncUserId` > OS
+  username. Every CLI command, MCP tool handler, hook extractor, and
+  enforce call now routes through this helper. Pin `syncUserId` once
+  via `memrosetta sync enable --user <id>` and every device stays on
+  the same identity regardless of OS username.
+- Korean stopword list in `buildFtsQuery` / `preprocessQuery`.
+
+**Fixed**
+- `SyncClient.push()` no longer ships ops tagged with a legacy
+  `user_id` to the hub. `Outbox.getPending(userId)` and
+  `countPending(userId)` now accept an optional user filter and
+  `SyncClient` always passes its configured user — so after a
+  partial migration the queue stays clean.
+- MCP server default user resolves through `config.syncUserId`, not
+  just the OS username. `registerTools(..., { canonicalUserId })`
+  pins the identity at startup.
+
+**Deferred to v0.5.3**
+- Destructive duplicate collapse. v0.5.2 only audits; v0.5.3 will
+  merge or soft-invalidate duplicate rows using the priority hints
+  (canonical user > higher success_count > higher use_count > newer
+  learned_at) and `duplicates` relation edges.
+
+**Upgrade path**
+Every device needs the same sequence:
+
+```
+npm i -g memrosetta@0.5.2
+memrosetta migrate legacy-user-ids --dry-run
+memrosetta migrate legacy-user-ids
+memrosetta sync backfill --user <canonical>
+memrosetta sync now
+memrosetta duplicates report
+```
+
+Server-side old partitions stay orphaned; they will be pruned by a
+separate server tool in a later release. Back up
+`~/.memrosetta/memories.db` before the migration if you want a
+restore point (the CLI does not delete any rows, but a backup is
+cheap).
+
+---
+
 ## v0.5.1 — 2026-04-16
 
 **Headline: Codex CLI gets the same enforced memory capture as Claude Code.**

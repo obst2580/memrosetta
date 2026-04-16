@@ -2,6 +2,82 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.5.2] - 2026-04-16
+
+### Added
+- **`memrosetta migrate legacy-user-ids`** — one-shot client-side fixup
+  for the historical `user_id` fragmentation. Pre-v0.4 versions of
+  `resolveUserId(cwd)` wrote `personal/<dir>`, `work/<dir>`, `general`,
+  etc. as `user_id`, so a single user ended up with 30+ partitions on
+  a single device and cross-device search missed most memories.
+  The new command is non-destructive:
+  (a) snapshots legacy rows into `memory_legacy_scope(memory_id,
+      legacy_user_id, legacy_namespace, migrated_at)`,
+  (b) rewrites `memories.user_id` to the canonical user (from
+      `config.syncUserId ?? username`), leaving `namespace` untouched,
+  (c) clears `sync_outbox` / `sync_inbox` and resets the sync cursor
+      so stale legacy ops do not re-upload after migration, and
+  (d) records the migration in the new `migration_version` table so
+      re-runs are idempotent. `--dry-run` prints an impact report
+      with legacy row counts, distinct legacy partitions, queue
+      pending, and cross-partition duplicate group count.
+- **`memrosetta duplicates report`** — read-only audit of exact-content
+  duplicate groups across `user_id` partitions. Shows group counts,
+  member memory ids, and priority hints (canonical user > higher
+  `success_count` > higher `use_count` > newer `learned_at`). This is
+  the feeder for the v0.5.3 destructive dedupe pass.
+- **Schema v6** (`@memrosetta/core`): adds `migration_version` and
+  `memory_legacy_scope` tables plus their supporting indexes. Fresh
+  installs start at v6; upgrading installs run the v5 → v6 migration
+  automatically on next engine open.
+- **`resolveCanonicalUserId(explicit?, configLoader?)`** helper in
+  `@memrosetta/cli` that enforces the identity priority
+  `explicit → config.syncUserId → OS username`. Every CLI command,
+  MCP tool handler, hook extractor, and enforce pipeline now routes
+  through this helper, so pinning `syncUserId` once survives every
+  write and read path on every host.
+
+### Fixed
+- **FTS5 search returned zero results for natural-language queries
+  with Korean tokens.** `buildFtsQuery` joined tokens with AND, so
+  `"hermes github 주소가 뭐지 ?"` required every Korean question
+  particle to appear in the target document. `@memrosetta/core`
+  now runs a `preprocessQuery` step that normalises with NFKC,
+  strips question marks and other query-killing punctuation, drops
+  Korean stopwords (`뭐지`, `뭐야`, `어디`, `왜`, `어떻게`, …) alongside
+  the existing English stopwords, and switches the FTS connective to
+  OR for queries with 3+ tokens so reranking handles precision.
+- **`SyncClient.push()` could re-upload legacy user_id ops.** The
+  outbox transport did not filter by configured user, so after a
+  partial migration the next push would ship legacy-tagged ops back
+  to the hub. `Outbox.getPending(userId)` / `countPending(userId)`
+  now accept an optional user filter and `SyncClient` passes its
+  configured user every call, so only canonical-partition ops
+  leave the device.
+- **MCP server default user ignored `config.syncUserId`.** Tools
+  previously fell back to the OS username directly, so on hosts
+  where the OS username differed from the canonical user every
+  memory stored via MCP split off into a fresh partition.
+  `registerTools(server, engine, syncRecorder, { canonicalUserId })`
+  now pins the canonical user on startup and every handler defaults
+  to it.
+
+### Migration notes
+After upgrading on every device you already use, run:
+
+```
+memrosetta migrate legacy-user-ids --dry-run       # preview
+memrosetta migrate legacy-user-ids                  # apply (prompts)
+memrosetta sync backfill --user <canonical>        # republish
+memrosetta sync now                                 # push to hub
+memrosetta duplicates report                        # audit dupes
+```
+
+The migration is non-destructive: the pre-migration `user_id` is
+preserved in `memory_legacy_scope` and the on-disk SQLite file is
+never dropped. Back up `~/.memrosetta/memories.db` if you want a
+restore point anyway.
+
 ## [0.5.1] - 2026-04-16
 
 ### Added

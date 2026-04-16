@@ -796,6 +796,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] Structural memory capture via `memrosetta enforce` + Stop hook (v0.5.0)
 - [x] Sync push chunking for large backfills (v0.5.0)
 - [x] Codex CLI Stop hook auto-registration (v0.5.1)
+- [x] Canonical `user_id` migration + `duplicates report` (v0.5.2)
+- [x] Korean natural-language FTS5 preprocessing (v0.5.2)
 - [ ] Sync server 1.0 (promotion from 0.1.x after production validation)
 - [ ] Profile builder (stable + dynamic user profiles)
 - [ ] Stable/volatile memory classification

@@ -232,7 +232,15 @@ async function main(): Promise<void> {
     { capabilities: { tools: {} } },
   );
 
-  registerTools(server, engine, syncRecorder);
+  // Canonical identity: prefer the user-pinned `config.syncUserId`
+  // over the host OS username so memories stay on one identity
+  // across devices (Mac `obst` vs Windows `jhlee13`).
+  const canonicalUserId =
+    config.syncUserId && config.syncUserId.trim().length > 0
+      ? config.syncUserId.trim()
+      : (process.env.USER ?? process.env.USERNAME ?? 'unknown');
+
+  registerTools(server, engine, syncRecorder, { canonicalUserId });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

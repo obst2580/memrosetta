@@ -86,7 +86,7 @@ export class SyncClient {
       serverUrl: this.config.serverUrl,
       userId: this.config.userId,
       deviceId: this.config.deviceId,
-      pendingOps: this.outbox.countPending(),
+      pendingOps: this.outbox.countPending(this.config.userId),
       lastPush: {
         attemptAt: this.getState('last_push_attempt_at'),
         successAt: this.getState('last_push_success_at'),
@@ -103,7 +103,13 @@ export class SyncClient {
     const now = new Date().toISOString();
     this.setState('last_push_attempt_at', now);
 
-    const pending = this.outbox.getPending();
+    // v0.5.2 hardening: only push ops belonging to the configured
+    // canonical user. Legacy ops tagged with a fragmented user_id
+    // stay parked in sync_outbox until `memrosetta migrate
+    // legacy-user-ids` rewrites them (or the user clears the queue
+    // manually). This prevents old fragmented partitions from
+    // silently republishing after a migration.
+    const pending = this.outbox.getPending(this.config.userId);
     if (pending.length === 0) {
       this.setState('last_push_success_at', now);
       return { pushed: 0, results: [], highWatermark: 0 };

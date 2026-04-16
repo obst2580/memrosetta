@@ -13,13 +13,12 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import { userInfo } from 'node:os';
 import type {
   Memory,
   MemoryRelation,
   SyncOp,
 } from '@memrosetta/types';
-import { getConfig, type MemRosettaConfig } from '../hooks/config.js';
+import { getConfig, resolveCanonicalUserId, type MemRosettaConfig } from '../hooks/config.js';
 
 /**
  * Deterministic opId helper used by backfill: same (kind, key) always
@@ -60,7 +59,7 @@ export async function openCliSyncContext(dbPath: string): Promise<CliSyncContext
     return DISABLED;
   }
 
-  const userId = config.syncUserId ?? userInfo().username;
+  const userId = resolveCanonicalUserId();
   const deviceId = config.syncDeviceId;
 
   try {

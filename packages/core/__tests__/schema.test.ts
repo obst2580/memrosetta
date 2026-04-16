@@ -57,11 +57,28 @@ describe('ensureSchema', () => {
     expect(indexNames).toContain('idx_memories_activation');
   });
 
-  it('sets schema version to 5 for fresh database', () => {
+  it('sets schema version to 6 for fresh database', () => {
     ensureSchema(db);
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(5);
+    expect(row.version).toBe(6);
+  });
+
+  it('creates migration_version and memory_legacy_scope tables at v6', () => {
+    ensureSchema(db);
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+      .all() as readonly { name: string }[];
+    const names = tables.map((t) => t.name);
+    expect(names).toContain('migration_version');
+    expect(names).toContain('memory_legacy_scope');
+
+    const indexes = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_memory_legacy_scope%'")
+      .all() as readonly { name: string }[];
+    const indexNames = indexes.map((i) => i.name);
+    expect(indexNames).toContain('idx_memory_legacy_scope_user');
+    expect(indexNames).toContain('idx_memory_legacy_scope_user_ns');
   });
 
   it('is idempotent - running twice does not error', () => {
@@ -69,7 +86,7 @@ describe('ensureSchema', () => {
     expect(() => ensureSchema(db)).not.toThrow();
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(5);
+    expect(row.version).toBe(6);
   });
 
   it('FTS5 syncs with memories table on insert', () => {

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { ensureSchema } from '../src/schema.js';
 import {
+  preprocessQuery,
   buildFtsQuery,
   buildSearchSql,
   normalizeScores,
@@ -99,8 +100,8 @@ describe('buildFtsQuery', () => {
 
   it('filters stop words from queries', () => {
     const result = buildFtsQuery('When did Caroline go to the LGBTQ support group?');
-    // 4 tokens -> AND mode
-    expect(result).toBe('"caroline" AND "lgbtq" AND "support" AND "group"');
+    // 4 meaningful tokens -> OR mode
+    expect(result).toBe('"caroline" OR "lgbtq" OR "support" OR "group"');
   });
 
   it('falls back to all tokens when every token is a stop word', () => {
@@ -111,8 +112,8 @@ describe('buildFtsQuery', () => {
 
   it('handles query with multiple special characters', () => {
     const result = buildFtsQuery('a(b) c*d {e}');
-    // 3 tokens -> AND mode
-    expect(result).toBe('"ab" AND "cd" AND "e"');
+    // 3 tokens -> OR mode
+    expect(result).toBe('"ab" OR "cd" OR "e"');
   });
 
   it('filters out tokens that become empty after escaping', () => {
@@ -346,6 +347,86 @@ describe('searchMemories', () => {
     expect(result.results[0].memory.memoryId).toBe('mem-1');
     expect(result.totalCount).toBe(1);
     expect(result.queryTimeMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('finds Korean natural-language query with low-signal suffixes removed', () => {
+    insertTestMemory(db, {
+      memory_id: 'mem-hermes-1',
+      content: 'hermes github 주소 정리',
+      keywords: 'hermes github 주소',
+    });
+
+    const result = searchMemories(db, {
+      userId: 'user1',
+      query: 'hermes github 주소가 뭐지 ?',
+    });
+
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.results[0].memory.memoryId).toBe('mem-hermes-1');
+  });
+
+  it('finds mixed query with Korean filler words removed', () => {
+    insertTestMemory(db, {
+      memory_id: 'mem-hermes-2',
+      content: 'hermes github 링크',
+      keywords: 'hermes github 링크',
+    });
+
+    const result = searchMemories(db, {
+      userId: 'user1',
+      query: 'hermes github 이거 뭐야',
+    });
+
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.results[0].memory.memoryId).toBe('mem-hermes-2');
+  });
+
+  it('finds mixed English/Korean query with OR recall for three tokens', () => {
+    insertTestMemory(db, {
+      memory_id: 'mem-hermes-3',
+      content: 'NousResearch hermes-agent 링크',
+      keywords: 'nousresearch hermes-agent 링크',
+    });
+
+    const result = searchMemories(db, {
+      userId: 'user1',
+      query: 'NousResearch hermes-agent 링크 어디',
+    });
+
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.results[0].memory.memoryId).toBe('mem-hermes-3');
+  });
+
+  it('finds Korean-only query after switching 3+ tokens to OR mode', () => {
+    insertTestMemory(db, {
+      memory_id: 'mem-hermes-4',
+      content: '헤르메스 깃허브 주소',
+      keywords: '헤르메스 깃허브 주소',
+    });
+
+    const result = searchMemories(db, {
+      userId: 'user1',
+      query: '헤르메스 깃허브 주소',
+    });
+
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.results[0].memory.memoryId).toBe('mem-hermes-4');
+  });
+
+  it('keeps two-token punctuated query in AND mode', () => {
+    insertTestMemory(db, {
+      memory_id: 'mem-hermes-5',
+      content: 'hermes github',
+      keywords: 'hermes github',
+    });
+
+    const result = searchMemories(db, {
+      userId: 'user1',
+      query: 'hermes? github!!',
+    });
+
+    expect(result.results.length).toBeGreaterThan(0);
+    expect(result.results[0].memory.memoryId).toBe('mem-hermes-5');
   });
 
   it('ranks more relevant results higher with BM25', () => {
@@ -1111,11 +1192,11 @@ describe('buildFtsQuery AND/OR strategy', () => {
   });
 
   it('uses AND for 3-token queries', () => {
-    expect(buildFtsQuery('big red car')).toBe('"big" AND "red" AND "car"');
+    expect(buildFtsQuery('big red car')).toBe('"big" OR "red" OR "car"');
   });
 
   it('uses AND for 4-token queries', () => {
-    expect(buildFtsQuery('big red fast car')).toBe('"big" AND "red" AND "fast" AND "car"');
+    expect(buildFtsQuery('big red fast car')).toBe('"big" OR "red" OR "fast" OR "car"');
   });
 
   it('uses OR for 5+ token queries', () => {
@@ -1125,8 +1206,45 @@ describe('buildFtsQuery AND/OR strategy', () => {
   });
 
   it('counts only meaningful tokens for AND/OR threshold', () => {
-    // "the big and red car" -> stop words removed -> "big", "red", "car" (3 tokens -> AND)
-    expect(buildFtsQuery('the big and red car')).toBe('"big" AND "red" AND "car"');
+    // "the big and red car" -> stop words removed -> "big", "red", "car" (3 tokens -> OR)
+    expect(buildFtsQuery('the big and red car')).toBe('"big" OR "red" OR "car"');
+  });
+
+  it('removes low-signal Korean question tokens before building the FTS query', () => {
+    expect(buildFtsQuery('hermes github 주소가 뭐지 ?')).toBe('"hermes" OR "github" OR "주소가"');
+  });
+
+  it('keeps two-token Korean/English queries in AND mode', () => {
+    expect(buildFtsQuery('hermes? github!!')).toBe('"hermes" AND "github"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// preprocessQuery
+// ---------------------------------------------------------------------------
+describe('preprocessQuery', () => {
+  it('normalizes English queries and removes stop words', () => {
+    expect(preprocessQuery('What color is the car?')).toEqual(['color', 'car']);
+  });
+
+  it('removes low-signal Korean question tokens', () => {
+    expect(preprocessQuery('hermes github 주소가 뭐지 ?')).toEqual(['hermes', 'github', '주소가']);
+  });
+
+  it('removes low-signal Korean request tokens', () => {
+    expect(preprocessQuery('NousResearch hermes-agent 링크 알려줘')).toEqual([
+      'nousresearch',
+      'hermes-agent',
+      '링크',
+    ]);
+  });
+
+  it('falls back to the original tokens when every token is low-signal', () => {
+    expect(preprocessQuery('왜 어디')).toEqual(['왜', '어디']);
+  });
+
+  it('returns empty for empty query', () => {
+    expect(preprocessQuery('')).toEqual([]);
   });
 });
 

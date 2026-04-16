@@ -1,6 +1,6 @@
-import { userInfo } from 'node:os';
 import type { MemoryInput, MemoryType } from '@memrosetta/types';
 import type { ConversationTurn, TranscriptData } from './transcript-parser.js';
+import { resolveCanonicalUserId } from './config.js';
 
 const KEYWORD_PATTERNS: Record<string, string> = {
   typescript: 'TypeScript',
@@ -76,8 +76,14 @@ export function extractKeywords(text: string): readonly string[] {
   return [...keywords];
 }
 
+/**
+ * Legacy alias retained for backwards compatibility with hook callers
+ * that still pass `cwd`. Routes through `resolveCanonicalUserId()` so
+ * the OS username never wins over a user-pinned `config.syncUserId`,
+ * preventing fresh fragmentation on multi-device installs.
+ */
 export function resolveUserId(_cwd: string): string {
-  return userInfo().username;
+  return resolveCanonicalUserId();
 }
 
 /**

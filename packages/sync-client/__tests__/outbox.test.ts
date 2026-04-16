@@ -76,4 +76,31 @@ describe('Outbox', () => {
     const pending = outbox.getPending();
     expect(pending).toHaveLength(1);
   });
+
+  it('getPending(userId) filters to a single user', () => {
+    outbox.addOp(createTestOp({ opId: 'op-canonical-1', userId: 'obst' }));
+    outbox.addOp(createTestOp({ opId: 'op-legacy-1', userId: 'work/tech-manage-api' }));
+    outbox.addOp(createTestOp({ opId: 'op-canonical-2', userId: 'obst' }));
+    outbox.addOp(createTestOp({ opId: 'op-legacy-2', userId: 'personal/memrosetta' }));
+
+    const canonical = outbox.getPending('obst');
+    expect(canonical.map((p) => p.opId).sort()).toEqual(['op-canonical-1', 'op-canonical-2']);
+
+    const legacy = outbox.getPending('work/tech-manage-api');
+    expect(legacy.map((p) => p.opId)).toEqual(['op-legacy-1']);
+
+    // Unfiltered still sees everything.
+    expect(outbox.getPending()).toHaveLength(4);
+  });
+
+  it('countPending(userId) matches getPending(userId)', () => {
+    outbox.addOp(createTestOp({ opId: 'op-1', userId: 'obst' }));
+    outbox.addOp(createTestOp({ opId: 'op-2', userId: 'obst' }));
+    outbox.addOp(createTestOp({ opId: 'op-3', userId: 'general' }));
+
+    expect(outbox.countPending('obst')).toBe(2);
+    expect(outbox.countPending('general')).toBe(1);
+    expect(outbox.countPending('no-such-user')).toBe(0);
+    expect(outbox.countPending()).toBe(3);
+  });
 });

@@ -85,6 +85,45 @@ export function writeDefaultConfig(): void {
   writeConfig(DEFAULT_CONFIG);
 }
 
-export function getDefaultUserId(): string {
+/**
+ * Canonical user identity resolution.
+ *
+ * Priority:
+ *   1. explicit argument (`--user <id>`)
+ *   2. `config.syncUserId` from ~/.memrosetta/config.json
+ *   3. OS username (`whoami`)
+ *
+ * This single entry point is used by every write and read path —
+ * CLI commands, MCP tools, hook extractor, enforce pipeline — so the
+ * same memory is identifiable across devices even when the OS username
+ * differs (e.g. Mac `obst` vs Windows `jhlee13`). The user pins their
+ * canonical identity once via `memrosetta sync enable --user <id>`
+ * and everything else inherits it.
+ *
+ * The `configLoader` parameter is there solely to make the function
+ * unit-testable without touching the real `~/.memrosetta/config.json`.
+ * Production callers never pass it.
+ */
+export function resolveCanonicalUserId(
+  explicit?: string | null,
+  configLoader: () => MemRosettaConfig = getConfig,
+): string {
+  if (explicit && explicit.trim().length > 0) {
+    return explicit.trim();
+  }
+  const config = configLoader();
+  if (config.syncUserId && config.syncUserId.trim().length > 0) {
+    return config.syncUserId.trim();
+  }
   return userInfo().username;
+}
+
+/**
+ * @deprecated Use `resolveCanonicalUserId()` instead. Retained for
+ * backwards compatibility with callers that have not been migrated
+ * yet. New code must never fall back straight to the OS username
+ * without checking config.syncUserId first.
+ */
+export function getDefaultUserId(): string {
+  return resolveCanonicalUserId();
 }
