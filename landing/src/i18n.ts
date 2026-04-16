@@ -334,6 +334,12 @@ memrosetta maintain`,
           description:
             'Context-dependent retrieval boosts memories from the same project/session (Tulving 1973). Hebbian co-access strengthens memories that appear together in search results (Hebb 1949). Spreading activation propagates relevance through relation and co-access edges with hop decay.',
         },
+        {
+          badge: 'v0.9.0-v0.9.1',
+          title: 'Auth Rework + Search Quality',
+          description:
+            'Liliplanet JWT auth replaces the device-code flow: browser-based login, JWKS verification, dual-auth middleware. Recency boost tuned (decay 0.99/hr), autoRelate expanded (50 candidates, cosine>0.7 auto-extends), and `memrosetta dedupe` collapses exact-content duplicates. 938 tests green.',
+        },
       ],
     },
     architecture: {
@@ -790,6 +796,12 @@ memrosetta maintain`,
           title: '뇌과학 기반 검색',
           description:
             '맥락 의존 인출로 같은 프로젝트/세션의 기억을 부스트합니다 (Tulving 1973). Hebbian 동시 접근은 함께 검색된 기억을 강화합니다 (Hebb 1949). 확산 활성화가 relation 및 co-access 엣지를 통해 관련성을 전파하며 hop decay를 적용합니다.',
+        },
+        {
+          badge: 'v0.9.0-v0.9.1',
+          title: '인증 리워크 + 검색 품질',
+          description:
+            'Liliplanet JWT 인증이 device-code 흐름을 대체합니다: 브라우저 기반 로그인, JWKS 검증, 이중 인증 미들웨어. Recency 부스트 강화 (decay 0.99/hr), autoRelate 확장 (후보 50개, cosine>0.7 자동 extends), `memrosetta dedupe`로 동일 내용 중복 정리. 938개 테스트 통과.',
         },
       ],
     },

@@ -786,6 +786,8 @@ pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 - [x] 대용량 sync pull 페이지네이션 (v0.5.3)
 - [x] 맥락 의존 인출 + Hebbian 동시 활성화 (v0.7.0)
 - [x] 확산 활성화 Lite: relation + co-access 그래프 순회 (v0.8.0)
+- [x] Liliplanet JWT 인증 통합 + 랜딩 페이지 리디자인 (v0.9.0)
+- [x] Recency 강화 + autoRelate 확장 + 중복 메모리 정리 (v0.9.1)
 - [ ] Sync server 1.0 (프로덕션 검증 후 0.1.x → 1.0 승격)
 - [ ] 프로필 빌더 (stable + dynamic 사용자 프로필)
 - [ ] Stable/volatile 기억 분류

@@ -2,6 +2,51 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.9.1] - 2026-04-16
+
+### Added
+- **Recency boost tuning**: weight 1.0 -> 2.0, decay 0.995 -> 0.99 per hour
+  (3 days = 49%, 7 days = 19%). Recent memories surface more aggressively.
+- **autoRelate expansion**: candidate window 10 -> 50, keyword overlap
+  threshold 3 -> 2, embedding cosine > 0.7 auto-creates `extends` relation.
+- **`memrosetta dedupe [--dry-run]`** command: exact content + type grouping,
+  loser invalidated with `duplicates` relation edge.
+- **Schema v8**: `duplicates` added to `relation_type` CHECK constraint.
+- New files: `packages/core/src/dedupe.ts`,
+  `packages/cli/src/commands/dedupe.ts`.
+
+### Changed
+- **Version bumps**: `@memrosetta/core` 0.6.0 -> 0.7.0,
+  `@memrosetta/cli` 0.8.0 -> 0.9.1, `memrosetta` 0.8.0 -> 0.9.1.
+
+### Tests
+- 938 tests green.
+
+## [0.9.0] - 2026-04-16
+
+### Added
+- **Liliplanet JWT auth rework**: `sync login` opens browser + localhost
+  callback for JWT capture, replacing the device-code flow.
+- **`sync logout` / `sync status`**: shows auth mode, account email, token
+  expiry.
+- **sync-server JWKS JWT verification** via `jose`, dual-auth middleware
+  (JWT + API key).
+- **push/pull JWT mode** uses auth context `ownerUserId`; API key mode
+  preserves request `userId`.
+- **Landing page redesign**: Bricolage Grotesque + Source Serif 4 fonts,
+  auth callback page, Login/Logout state toggle in header.
+- **PostgreSQL migration**: additive-first split (002a additive, 002b
+  cleanup).
+
+### Removed
+- Self-built OAuth broker (`providers.ts`, `tokens.ts`,
+  `sessions` / `auth_device_requests` tables).
+
+### Changed
+- **Version bumps**: `@memrosetta/cli` 0.8.0 -> 0.9.0,
+  `memrosetta` 0.8.0 -> 0.9.0.
+- README: Hosted Cloud vs Self-Host sync paths separated.
+
 ## [0.8.0] - 2026-04-16
 
 ### Added

@@ -5,6 +5,48 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.9.1 — 2026-04-16
+
+**Search quality + duplicate cleanup.**
+
+Recency boost tuned (weight 2.0, decay 0.99/hr -- 3 days = 49%,
+7 days = 19%). autoRelate expanded (50 candidates, keyword overlap 2,
+cosine > 0.7 auto-extends). New `memrosetta dedupe [--dry-run]` collapses
+exact-content duplicates with `duplicates` relation. Schema v8.
+
+**Key changes**
+- `packages/core/src/dedupe.ts`, `packages/cli/src/commands/dedupe.ts`.
+- `duplicates` added to `relation_type` CHECK constraint.
+- 938 tests green.
+
+**Version bumps**: `@memrosetta/core` 0.6.0 -> 0.7.0,
+`@memrosetta/cli` 0.8.0 -> 0.9.1, `memrosetta` 0.8.0 -> 0.9.1.
+
+---
+
+## v0.9.0 — 2026-04-16
+
+**Liliplanet JWT auth integration + landing page redesign.**
+
+`sync login` now opens the browser for a localhost callback JWT capture,
+replacing the device-code flow. `sync logout` / `sync status` show auth
+mode, account email, and token expiry. The sync-server verifies JWTs via
+JWKS (`jose`) with dual-auth middleware (JWT + API key). push/pull in JWT
+mode uses the auth context `ownerUserId`.
+
+**Key changes**
+- Removed self-built OAuth broker (providers.ts, tokens.ts,
+  sessions/auth_device_requests tables).
+- PostgreSQL migration: additive-first split (002a additive, 002b cleanup).
+- Landing page: Bricolage Grotesque + Source Serif 4 fonts, auth callback
+  page, Login/Logout state toggle in header.
+- README: Hosted Cloud vs Self-Host sync paths separated.
+
+**Version bumps**: `@memrosetta/cli` 0.8.0 -> 0.9.0,
+`memrosetta` 0.8.0 -> 0.9.0.
+
+---
+
 ## v0.8.0 — 2026-04-16
 
 **Spreading Activation Lite on relation + co-access graph.**
