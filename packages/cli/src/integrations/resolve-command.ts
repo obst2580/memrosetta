@@ -14,7 +14,7 @@ function resolveAbsolutePath(command: string): string | null {
       process.platform === 'win32'
         ? `where ${command}`
         : `command -v ${command}`;
-    return execSync(cmd, { encoding: 'utf-8' }).trim().split('\n')[0] || null;
+    return execSync(cmd, { encoding: 'utf-8' }).trim().split(/\r?\n/)[0]?.trim() || null;
   } catch {
     return null;
   }
