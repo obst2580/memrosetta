@@ -947,6 +947,54 @@ const COACCESS_SEED_COUNT = 5;
  * Boost candidates that are strongly co-accessed with already top-ranked
  * seed memories. Graceful fallback when the co-access table is absent.
  */
+/**
+ * Spreading Activation boost (v0.8.0).
+ *
+ * Takes the top-5 seed results, spreads activation through the
+ * explicit relation graph + co-access graph (1-2 hops), and boosts
+ * any result that was reached by the spread. This surfaces memories
+ * that are graph-adjacent to the top hits even if their text/vector
+ * similarity was borderline.
+ *
+ * v0.8.0-lite: only boosts existing results. Does NOT fetch new
+ * candidates from the graph — that is v0.9.0 territory.
+ */
+export function applySpreadingBoost(
+  db: Database.Database,
+  results: readonly SearchResult[],
+): readonly SearchResult[] {
+  if (results.length < 2) return results;
+
+  try {
+    const { spreadActivation } = require('./spreading.js') as {
+      spreadActivation: (
+        db: Database.Database,
+        seedIds: readonly string[],
+        opts?: { maxHops?: number; maxNeighborsPerHop?: number; includeCoAccess?: boolean },
+      ) => ReadonlyMap<string, number>;
+    };
+
+    const seedIds = results.slice(0, 5).map((r) => r.memory.memoryId);
+    const activation = spreadActivation(db, seedIds, {
+      maxHops: 2,
+      maxNeighborsPerHop: 10,
+      includeCoAccess: true,
+    });
+
+    if (activation.size === 0) return results;
+
+    const boosted = results.map((r) => {
+      const boost = activation.get(r.memory.memoryId);
+      if (boost == null || boost === 0) return r;
+      return { ...r, score: r.score + boost };
+    });
+
+    return [...boosted].sort((a, b) => b.score - a.score);
+  } catch {
+    return results;
+  }
+}
+
 export function applyCoAccessBoost(
   db: Database.Database,
   results: readonly SearchResult[],
@@ -1094,7 +1142,8 @@ export function searchMemories(
     const boosted = applyKeywordBoost(weighted, queryTokens);
     const contextBoosted = applyContextBoost(db, boosted, contextFilters);
     const coAccessBoosted = applyCoAccessBoost(db, contextBoosted);
-    finalResults = deduplicateResults(coAccessBoosted);
+    const spreadBoosted = applySpreadingBoost(db, coAccessBoosted);
+    finalResults = deduplicateResults(spreadBoosted);
 
     // Update access tracking for returned results
     if (!skipAccessTracking) {
@@ -1128,14 +1177,16 @@ export function searchMemories(
     const boosted = applyKeywordBoost(weighted, queryTokens);
     const contextBoosted = applyContextBoost(db, boosted, contextFilters);
     const coAccessBoosted = applyCoAccessBoost(db, contextBoosted);
-    finalResults = deduplicateResults(coAccessBoosted);
+    const spreadBoosted = applySpreadingBoost(db, coAccessBoosted);
+    finalResults = deduplicateResults(spreadBoosted);
   } else if (vecResults.length === 0) {
     // If vector returned nothing, return FTS-only
     const weighted = applyThreeFactorReranking(ftsResults);
     const boosted = applyKeywordBoost(weighted, queryTokens);
     const contextBoosted = applyContextBoost(db, boosted, contextFilters);
     const coAccessBoosted = applyCoAccessBoost(db, contextBoosted);
-    finalResults = deduplicateResults(coAccessBoosted);
+    const spreadBoosted = applySpreadingBoost(db, coAccessBoosted);
+    finalResults = deduplicateResults(spreadBoosted);
   } else {
     // Convex combination fusion: principled score-level merge
     const limit = query.limit ?? DEFAULT_LIMIT;
@@ -1145,7 +1196,8 @@ export function searchMemories(
     const boosted = applyKeywordBoost(weighted, queryTokens);
     const contextBoosted = applyContextBoost(db, boosted, contextFilters);
     const coAccessBoosted = applyCoAccessBoost(db, contextBoosted);
-    finalResults = deduplicateResults(coAccessBoosted);
+    const spreadBoosted = applySpreadingBoost(db, coAccessBoosted);
+    finalResults = deduplicateResults(spreadBoosted);
   }
 
   // Update access tracking for returned results
