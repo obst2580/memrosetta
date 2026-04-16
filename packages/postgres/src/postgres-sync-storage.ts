@@ -1,4 +1,3 @@
-import { createHash, randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
@@ -10,10 +9,7 @@ import type {
 
 import type {
   AuthenticatedUser,
-  DeviceAuthStart,
   ISyncStorage,
-  SessionTokens,
-  StoredDeviceAuthRequest,
 } from './sync-storage.js';
 import { Migrator } from './migrator.js';
 
@@ -159,293 +155,20 @@ export class PostgresSyncStorage implements ISyncStorage {
     return rows[0]?.hwm != null ? Number(rows[0].hwm) : 0;
   }
 
-  async createDeviceAuthRequest(input: DeviceAuthStart): Promise<StoredDeviceAuthRequest> {
-    const { rows } = await this.pool.query<{
-      id: string;
-      provider: string;
-      device_id: string;
-      user_code: string;
-      verification_uri: string;
-      interval_seconds: number;
-      expires_at: Date;
-      provider_device_code: string;
-      status: string;
-      created_at: Date;
-      completed_at: Date | null;
-    }>(
-      `INSERT INTO auth_device_requests (
-         id, provider, device_id, user_code, verification_uri,
-         interval_seconds, expires_at, provider_device_code, status, created_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
-       RETURNING id, provider, device_id, user_code, verification_uri,
-                 interval_seconds, expires_at, provider_device_code,
-                 status, created_at, completed_at`,
-      [
-        cryptoRandomUuid(),
-        input.provider,
-        input.deviceId,
-        input.userCode,
-        input.verificationUri,
-        input.intervalSeconds,
-        input.expiresAt,
-        input.providerDeviceCode,
-      ],
-    );
-
-    return mapDeviceAuthRequest(rows[0]);
-  }
-
-  async getDeviceAuthRequest(id: string): Promise<StoredDeviceAuthRequest | null> {
-    const { rows } = await this.pool.query<{
-      id: string;
-      provider: string;
-      device_id: string;
-      user_code: string;
-      verification_uri: string;
-      interval_seconds: number;
-      expires_at: Date;
-      provider_device_code: string;
-      status: string;
-      created_at: Date;
-      completed_at: Date | null;
-    }>(
-      `SELECT id, provider, device_id, user_code, verification_uri,
-              interval_seconds, expires_at, provider_device_code,
-              status, created_at, completed_at
-       FROM auth_device_requests
-       WHERE id = $1`,
-      [id],
-    );
-
-    return rows[0] ? mapDeviceAuthRequest(rows[0]) : null;
-  }
-
-  async markDeviceAuthRequestCompleted(id: string): Promise<void> {
+  async upsertAuthenticatedUser(user: AuthenticatedUser): Promise<void> {
     await this.pool.query(
-      `UPDATE auth_device_requests
-       SET status = 'completed', completed_at = NOW()
-       WHERE id = $1`,
-      [id],
+      `INSERT INTO users (owner_user_id, email, roles, created_at, last_seen_at)
+       VALUES ($1, $2, $3::jsonb, NOW(), NOW())
+       ON CONFLICT (owner_user_id)
+       DO UPDATE SET
+         email = EXCLUDED.email,
+         roles = EXCLUDED.roles,
+         last_seen_at = NOW()`,
+      [user.ownerUserId, user.email, JSON.stringify(user.roles)],
     );
-  }
-
-  async markDeviceAuthRequestExpired(id: string): Promise<void> {
-    await this.pool.query(
-      `UPDATE auth_device_requests
-       SET status = 'expired'
-       WHERE id = $1`,
-      [id],
-    );
-  }
-
-  async upsertAuthenticatedUser(user: AuthenticatedUser): Promise<{ readonly userId: string }> {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const existing = await client.query<{ user_id: string }>(
-        `SELECT user_id
-         FROM auth_accounts
-         WHERE provider = $1 AND provider_subject = $2`,
-        [user.provider, user.providerSubject],
-      );
-
-      const userId = existing.rows[0]?.user_id ?? cryptoRandomUuid();
-
-      if (existing.rows.length === 0) {
-        await client.query(
-          `INSERT INTO users (id, primary_email, display_name, created_at)
-           VALUES ($1, $2, $3, NOW())
-           ON CONFLICT (id) DO NOTHING`,
-          [userId, user.email, user.displayName],
-        );
-      } else {
-        await client.query(
-          `UPDATE users
-           SET primary_email = COALESCE($2, primary_email),
-               display_name = COALESCE($3, display_name)
-           WHERE id = $1`,
-          [userId, user.email, user.displayName],
-        );
-      }
-
-      await client.query(
-        `INSERT INTO auth_accounts (
-           id, user_id, provider, provider_subject, email, display_name, created_at, last_login_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-         ON CONFLICT (provider, provider_subject)
-         DO UPDATE SET
-           user_id = EXCLUDED.user_id,
-           email = EXCLUDED.email,
-           display_name = EXCLUDED.display_name,
-           last_login_at = NOW()`,
-        [cryptoRandomUuid(), userId, user.provider, user.providerSubject, user.email, user.displayName],
-      );
-
-      await client.query('COMMIT');
-      return { userId };
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  }
-
-  async createSession(
-    userId: string,
-    deviceId: string,
-    tokens: SessionTokens,
-  ): Promise<void> {
-    await this.pool.query(
-      `INSERT INTO sessions (
-         id, user_id, device_id,
-         access_token_hash, refresh_token_hash,
-         access_expires_at, refresh_expires_at,
-         created_at, last_seen_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-      [
-        cryptoRandomUuid(),
-        userId,
-        deviceId,
-        hashToken(tokens.accessToken),
-        hashToken(tokens.refreshToken),
-        tokens.accessExpiresAt,
-        tokens.refreshExpiresAt,
-      ],
-    );
-  }
-
-  async refreshSession(
-    refreshToken: string,
-    nextTokens: SessionTokens,
-  ): Promise<{ readonly userId: string; readonly deviceId: string } | null> {
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      const current = await client.query<{ user_id: string; device_id: string }>(
-        `SELECT user_id, device_id
-         FROM sessions
-         WHERE refresh_token_hash = $1
-           AND revoked_at IS NULL
-           AND refresh_expires_at > NOW()
-         LIMIT 1`,
-        [hashToken(refreshToken)],
-      );
-
-      const row = current.rows[0];
-      if (!row) {
-        await client.query('ROLLBACK');
-        return null;
-      }
-
-      await client.query(
-        `UPDATE sessions
-         SET access_token_hash = $2,
-             refresh_token_hash = $3,
-             access_expires_at = $4,
-             refresh_expires_at = $5,
-             last_seen_at = NOW()
-         WHERE refresh_token_hash = $1`,
-        [
-          hashToken(refreshToken),
-          hashToken(nextTokens.accessToken),
-          hashToken(nextTokens.refreshToken),
-          nextTokens.accessExpiresAt,
-          nextTokens.refreshExpiresAt,
-        ],
-      );
-
-      await client.query('COMMIT');
-      return {
-        userId: row.user_id,
-        deviceId: row.device_id,
-      };
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  }
-
-  async getSessionByAccessToken(
-    accessToken: string,
-  ): Promise<{ readonly userId: string; readonly deviceId: string } | null> {
-    const { rows } = await this.pool.query<{ user_id: string; device_id: string }>(
-      `SELECT user_id, device_id
-       FROM sessions
-       WHERE access_token_hash = $1
-         AND revoked_at IS NULL
-         AND access_expires_at > NOW()
-       LIMIT 1`,
-      [hashToken(accessToken)],
-    );
-
-    const row = rows[0];
-    if (!row) {
-      return null;
-    }
-
-    await this.pool.query(
-      `UPDATE sessions SET last_seen_at = NOW() WHERE access_token_hash = $1`,
-      [hashToken(accessToken)],
-    );
-
-    return {
-      userId: row.user_id,
-      deviceId: row.device_id,
-    };
-  }
-
-  async revokeSessionByAccessToken(accessToken: string): Promise<boolean> {
-    const result = await this.pool.query(
-      `UPDATE sessions
-       SET revoked_at = NOW()
-       WHERE access_token_hash = $1
-         AND revoked_at IS NULL`,
-      [hashToken(accessToken)],
-    );
-    return (result.rowCount ?? 0) > 0;
   }
 
   async close(): Promise<void> {
     await this.pool.end();
   }
-}
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
-
-function cryptoRandomUuid(): string {
-  return randomUUID();
-}
-
-function mapDeviceAuthRequest(row: {
-  id: string;
-  provider: string;
-  device_id: string;
-  user_code: string;
-  verification_uri: string;
-  interval_seconds: number;
-  expires_at: Date;
-  provider_device_code: string;
-  status: string;
-  created_at: Date;
-  completed_at: Date | null;
-}): StoredDeviceAuthRequest {
-  return {
-    id: row.id,
-    provider: row.provider as StoredDeviceAuthRequest['provider'],
-    deviceId: row.device_id,
-    userCode: row.user_code,
-    verificationUri: row.verification_uri,
-    intervalSeconds: row.interval_seconds,
-    expiresAt: row.expires_at.toISOString(),
-    providerDeviceCode: row.provider_device_code,
-    status: row.status as StoredDeviceAuthRequest['status'],
-    createdAt: row.created_at.toISOString(),
-    completedAt: row.completed_at?.toISOString() ?? null,
-  };
 }

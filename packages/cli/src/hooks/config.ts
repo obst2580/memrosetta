@@ -21,7 +21,7 @@ export interface MemRosettaConfig {
   readonly syncApiKey?: string;
   readonly syncDeviceId?: string;
   readonly syncUserId?: string;
-  readonly syncAuthMode?: 'api_key' | 'oauth';
+  readonly syncAuthMode?: 'api_key' | 'jwt' | 'oauth';
   readonly syncAccessToken?: string;
   readonly syncRefreshToken?: string;
   readonly syncTokenExpiresAt?: string;

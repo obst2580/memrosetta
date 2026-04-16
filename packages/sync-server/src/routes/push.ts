@@ -37,7 +37,7 @@ export function pushRoutes(ctx: SyncAppContext): Hono {
     const parsed = pushRequestSchema.parse(body);
     const auth = (c as { get(key: string): unknown }).get('auth') as AuthContext | undefined;
 
-    const ownerUserId = auth?.mode === 'oauth'
+    const ownerUserId = auth?.mode === 'jwt'
       ? auth.ownerUserId
       : parsed.userId ?? parsed.ops[0].userId;
 

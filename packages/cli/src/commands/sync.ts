@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { userInfo, platform } from 'node:os';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
+import { URL } from 'node:url';
 import { output, outputError, type OutputFormat } from '../output.js';
 import { requireOption, optionalOption, hasFlag } from '../parser.js';
 import { getConfig, writeConfig, getDefaultDbPath, type MemRosettaConfig } from '../hooks/config.js';
@@ -34,55 +38,7 @@ interface SyncOptions {
 }
 
 type Subcommand = 'enable' | 'disable' | 'status' | 'now' | 'device-id' | 'backfill' | 'login' | 'logout';
-type AuthProvider = 'github' | 'google';
-type SyncAuthMode = 'api_key' | 'oauth';
-
-interface RefreshResponse {
-  readonly success: true;
-  readonly data: {
-    readonly accessToken: string;
-    readonly refreshToken: string;
-    readonly tokenExpiresAt: string;
-  };
-}
-
-interface DeviceStartResponse {
-  readonly success: true;
-  readonly data: {
-    readonly deviceRequestId: string;
-    readonly provider: AuthProvider;
-    readonly userCode: string;
-    readonly verificationUri: string;
-    readonly intervalSeconds: number;
-    readonly expiresAt: string;
-  };
-}
-
-interface DevicePollPendingResponse {
-  readonly success: true;
-  readonly data: {
-    readonly status: 'pending';
-    readonly intervalSeconds: number;
-  };
-}
-
-interface DevicePollApprovedResponse {
-  readonly success: true;
-  readonly data: {
-    readonly status: 'approved';
-    readonly provider: AuthProvider;
-    readonly accountEmail: string | null;
-    readonly displayName: string | null;
-    readonly accessToken: string;
-    readonly refreshToken: string;
-    readonly tokenExpiresAt: string;
-  };
-}
-
-interface ErrorResponse {
-  readonly success: false;
-  readonly error: string;
-}
+type SyncAuthMode = 'api_key' | 'jwt' | 'oauth';
 
 function parseSubcommand(args: readonly string[]): Subcommand | null {
   const first = args[0];
@@ -107,14 +63,14 @@ function normalizeServerUrl(serverUrl: string): string {
 }
 
 function getSyncAuthMode(config: MemRosettaConfig): SyncAuthMode | null {
-  if (config.syncAuthMode === 'oauth' && config.syncAccessToken) {
-    return 'oauth';
+  if ((config.syncAuthMode === 'jwt' || config.syncAuthMode === 'oauth') && config.syncAccessToken) {
+    return config.syncAuthMode;
   }
   if (config.syncAuthMode === 'api_key' && config.syncApiKey) {
     return 'api_key';
   }
   if (config.syncAccessToken) {
-    return 'oauth';
+    return 'jwt';
   }
   if (config.syncApiKey) {
     return 'api_key';
@@ -124,7 +80,7 @@ function getSyncAuthMode(config: MemRosettaConfig): SyncAuthMode | null {
 
 function getSyncBearer(config: MemRosettaConfig): string | null {
   const mode = getSyncAuthMode(config);
-  if (mode === 'oauth') {
+  if (mode === 'oauth' || mode === 'jwt') {
     return config.syncAccessToken ?? null;
   }
   if (mode === 'api_key') {
@@ -133,19 +89,97 @@ function getSyncBearer(config: MemRosettaConfig): string | null {
   return null;
 }
 
-function tokenNeedsRefresh(config: MemRosettaConfig): boolean {
-  if (getSyncAuthMode(config) !== 'oauth' || !config.syncTokenExpiresAt) {
-    return false;
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  const parts = token.split('.');
+  if (parts.length < 2) {
+    throw new Error('Invalid JWT format');
   }
-  const expiresAt = Date.parse(config.syncTokenExpiresAt);
-  if (Number.isNaN(expiresAt)) {
-    return false;
-  }
-  return expiresAt <= Date.now() + 5 * 60 * 1000;
+  const payload = parts[1]
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(parts[1].length / 4) * 4, '=');
+  return JSON.parse(Buffer.from(payload, 'base64').toString('utf-8')) as Record<string, unknown>;
 }
 
-async function delay(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+function decodeJwtExpiry(token: string): string | undefined {
+  const payload = decodeJwtPayload(token);
+  const exp = payload.exp;
+  if (typeof exp !== 'number') {
+    return undefined;
+  }
+  return new Date(exp * 1000).toISOString();
+}
+
+function decodeJwtEmail(token: string): string | undefined {
+  const payload = decodeJwtPayload(token);
+  return typeof payload.sub === 'string' ? payload.sub : undefined;
+}
+
+function openUrlInBrowser(url: string): void {
+  if (platform() === 'darwin') {
+    spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
+    return;
+  }
+  if (platform() === 'win32') {
+    spawn('cmd', ['/c', 'start', '', url], { stdio: 'ignore', detached: true }).unref();
+    return;
+  }
+  spawn('xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
+}
+
+async function startJwtCallbackListener(timeoutMs: number): Promise<{
+  readonly redirectUrl: string;
+  readonly waitForToken: Promise<string>;
+}> {
+  return await new Promise((resolve, reject) => {
+    const server = createServer((req, res) => {
+      try {
+        const requestUrl = new URL(req.url ?? '/', `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+        if (requestUrl.pathname !== '/callback') {
+          res.statusCode = 404;
+          res.end('Not found');
+          return;
+        }
+
+        const token = requestUrl.searchParams.get('token');
+        if (!token) {
+          res.statusCode = 400;
+          res.end('Missing token');
+          return;
+        }
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.end('<html><body><p>Login complete. You can close this window.</p></body></html>');
+        tokenResolve(token);
+        server.close();
+      } catch (err) {
+        tokenReject(err);
+        server.close();
+      }
+    });
+
+    let tokenResolve!: (token: string) => void;
+    let tokenReject!: (err: unknown) => void;
+    const waitForToken = new Promise<string>((resolveToken, rejectToken) => {
+      tokenResolve = resolveToken;
+      tokenReject = rejectToken;
+    });
+
+    server.listen(0, '127.0.0.1', () => {
+      const port = (server.address() as AddressInfo).port;
+      const timeout = setTimeout(() => {
+        tokenReject(new Error('Timed out waiting for login callback'));
+        server.close();
+      }, timeoutMs);
+      server.once('close', () => clearTimeout(timeout));
+      resolve({
+        redirectUrl: `http://127.0.0.1:${port}/callback`,
+        waitForToken,
+      });
+    });
+    server.on('error', reject);
+  });
 }
 
 // Characters that should never appear in a valid API key. We reject any
@@ -310,34 +344,6 @@ async function testConnection(serverUrl: string, apiKey: string): Promise<void> 
   }
 }
 
-async function refreshOAuthTokens(config: MemRosettaConfig): Promise<MemRosettaConfig> {
-  if (!config.syncServerUrl || !config.syncRefreshToken) {
-    throw new Error('OAuth sync is not fully configured. Run: memrosetta sync login');
-  }
-
-  const res = await fetch(`${normalizeServerUrl(config.syncServerUrl)}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken: config.syncRefreshToken }),
-  });
-  const body = (await res.json()) as RefreshResponse | ErrorResponse;
-  if (!res.ok || body.success === false) {
-    throw new Error(
-      `Token refresh failed: ${'error' in body ? body.error : `${res.status} ${res.statusText}`}`,
-    );
-  }
-
-  const nextConfig: MemRosettaConfig = {
-    ...config,
-    syncAuthMode: 'oauth',
-    syncAccessToken: body.data.accessToken,
-    syncRefreshToken: body.data.refreshToken,
-    syncTokenExpiresAt: body.data.tokenExpiresAt,
-  };
-  writeConfig(nextConfig);
-  return nextConfig;
-}
-
 async function withSyncClient<T>(
   dbPath: string,
   config: MemRosettaConfig,
@@ -346,11 +352,7 @@ async function withSyncClient<T>(
   const Database = (await import('better-sqlite3')).default;
   const { SyncClient, ensureSyncSchema } = await import('@memrosetta/sync-client');
 
-  let runtimeConfig = config;
-  if (runtimeConfig.syncAuthMode === 'oauth' && tokenNeedsRefresh(runtimeConfig)) {
-    runtimeConfig = await refreshOAuthTokens(runtimeConfig);
-  }
-
+  const runtimeConfig = config;
   const bearer = getSyncBearer(runtimeConfig);
   if (!runtimeConfig.syncServerUrl || !bearer || !runtimeConfig.syncDeviceId) {
     throw new Error('Sync is not configured. Run: memrosetta sync enable --server <url>');
@@ -359,7 +361,7 @@ async function withSyncClient<T>(
   // Reject stored API keys that contain control characters. This is a
   // recovery path for users whose 0.4.1 `sync enable` captured garbage from
   // a Windows terminal.
-  if (runtimeConfig.syncAuthMode !== 'oauth' && CONTROL_CHAR_REGEX.test(runtimeConfig.syncApiKey ?? '')) {
+  if (runtimeConfig.syncAuthMode !== 'jwt' && runtimeConfig.syncAuthMode !== 'oauth' && CONTROL_CHAR_REGEX.test(runtimeConfig.syncApiKey ?? '')) {
     throw new Error(
       'Stored API key is invalid (contains control characters from a previous ' +
         'terminal input). Re-run with one of:\n' +
@@ -462,16 +464,9 @@ async function runEnable(options: SyncOptions): Promise<void> {
 async function runLogin(options: SyncOptions): Promise<void> {
   const { args, format } = options;
   const existing = getConfig();
-  const provider = (optionalOption(args, '--provider') ?? 'github') as AuthProvider;
-  if (provider !== 'github' && provider !== 'google') {
-    outputError('Provider must be one of: github, google', format);
-    process.exitCode = 1;
-    return;
-  }
-
   const serverUrl = optionalOption(args, '--server') ?? existing.syncServerUrl;
   if (!serverUrl) {
-    outputError('OAuth login requires a sync server URL. Use: memrosetta sync login --server <url>', format);
+    outputError('JWT login requires a sync server URL. Use: memrosetta sync login --server <url>', format);
     process.exitCode = 1;
     return;
   }
@@ -479,95 +474,63 @@ async function runLogin(options: SyncOptions): Promise<void> {
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
   const deviceId = existing.syncDeviceId ?? `device-${randomUUID().slice(0, 8)}`;
   const syncUserId = existing.syncUserId ?? userInfo().username;
+  const loginBaseUrl = process.env.MEMROSETTA_LOGIN_URL ?? 'https://login.liliplanet.net';
 
-  const startRes = await fetch(`${normalizedServerUrl}/auth/device/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, deviceId }),
-  });
-  const startBody = (await startRes.json()) as DeviceStartResponse | ErrorResponse;
-  if (!startRes.ok || startBody.success === false) {
-    outputError(
-      `OAuth login start failed: ${'error' in startBody ? startBody.error : `${startRes.status} ${startRes.statusText}`}`,
-      format,
-    );
-    process.exitCode = 1;
-    return;
-  }
+  try {
+    const listener = await startJwtCallbackListener(5 * 60 * 1000);
+    const { redirectUrl, waitForToken } = listener;
+    const loginUrl = `${loginBaseUrl}?redirect=${encodeURIComponent(redirectUrl)}`;
 
-  if (format === 'text') {
-    process.stdout.write(`Open: ${startBody.data.verificationUri}\n`);
-    process.stdout.write(`Code: ${startBody.data.userCode}\n`);
-    process.stdout.write('Waiting for authorization...\n');
-  }
-
-  const expiresAt = Date.parse(startBody.data.expiresAt);
-  let intervalMs = Math.max(1, startBody.data.intervalSeconds) * 1000;
-  for (;;) {
-    if (Date.now() >= expiresAt) {
-      outputError('OAuth device code expired before approval. Run `memrosetta sync login` again.', format);
-      process.exitCode = 1;
-      return;
+    if (format === 'text') {
+      process.stdout.write(`Open: ${loginUrl}\n`);
+      process.stdout.write('Waiting for browser login callback...\n');
     }
+    openUrlInBrowser(loginUrl);
 
-    await delay(intervalMs);
-    const pollRes = await fetch(`${normalizedServerUrl}/auth/device/poll`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceRequestId: startBody.data.deviceRequestId }),
-    });
-    const pollBody = (await pollRes.json()) as DevicePollPendingResponse | DevicePollApprovedResponse | ErrorResponse;
+    const token = await waitForToken;
+    const tokenExpiresAt = decodeJwtExpiry(token);
+    const accountEmail = decodeJwtEmail(token);
 
-    if (pollRes.ok && pollBody.success && pollBody.data.status === 'pending') {
-      intervalMs = Math.max(1, pollBody.data.intervalSeconds) * 1000;
-      continue;
-    }
+    const nextConfig: MemRosettaConfig = {
+      ...existing,
+      syncEnabled: true,
+      syncServerUrl: normalizedServerUrl,
+      syncDeviceId: deviceId,
+      syncUserId,
+      syncAuthMode: 'jwt',
+      syncAccessToken: token,
+      syncRefreshToken: undefined,
+      syncTokenExpiresAt: tokenExpiresAt,
+      syncAccountEmail: accountEmail,
+      syncProvider: undefined,
+    };
+    writeConfig(nextConfig);
 
-    if (pollRes.ok && pollBody.success && pollBody.data.status === 'approved') {
-      const nextConfig: MemRosettaConfig = {
-        ...existing,
-        syncEnabled: true,
-        syncServerUrl: normalizedServerUrl,
-        syncDeviceId: deviceId,
-        syncUserId,
-        syncAuthMode: 'oauth',
-        syncAccessToken: pollBody.data.accessToken,
-        syncRefreshToken: pollBody.data.refreshToken,
-        syncTokenExpiresAt: pollBody.data.tokenExpiresAt,
-        syncAccountEmail: pollBody.data.accountEmail ?? undefined,
-        syncProvider: pollBody.data.provider,
-      };
-      writeConfig(nextConfig);
-
-      if (format === 'text') {
-        process.stdout.write('OAuth login complete.\n');
-        process.stdout.write(`  Server:   ${normalizedServerUrl}\n`);
-        process.stdout.write(`  Provider: ${pollBody.data.provider}\n`);
-        if (pollBody.data.accountEmail) {
-          process.stdout.write(`  Account:  ${pollBody.data.accountEmail}\n`);
-        }
-        process.stdout.write(`  UserId:   ${syncUserId}\n`);
-        process.stdout.write(`  DeviceId: ${deviceId}\n`);
-        return;
+    if (format === 'text') {
+      process.stdout.write('JWT login complete.\n');
+      process.stdout.write(`  Server:   ${normalizedServerUrl}\n`);
+      if (accountEmail) {
+        process.stdout.write(`  Account:  ${accountEmail}\n`);
       }
-
-      output({
-        success: true,
-        provider: pollBody.data.provider,
-        accountEmail: pollBody.data.accountEmail,
-        tokenExpiresAt: pollBody.data.tokenExpiresAt,
-        userId: syncUserId,
-        deviceId,
-      }, format);
+      if (tokenExpiresAt) {
+        process.stdout.write(`  Expires:  ${tokenExpiresAt}\n`);
+      }
+      process.stdout.write(`  UserId:   ${syncUserId}\n`);
+      process.stdout.write(`  DeviceId: ${deviceId}\n`);
       return;
     }
 
-    outputError(
-      `OAuth login failed: ${'error' in pollBody ? pollBody.error : `${pollRes.status} ${pollRes.statusText}`}`,
-      format,
-    );
-    process.exitCode = 1;
+    output({
+      success: true,
+      accountEmail,
+      tokenExpiresAt,
+      userId: syncUserId,
+      deviceId,
+    }, format);
     return;
+  } catch (err) {
+    outputError(`JWT login failed: ${err instanceof Error ? err.message : String(err)}`, format);
+    process.exitCode = 1;
   }
 }
 
@@ -592,17 +555,6 @@ async function runLogout(options: SyncOptions): Promise<void> {
   const { format } = options;
   const existing = getConfig();
 
-  if (existing.syncAuthMode === 'oauth' && existing.syncServerUrl && existing.syncAccessToken) {
-    try {
-      await fetch(`${normalizeServerUrl(existing.syncServerUrl)}/auth/logout`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${existing.syncAccessToken}` },
-      });
-    } catch {
-      // best effort
-    }
-  }
-
   writeConfig({
     ...existing,
     syncAuthMode: existing.syncApiKey ? 'api_key' : undefined,
@@ -614,7 +566,7 @@ async function runLogout(options: SyncOptions): Promise<void> {
   });
 
   if (format === 'text') {
-    process.stdout.write('OAuth session removed.\n');
+    process.stdout.write('Cloud auth session removed.\n');
     return;
   }
 
@@ -665,8 +617,7 @@ async function runStatus(options: SyncOptions): Promise<void> {
       process.stdout.write(`  UserId:          ${status.userId}\n`);
       process.stdout.write(`  DeviceId:        ${status.deviceId}\n`);
       process.stdout.write(`  Auth:            ${authMode ?? 'unknown'}\n`);
-      if (authMode === 'oauth') {
-        process.stdout.write(`  Provider:        ${config.syncProvider ?? 'unknown'}\n`);
+      if (authMode === 'jwt' || authMode === 'oauth') {
         if (config.syncAccountEmail) {
           process.stdout.write(`  Account:         ${config.syncAccountEmail}\n`);
         }
@@ -960,7 +911,7 @@ export async function run(options: SyncOptions): Promise<void> {
         '\n' +
         '  enable    --server <url> [--key <key> | --key-stdin | --key-file <p>]\n' +
         '  disable\n' +
-        '  login     [--provider github|google] [--server <url>]\n' +
+        '  login     [--server <url>]\n' +
         '  logout\n' +
         '  status\n' +
         '  now       [--push-only | --pull-only]\n' +

@@ -25,7 +25,7 @@ export function pullRoutes(ctx: SyncAppContext): Hono {
     });
 
     const limit = query.limit ?? DEFAULT_LIMIT;
-    const ownerUserId = auth?.mode === 'oauth' ? auth.ownerUserId : query.userId;
+    const ownerUserId = auth?.mode === 'jwt' ? auth.ownerUserId : query.userId;
     if (!ownerUserId) {
       return c.json({
         success: false as const,

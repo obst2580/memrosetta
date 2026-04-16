@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { URL } from 'node:url';
 
 const {
   getConfigMock,
@@ -33,6 +34,12 @@ const {
     syncClientCtorArgs,
   };
 });
+
+const spawnMock = vi.fn(() => ({ unref: vi.fn() }));
+
+vi.mock('node:child_process', () => ({
+  spawn: (...args: unknown[]) => spawnMock(...args),
+}));
 
 vi.mock('../../src/hooks/config.js', () => ({
   getConfig: getConfigMock,
@@ -81,103 +88,72 @@ describe('sync command', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sync login stores OAuth tokens and account metadata', async () => {
-    vi.useFakeTimers();
+  it('sync login stores JWT and account metadata from localhost callback', async () => {
     const { run } = await import('../../src/commands/sync.js');
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        success: true,
-        data: {
-          deviceRequestId: '2f4cbcf3-9da9-4f6b-9f8d-2b37f9fd9d6b',
-          provider: 'github',
-          userCode: 'ABCD-EFGH',
-          verificationUri: 'https://github.com/login/device',
-          intervalSeconds: 1,
-          expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        },
-      }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        success: true,
-        data: {
-          status: 'approved',
-          provider: 'github',
-          accountEmail: 'obst@example.com',
-          displayName: 'obst',
-          accessToken: 'mrs_at_test-access',
-          refreshToken: 'mrs_rt_test-refresh',
-          tokenExpiresAt: new Date(Date.now() + 3600_000).toISOString(),
-        },
-      }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
     const runPromise = run({
-      args: ['login', '--server', 'https://sync.example.com', '--provider', 'github'],
+      args: ['login', '--server', 'https://sync.example.com'],
       format: 'json',
       noEmbeddings: false,
     });
-    await vi.advanceTimersByTimeAsync(1000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const openedUrl = spawnMock.mock.calls[0]?.[1]?.[0] as string;
+    const loginUrl = new URL(openedUrl);
+    const redirect = loginUrl.searchParams.get('redirect');
+    expect(redirect).toBeTruthy();
+    const fakeJwt = [
+      Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url'),
+      Buffer.from(JSON.stringify({
+        sub: 'obst@example.com',
+        user_id: 123,
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })).toString('base64url'),
+      'signature',
+    ].join('.');
+    const callbackUrl = new URL(redirect!);
+    callbackUrl.searchParams.set('token', fakeJwt);
+    await fetch(callbackUrl);
     await runPromise;
 
     expect(writeConfigMock).toHaveBeenCalled();
     const saved = writeConfigMock.mock.calls.at(-1)?.[0] as Record<string, unknown>;
-    expect(saved.syncAuthMode).toBe('oauth');
-    expect(saved.syncAccessToken).toBe('mrs_at_test-access');
-    expect(saved.syncRefreshToken).toBe('mrs_rt_test-refresh');
-    expect(saved.syncProvider).toBe('github');
+    expect(saved.syncAuthMode).toBe('jwt');
+    expect(saved.syncAccessToken).toBe(fakeJwt);
+    expect(saved.syncRefreshToken).toBeUndefined();
     expect(saved.syncAccountEmail).toBe('obst@example.com');
   });
 
-  it('sync now refreshes expiring OAuth access tokens before push/pull', async () => {
+  it('sync now uses stored JWT bearer for push/pull', async () => {
     writeConfigMock({
       dbPath: '/tmp/test.db',
       syncEnabled: true,
       syncServerUrl: 'https://sync.example.com',
       syncDeviceId: 'device-1',
       syncUserId: 'obst',
-      syncAuthMode: 'oauth',
-      syncAccessToken: 'mrs_at_old',
-      syncRefreshToken: 'mrs_rt_old',
-      syncTokenExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      syncAuthMode: 'jwt',
+      syncAccessToken: 'jwt-token',
+      syncTokenExpiresAt: new Date(Date.now() + 3600_000).toISOString(),
     });
     mockPush.mockResolvedValue({ pushed: 2, results: [], highWatermark: 10 });
     mockPull.mockResolvedValue(3);
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      success: true,
-      data: {
-        accessToken: 'mrs_at_new',
-        refreshToken: 'mrs_rt_new',
-        tokenExpiresAt: new Date(Date.now() + 3600_000).toISOString(),
-      },
-    }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
 
     const { run } = await import('../../src/commands/sync.js');
     await run({ args: ['now'], format: 'json', noEmbeddings: false });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://sync.example.com/auth/refresh',
-      expect.objectContaining({ method: 'POST' }),
-    );
-    expect(syncClientCtorArgs.at(-1)).toEqual(expect.objectContaining({ apiKey: 'mrs_at_new' }));
+    expect(syncClientCtorArgs.at(-1)).toEqual(expect.objectContaining({ apiKey: 'jwt-token' }));
   });
 
-  it('sync logout clears OAuth tokens', async () => {
+  it('sync logout clears JWT token', async () => {
     writeConfigMock({
       dbPath: '/tmp/test.db',
       syncEnabled: true,
       syncServerUrl: 'https://sync.example.com',
       syncDeviceId: 'device-1',
       syncUserId: 'obst',
-      syncAuthMode: 'oauth',
-      syncAccessToken: 'mrs_at_old',
-      syncRefreshToken: 'mrs_rt_old',
-      syncProvider: 'github',
+      syncAuthMode: 'jwt',
+      syncAccessToken: 'jwt-token',
       syncAccountEmail: 'obst@example.com',
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      success: true,
-      data: { revoked: true },
-    }), { status: 200 })));
 
     const { run } = await import('../../src/commands/sync.js');
     await run({ args: ['logout'], format: 'json', noEmbeddings: false });
@@ -185,6 +161,6 @@ describe('sync command', () => {
     const saved = writeConfigMock.mock.calls.at(-1)?.[0] as Record<string, unknown>;
     expect(saved.syncAccessToken).toBeUndefined();
     expect(saved.syncRefreshToken).toBeUndefined();
-    expect(saved.syncProvider).toBeUndefined();
+    expect(saved.syncAccountEmail).toBeUndefined();
   });
 });

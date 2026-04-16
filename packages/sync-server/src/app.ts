@@ -22,6 +22,7 @@ export function createApp(storage: ISyncStorage): Hono {
   }));
   app.use('/sync/push', authMiddleware(storage));
   app.use('/sync/pull', authMiddleware(storage));
+  app.use('/auth/me', authMiddleware(storage));
   app.onError(errorHandler);
 
   const ctx: SyncAppContext = { storage };
