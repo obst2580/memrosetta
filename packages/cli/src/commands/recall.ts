@@ -8,6 +8,7 @@ import { getEngine } from '../engine.js';
 import { output, outputError, type OutputFormat } from '../output.js';
 import { requireOption, optionalOption } from '../parser.js';
 import { getDefaultUserId } from '../hooks/config.js';
+import { formatRecallResult } from '../formatters/recall.js';
 
 interface RecallOptions {
   readonly args: readonly string[];
@@ -92,5 +93,11 @@ export async function run(options: RecallOptions): Promise<void> {
     maxEvidence,
   });
 
-  output(result, format);
+  if (format === 'text') {
+    // Custom human-readable renderer (Codex Step 11 review); JSON path
+    // keeps the full machine-readable structure untouched.
+    process.stdout.write(formatRecallResult(result) + '\n');
+  } else {
+    output(result, format);
+  }
 }
