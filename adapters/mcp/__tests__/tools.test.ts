@@ -73,6 +73,27 @@ function createMockEngine(): IMemoryEngine {
       avgActivation: 0,
     }),
     feedback: vi.fn(),
+    reconstructRecall: vi.fn().mockResolvedValue({
+      artifact: '- evidence text',
+      artifactFormat: 'ranked_list',
+      intent: 'browse' as const,
+      evidence: [
+        {
+          memoryId: 'mem-test-001',
+          episodeId: 'ep-1',
+          role: 'fact',
+          system: 'semantic' as const,
+          confidence: 0.9,
+          bindingStrength: 1.0,
+          verbatimContent: 'evidence text',
+          gistContent: 'evidence text',
+        },
+      ],
+      completedFeatures: [],
+      supportingEpisodes: ['ep-1'],
+      confidence: 0.7,
+      warnings: [],
+    }),
   };
 }
 
@@ -100,13 +121,14 @@ describe('MCP tools', () => {
       expect(TOOL_NAMES).toContain('memrosetta_count');
       expect(TOOL_NAMES).toContain('memrosetta_invalidate');
       expect(TOOL_NAMES).toContain('memrosetta_feedback');
-      expect(TOOL_NAMES).toHaveLength(7);
+      expect(TOOL_NAMES).toContain('memrosetta_reconstruct_recall');
+      expect(TOOL_NAMES).toHaveLength(8);
     });
   });
 
   describe('TOOL_DEFINITIONS', () => {
-    it('has 7 tool definitions', () => {
-      expect(TOOL_DEFINITIONS).toHaveLength(7);
+    it('has 8 tool definitions', () => {
+      expect(TOOL_DEFINITIONS).toHaveLength(8);
     });
 
     it('each definition has name, description, and inputSchema', () => {
@@ -402,6 +424,78 @@ describe('MCP tools', () => {
         expect(result.content[0].text).toBe(
           'Feedback recorded for mem-test-001: not helpful',
         );
+      });
+    });
+
+    describe('memrosetta_reconstruct_recall', () => {
+      it('appears in TOOL_DEFINITIONS with required query', () => {
+        const def = TOOL_DEFINITIONS.find(
+          (t) => t.name === 'memrosetta_reconstruct_recall',
+        );
+        expect(def).toBeDefined();
+        expect(def!.inputSchema.required).toContain('query');
+      });
+
+      it('calls engine.reconstructRecall with parsed input', async () => {
+        const result = await handleToolCall(
+          engine,
+          'memrosetta_reconstruct_recall',
+          {
+            query: 'typescript review prompt',
+            intent: 'reuse',
+            context: {
+              project: 'memrosetta',
+              language: 'typescript',
+              taskMode: 'review',
+            },
+            cues: [
+              { featureType: 'topic', featureValue: 'review' },
+            ],
+            maxEvidence: 3,
+          },
+        );
+
+        expect(engine.reconstructRecall).toHaveBeenCalledTimes(1);
+        const call = (engine.reconstructRecall as ReturnType<typeof vi.fn>).mock
+          .calls[0][0];
+        expect(call.query).toBe('typescript review prompt');
+        expect(call.intent).toBe('reuse');
+        expect(call.context.project).toBe('memrosetta');
+        expect(call.context.taskMode).toBe('review');
+        expect(call.cues).toHaveLength(1);
+        expect(call.maxEvidence).toBe(3);
+
+        const payload = JSON.parse(result.content[0].text) as {
+          artifact: string;
+        };
+        expect(payload.artifact).toContain('evidence text');
+      });
+
+      it('defaults intent to browse when omitted', async () => {
+        await handleToolCall(engine, 'memrosetta_reconstruct_recall', {
+          query: 'anything',
+        });
+        const call = (engine.reconstructRecall as ReturnType<typeof vi.fn>).mock
+          .calls[0][0];
+        expect(call.intent).toBe('browse');
+      });
+
+      it('rejects invalid intent via zod', async () => {
+        await expect(
+          handleToolCall(engine, 'memrosetta_reconstruct_recall', {
+            query: 'x',
+            intent: 'nonsense',
+          }),
+        ).rejects.toThrow();
+      });
+
+      it('rejects unknown featureType in cues', async () => {
+        await expect(
+          handleToolCall(engine, 'memrosetta_reconstruct_recall', {
+            query: 'x',
+            cues: [{ featureType: 'bogus', featureValue: 'v' }],
+          }),
+        ).rejects.toThrow();
       });
     });
 

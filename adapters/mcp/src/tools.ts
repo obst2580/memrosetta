@@ -65,6 +65,63 @@ const feedbackSchema = z.object({
   helpful: z.boolean(),
 });
 
+const FEATURE_FAMILIES = [
+  'who',
+  'project',
+  'repo',
+  'tool',
+  'goal',
+  'task_mode',
+  'topic',
+  'entity',
+  'concept',
+  'constraint',
+  'decision_subject',
+  'language',
+  'framework',
+] as const;
+
+const reconstructRecallSchema = z.object({
+  userId: z.string().min(1).max(256).optional(),
+  query: z.string().min(1).max(1_000),
+  intent: z.enum(['reuse', 'explain', 'decide', 'browse', 'verify']).optional(),
+  cues: z
+    .array(
+      z.object({
+        featureType: z.enum(FEATURE_FAMILIES),
+        featureValue: z.string().min(1).max(200),
+        polarity: z.union([z.literal(1), z.literal(-1)]).optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
+  context: z
+    .object({
+      project: z.string().max(200).optional(),
+      repo: z.string().max(200).optional(),
+      branch: z.string().max(200).optional(),
+      language: z.string().max(100).optional(),
+      framework: z.string().max(100).optional(),
+      taskMode: z
+        .enum(['debug', 'implement', 'review', 'design', 'ship', 'explore'])
+        .optional(),
+      actor: z.string().max(100).optional(),
+      conversationTopic: z.string().max(500).optional(),
+      activeGoals: z
+        .array(
+          z.object({
+            goalId: z.string().min(1).max(256),
+            dominant: z.boolean().optional(),
+          }),
+        )
+        .max(10)
+        .optional(),
+      toolRegime: z.array(z.string().max(100)).max(20).optional(),
+    })
+    .optional(),
+  maxEvidence: z.number().int().min(1).max(50).optional(),
+});
+
 /** MCP tool response shape. */
 export interface ToolResponse {
   readonly content: ReadonlyArray<{ readonly type: 'text'; readonly text: string }>;
@@ -211,6 +268,83 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         },
       },
       required: ['memoryId', 'helpful'],
+    },
+  },
+  {
+    name: 'memrosetta_reconstruct_recall',
+    description:
+      'v1.0 Reconstructive Recall (Layer A): pattern completion + anti-interference ' +
+      '+ evidence-bound synthesis. Choose intent: "reuse" (procedural/semantic for ' +
+      'adapting prior patterns), "explain" (episodic+semantic narrative), "decide" ' +
+      '(evidence list for decisions), "browse" (all systems), "verify" (strict verbatim ' +
+      '+ source). Pass structured context (project/repo/language/taskMode) so state ' +
+      'vector anchors retrieval; the query itself is also converted into topic cues.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        userId: {
+          type: 'string',
+          description: 'User identifier (defaults to canonical id)',
+        },
+        query: {
+          type: 'string',
+          description: 'Natural-language recall query',
+        },
+        intent: {
+          type: 'string',
+          enum: ['reuse', 'explain', 'decide', 'browse', 'verify'],
+          description: 'Recall posture (default: browse)',
+        },
+        cues: {
+          type: 'array',
+          description: 'Explicit cue features (canonicalized + added to state-vector cues)',
+          items: {
+            type: 'object',
+            properties: {
+              featureType: { type: 'string', enum: Array.from(FEATURE_FAMILIES) },
+              featureValue: { type: 'string' },
+              polarity: { type: 'integer', enum: [1, -1] },
+            },
+            required: ['featureType', 'featureValue'],
+          },
+        },
+        context: {
+          type: 'object',
+          description: 'Structured retrieval state: project/repo/language/taskMode/goal/etc.',
+          properties: {
+            project: { type: 'string' },
+            repo: { type: 'string' },
+            branch: { type: 'string' },
+            language: { type: 'string' },
+            framework: { type: 'string' },
+            taskMode: {
+              type: 'string',
+              enum: ['debug', 'implement', 'review', 'design', 'ship', 'explore'],
+            },
+            actor: { type: 'string' },
+            conversationTopic: { type: 'string' },
+            activeGoals: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  goalId: { type: 'string' },
+                  dominant: { type: 'boolean' },
+                },
+                required: ['goalId'],
+              },
+            },
+            toolRegime: { type: 'array', items: { type: 'string' } },
+          },
+        },
+        maxEvidence: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 50,
+          description: 'Cap on returned evidence rows (default 5)',
+        },
+      },
+      required: ['query'],
     },
   },
 ];
@@ -379,6 +513,26 @@ export async function handleToolCall(
           {
             type: 'text',
             text: `Feedback recorded for ${validated.memoryId}: ${validated.helpful ? 'helpful' : 'not helpful'}`,
+          },
+        ],
+      };
+    }
+
+    case 'memrosetta_reconstruct_recall': {
+      const validated = reconstructRecallSchema.parse(args);
+      const result = await engine.reconstructRecall({
+        userId: validated.userId ?? getDefaultUserId(),
+        query: validated.query,
+        intent: validated.intent ?? 'browse',
+        cues: validated.cues,
+        context: validated.context,
+        maxEvidence: validated.maxEvidence,
+      });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
           },
         ],
       };

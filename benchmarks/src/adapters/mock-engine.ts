@@ -194,6 +194,14 @@ export class MockEngine implements IMemoryEngine {
     }
   }
 
+  async reconstructRecall(): Promise<never> {
+    // Benchmark MockEngine does not implement the v1.0 reconstructive
+    // kernel. Tests that exercise reconstructRecall() should use the
+    // real SqliteMemoryEngine — the mock exists to benchmark the
+    // legacy Layer A search path, not the reconstructive path.
+    throw new Error('MockEngine does not implement reconstructRecall — use SqliteMemoryEngine for Layer A/B benchmarks');
+  }
+
   async quality(userId: string): Promise<MemoryQuality> {
     const userMemories = [...this.memories.values()].filter(m => m.userId === userId);
     const total = userMemories.length;

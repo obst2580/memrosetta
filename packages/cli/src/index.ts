@@ -13,7 +13,8 @@ Commands:
   status           Show database and integration status
   reset            Remove integrations
   store            Store a memory
-  search           Search memories
+  search           Search memories (Layer A lexical/vector)
+  recall           Reconstructive recall (Layer A kernel + 5-intent)
   ingest           Ingest conversation from JSONL transcript
   get              Get memory by ID
   count            Count memories for a user
@@ -81,6 +82,7 @@ Examples:
   memrosetta reset --all                   # Remove all integrations
   memrosetta store --user obst --content "Prefers TypeScript" --type preference
   memrosetta search --user obst --query "language preference" --format text
+  memrosetta recall --query "code review prompt" --intent reuse --language typescript
   memrosetta sync enable --server https://your-sync.example.com
   memrosetta sync status --format text
 `;
@@ -121,6 +123,11 @@ async function main(): Promise<void> {
       }
       case 'search': {
         const mod = await import('./commands/search.js');
+        await mod.run(commandOptions);
+        break;
+      }
+      case 'recall': {
+        const mod = await import('./commands/recall.js');
         await mod.run(commandOptions);
         break;
       }

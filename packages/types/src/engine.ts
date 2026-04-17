@@ -1,6 +1,10 @@
 import type { Memory, MemoryInput, MemoryTier } from './memory.js';
 import type { SearchQuery, SearchResponse } from './search.js';
 import type { MemoryRelation, RelationType } from './relation.js';
+import type {
+  ReconstructRecallInput,
+  ReconstructRecallResult,
+} from './recall.js';
 
 /** Result of a maintenance run. */
 export interface MaintenanceResult {
@@ -82,4 +86,12 @@ export interface IMemoryEngine {
 
   /** Record feedback on a memory: was it helpful when used? Updates salience dynamically. */
   feedback(memoryId: string, helpful: boolean): Promise<void>;
+
+  /**
+   * v1.0 Reconstructive Recall (v4 §6). Runs the Layer A kernel —
+   * pattern completion + anti-interference + deterministic synthesis
+   * — and emits evidence + artifact. See `ReconstructRecallInput`
+   * for intent routing and cue semantics.
+   */
+  reconstructRecall(input: ReconstructRecallInput): Promise<ReconstructRecallResult>;
 }
