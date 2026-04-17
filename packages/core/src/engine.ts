@@ -11,6 +11,8 @@ import type {
   RelationType,
   CompressResult,
   MaintenanceResult,
+  ReconstructRecallInput,
+  ReconstructRecallResult,
 } from '@memrosetta/types';
 import type { Embedder, ContradictionDetector } from '@memrosetta/embeddings';
 import { ensureSchema } from './schema.js';
@@ -34,13 +36,61 @@ import { rowToMemory, type MemoryRow } from './mapper.js';
 import { generateMemoryId, nowIso, keywordsToString } from './utils.js';
 import { computeActivation, computeEbbinghaus } from './activation.js';
 import { determineTier, estimateTokens } from './tiers.js';
+import { computeNoveltyScore } from './novelty.js';
+import { ConsolidationQueue } from './consolidation.js';
+import {
+  reconstructRecall as reconstructRecallInternal,
+  RecallHookRegistry,
+} from './recall.js';
+import {
+  createConstructStatements,
+  recordConstructReuse,
+  type ConstructStatements,
+} from './constructs.js';
 
+
+/**
+ * Layer B feature flags (v4 §2 Layer B, Codex Step 8 review Q5/Q10).
+ *
+ * These toggle the store-time runtime hooks for Layer B. All default
+ * to OFF so existing callers see the Layer A behaviour they already
+ * tested against. Enabling requires explicit opt-in, which is also
+ * how Codex's "activation boundary" must-fix is satisfied: if you
+ * want novelty scoring to influence salience, you turn the flag on.
+ */
+export interface LayerBConfig {
+  /**
+   * Compute a novelty score at store time and let it nudge salience.
+   * Costs one FTS-style similarity pass against recent memories.
+   */
+  readonly enableNoveltyScoring?: boolean;
+  /**
+   * When true, the engine records a light "pattern separation" marker
+   * on the newly-stored memory by writing its novelty score into the
+   * `gist_confidence` slot when no explicit gist confidence was
+   * provided. This keeps downstream Layer B jobs able to rank
+   * candidates without requiring a new column.
+   */
+  readonly enablePatternSeparation?: boolean;
+  /**
+   * When true, novelty / pattern separation outcomes also enqueue a
+   * background consolidation job (gist_refinement by default).
+   */
+  readonly enableConsolidation?: boolean;
+  /**
+   * Similarity threshold used by the Layer B novelty pass. Same
+   * semantics as NoveltyInput.similarityThreshold.
+   */
+  readonly noveltySimilarityThreshold?: number;
+}
 
 export interface SqliteEngineOptions {
   readonly dbPath: string; // ':memory:' for in-memory, or file path
   readonly embedder?: Embedder;  // Optional: enables vector search
   readonly contradictionDetector?: ContradictionDetector;  // Optional: enables NLI-based contradiction detection
   readonly contradictionThreshold?: number;  // Default: 0.7. Min NLI score to auto-create contradicts relation.
+  /** Layer B runtime flags (default all OFF). */
+  readonly layerB?: LayerBConfig;
 }
 
 interface AutoRelateCandidateRow {
@@ -53,8 +103,32 @@ export class SqliteMemoryEngine implements IMemoryEngine {
   private db: Database.Database | null = null;
   private stmts: PreparedStatements | null = null;
   private relStmts: RelationStatements | null = null;
+  private constructStmts: ConstructStatements | null = null;
   private readonly options: SqliteEngineOptions;
   private vectorEnabled = false;
+  /**
+   * Layer B consolidation queue. Always exists so tests and admin
+   * flows can enqueue jobs; actual runtime integration is
+   * flag-gated via options.layerB.enableConsolidation.
+   */
+  public readonly consolidation = new ConsolidationQueue();
+
+  /**
+   * @internal
+   * Test / admin access to the underlying DB handle.
+   *
+   * NOT PART OF THE SUPPORTED APPLICATION SURFACE. Production callers
+   * must go through typed engine methods (store, search, reconstructRecall
+   * …). This exists so the test suite and admin tooling can issue
+   * ad-hoc SQL without shipping parallel statement registries.
+   *
+   * Returns null before initialize() is called. May be removed or
+   * renamed without a semver bump — do not depend on it from
+   * downstream packages.
+   */
+  public rawDatabase(): Database.Database | null {
+    return this.db;
+  }
 
   constructor(options: SqliteEngineOptions) {
     this.options = options;
@@ -90,6 +164,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
 
     this.stmts = createPreparedStatements(this.db);
     this.relStmts = createRelationStatements(this.db);
+    this.constructStmts = createConstructStatements(this.db);
   }
 
   async close(): Promise<void> {
@@ -122,7 +197,106 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     // Auto-create 'extends' relations for memories with overlapping keywords
     await this.autoRelate(memory);
 
+    // Layer B activation (Codex Step 8 review must-fix: "define the
+    // activation boundary"). All behaviour here is flag-gated so the
+    // legacy engine path stays exactly as before unless a caller
+    // explicitly opted in via options.layerB.
+    this.runLayerB(memory);
+
     return memory;
+  }
+
+  private runLayerB(memory: Memory): void {
+    const layerB = this.options.layerB;
+    if (!layerB) return;
+    if (!layerB.enableNoveltyScoring && !layerB.enablePatternSeparation && !layerB.enableConsolidation) {
+      return;
+    }
+
+    // Compute novelty once and share the result across flags.
+    const novelty = computeNoveltyScore(this.db!, {
+      userId: memory.userId,
+      content: memory.content,
+      keywords: memory.keywords ? Array.from(memory.keywords) : undefined,
+      similarityThreshold: layerB.noveltySimilarityThreshold,
+      excludeMemoryId: memory.memoryId,
+    });
+
+    if (layerB.enableNoveltyScoring) {
+      // Salience bump proportional to novelty. Avoid mutating the
+      // salience outright — multiply by (0.5 + novelty/2) so very
+      // novel memories land around 1.0x while near-duplicates settle
+      // around 0.5x of the existing salience.
+      const currentSalience = memory.salience ?? 1.0;
+      const newSalience = Math.max(
+        0,
+        Math.min(1.5, currentSalience * (0.5 + novelty.score / 2)),
+      );
+      this.db!
+        .prepare('UPDATE memories SET salience = ? WHERE memory_id = ?')
+        .run(newSalience, memory.memoryId);
+    }
+
+    if (layerB.enablePatternSeparation) {
+      // If the caller did not supply a gist_confidence, we park the
+      // novelty score there as a soft proxy so later ranking can
+      // tell "ultra-novel store" from "duplicate-of-earlier".
+      if (memory.gistConfidence == null) {
+        this.db!
+          .prepare('UPDATE memories SET gist_confidence = ? WHERE memory_id = ?')
+          .run(novelty.score, memory.memoryId);
+      }
+    }
+
+    if (layerB.enableConsolidation) {
+      this.consolidation.enqueue({
+        kind: 'gist_refinement',
+        payload: {
+          memoryId: memory.memoryId,
+          noveltyScore: novelty.score,
+          neighborCount: novelty.neighborCount,
+        },
+      });
+    }
+  }
+
+  /**
+   * Reconstructive Recall (v4 §6). Runs the Step 7 pipeline with the
+   * Step 9 full anti-interference. Each returned evidence that maps to
+   * a memory_constructs row also gets its reuse counter incremented
+   * (Codex Step 9 review must-fix): if constructs can now influence
+   * ranking, the system needs a principled way to say they were used.
+   *
+   * Layer C plugins (MINERVA echo, reconsolidation) should register
+   * against the hooks passed in via options; when omitted, the
+   * default registry is used.
+   */
+  async reconstructRecall(
+    input: ReconstructRecallInput,
+    hooks?: RecallHookRegistry,
+  ): Promise<ReconstructRecallResult> {
+    this.ensureInitialized();
+    const registry = hooks ?? new RecallHookRegistry();
+
+    // Wire construct reuse accounting to on_recall so callers that
+    // bring their own hook registry still get it — unless they've
+    // already registered an on_recall handler, in which case we
+    // piggyback rather than replace.
+    registry.register('on_recall', (ctx) => {
+      for (const e of ctx.evidence) {
+        const hasConstruct = this.constructStmts!
+          ? this.constructStmts.getConstruct.get(e.memoryId)
+          : null;
+        if (!hasConstruct) continue;
+        // Success attribution: conservatively mark reuse as
+        // "not yet confirmed successful" — Layer B feedback API
+        // will bump the success counter explicitly via
+        // engine.feedback() once the caller reports outcomes.
+        recordConstructReuse(this.constructStmts!, e.memoryId, false);
+      }
+    });
+
+    return reconstructRecallInternal(this.db!, this.stmts!.hippocampal, input, registry);
   }
 
   async storeBatch(
@@ -403,6 +577,13 @@ export class SqliteMemoryEngine implements IMemoryEngine {
           0, // success_count
           null, // project
           null, // activity_type
+          content, // verbatim_content — summary text itself
+          null, // gist_content (no separate gist for summaries yet)
+          null, // gist_confidence
+          null, // gist_extracted_at
+          null, // gist_extracted_model
+          'semantic', // memory_system — summaries are semantic abstractions
+          'fact', // memory_role — summary is a fact by convention
         );
         compressed++;
 

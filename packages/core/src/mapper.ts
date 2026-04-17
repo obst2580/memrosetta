@@ -1,4 +1,10 @@
-import type { Memory, MemoryType, MemoryTier } from '@memrosetta/types';
+import type {
+  Memory,
+  MemoryRole,
+  MemorySystem,
+  MemoryTier,
+  MemoryType,
+} from '@memrosetta/types';
 import { stringToKeywords } from './utils.js';
 
 export interface MemoryRow {
@@ -29,6 +35,13 @@ export interface MemoryRow {
   readonly success_count: number | null;
   readonly project: string | null;
   readonly activity_type: string | null;
+  readonly verbatim_content: string | null;
+  readonly gist_content: string | null;
+  readonly gist_confidence: number | null;
+  readonly gist_extracted_at: string | null;
+  readonly gist_extracted_model: string | null;
+  readonly memory_system: string | null;
+  readonly memory_role: string | null;
 }
 
 export function rowToMemory(row: MemoryRow): Memory {
@@ -59,6 +72,13 @@ export function rowToMemory(row: MemoryRow): Memory {
     successCount: row.success_count ?? 0,
     ...(row.project != null ? { project: row.project } : {}),
     ...(row.activity_type != null ? { activityType: row.activity_type } : {}),
+    ...(row.verbatim_content != null ? { verbatimContent: row.verbatim_content } : {}),
+    ...(row.gist_content != null ? { gistContent: row.gist_content } : {}),
+    ...(row.gist_confidence != null ? { gistConfidence: row.gist_confidence } : {}),
+    ...(row.gist_extracted_at != null ? { gistExtractedAt: row.gist_extracted_at } : {}),
+    ...(row.gist_extracted_model != null ? { gistExtractedModel: row.gist_extracted_model } : {}),
+    ...(row.memory_system != null ? { memorySystem: row.memory_system as MemorySystem } : {}),
+    ...(row.memory_role != null ? { memoryRole: row.memory_role as MemoryRole } : {}),
   };
 }
 
