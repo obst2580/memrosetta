@@ -2,6 +2,82 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.12.0] - 2026-04-17
+
+**Fix: `recall` no longer dies silently on pre-v0.12 memory stores.**
+
+Users who upgraded from v0.11 (or any prior release) with thousands of
+pre-existing memories reported that `memrosetta recall` always returned
+an empty artifact with a `no_episodes_matched` warning, even though
+`search` and `working-memory` still worked. Root cause: the write path
+never materialized `episodes` / `memory_episodic_bindings`, so the v1.0
+reconstructive kernel had nothing to pattern-complete against. The
+layer was technically empty for every user.
+
+This release closes that gap end-to-end: the empty state is now
+detectable, actionable, and self-healing.
+
+### Added
+
+- `memrosetta maintain --build-episodes` — backfills episodes from
+  existing memories. Defaults to `--granularity project-day` (one
+  episode per project+YYYY-MM-DD bucket); also accepts `day` and
+  `source`. Idempotent — re-running only processes newly unbound
+  memories. Supports `--dry-run` to preview scope before committing.
+- `memrosetta status` now surfaces the `Recall readiness` section:
+  `episodes`, `episodic bindings`, `episodic index entries`,
+  `construct exemplars`, and a single verdict of
+  `ready` / `degraded` / `empty` so operators can tell at a glance
+  whether `recall` has anything to work with.
+- New `RecallWarning` kinds:
+  - `episodic_layer_empty` — distinguished from `no_episodes_matched`
+    so the UI knows this is a write-side gap, not a cue miss.
+    Includes an actionable `hint` pointing at the backfill command.
+  - `degraded_search_fallback` — emitted only when the opt-in
+    fallback path served lexical search results.
+- Opt-in degraded fallback: `reconstructRecall({ allowDegraded: true })`
+  (or CLI `recall --allow-degraded`) falls back to lexical search for
+  `browse` intent when the episodic layer is empty. Confidence capped
+  at 0.4, artifact header prefixed with `[degraded: ...]`. `verify`
+  intent still fails closed — strict provenance contract is never
+  compromised.
+- `engine.buildEpisodes(userId, options)` on `IMemoryEngine`.
+- `MemoryInput.autoBindEpisode?: boolean` — opt-out flag for the new
+  auto-bind behavior described below.
+
+### Changed
+
+- **`store()` auto-binds new memories to the user's currently open
+  episode.** Previously, `store()` only wrote a
+  `memory_episodic_bindings` row if the caller supplied an explicit
+  `episodeId`; if a session had opened an episode via `openEpisode()`,
+  every subsequent `store()` call still created an orphan. That's the
+  write-side bug behind the empty-layer symptom. Now the resolution
+  order is: explicit `episodeId` > open episode for the user >
+  orphan. Pass `autoBindEpisode: false` to force orphan semantics for
+  bulk-loading paths that manage episodes externally.
+- `RecallWarning` now carries an optional `hint` field for
+  machine-consumable remediation text; the CLI formatter renders it
+  as an indented arrow under the warning line.
+- `memrosetta status` no longer displays the stale
+  `Embeddings: enabled (bge-small-en-v1.5)` line — embeddings were
+  removed in v0.11, so the label only caused confusion.
+
+### Notes
+
+If you upgraded from v0.11 and your recall returns empty, run:
+
+```bash
+memrosetta maintain --build-episodes --dry-run      # preview
+memrosetta maintain --build-episodes                # apply
+memrosetta status                                   # verify: readiness=ready
+memrosetta recall --query "..."                     # now returns evidence
+```
+
+Memories that were stored *after* an episode was opened continue to
+bind automatically going forward, so one-time backfill is enough for
+historical data.
+
 ## [0.11.0] - 2026-04-17
 
 **BREAKING. Core is now 100% LLM-free and offline.**

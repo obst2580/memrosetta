@@ -5,6 +5,72 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.12.0 — 2026-04-17
+
+**`recall` is no longer silently empty after upgrading.**
+
+If you upgraded from v0.10/v0.11 and `memrosetta recall` always returned
+a blank artifact with a `no_episodes_matched` warning while `search`
+and `working-memory` worked fine, you hit the write-side gap fixed in
+this release.
+
+### What was broken
+
+`recall` runs through the v1.0 reconstructive kernel: cues →
+hippocampal pattern completion → anti-interference → evidence. That
+path requires the `episodes` and `memory_episodic_bindings` tables to
+exist for the user. But `store()` only populated those tables if the
+caller threaded an explicit `episodeId` through every single write.
+In practice nobody did, so every user's episodic layer stayed empty
+forever and `recall` had nothing to complete against — even with tens
+of thousands of memories in the same DB.
+
+### What v0.12 does
+
+1. **Detects the empty state.** `recall` now emits a dedicated
+   `episodic_layer_empty` warning (distinct from a real
+   `no_episodes_matched`) with an actionable hint pointing at the
+   backfill command.
+2. **Shows readiness in `status`.** `memrosetta status` has a new
+   `Recall readiness` section with episode/binding/index counts and a
+   single verdict: `ready` / `degraded` / `empty`.
+3. **Backfills existing memories into episodes.**
+   `memrosetta maintain --build-episodes` groups your pre-existing
+   memories by `project` + `YYYY-MM-DD` and creates the episodes,
+   bindings, and sparse cue index the recall kernel needs.
+   Idempotent, supports `--dry-run`.
+4. **Stops creating new orphans.** `store()` now auto-binds to the
+   user's currently-open episode (via `openEpisode()`), so memories
+   stored *after* the upgrade won't need a second backfill pass.
+5. **Optional degraded fallback.** Pass `--allow-degraded` to
+   `recall` (`browse` intent only) and the engine serves lexical
+   search results wrapped as evidence, with confidence capped and
+   the artifact header explicitly marked `[degraded: ...]`. Strict
+   `verify` intent still fails closed.
+
+### Upgrade in 30 seconds
+
+```bash
+npm i -g memrosetta@0.12.0
+memrosetta maintain --build-episodes --dry-run
+memrosetta maintain --build-episodes
+memrosetta status                 # expect readiness=ready
+memrosetta recall --query "..."   # now returns evidence
+```
+
+### Behavior change worth flagging
+
+`store()` auto-binds by default now. If you have tooling that
+deliberately creates orphan memories (bulk ingestion, migration
+scripts) and you don't want them folded into whatever open episode
+happens to be active, pass `autoBindEpisode: false` to the
+`MemoryInput`.
+
+Credit to Codex (Windows session) for the clean diagnostic writeup
+that pinpointed `episodes=0 + bindings=0` as the missing piece.
+
+---
+
 ## v0.11.0 — 2026-04-17
 
 **BREAKING. Core is now 100% LLM-free and offline.**
