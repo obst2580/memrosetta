@@ -5,6 +5,49 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.12.2 — 2026-04-17
+
+**Fix: `status` scope now matches the rest of the CLI.**
+
+v0.12.1 correctly downgraded partial-state DBs to `degraded` — but on
+multi-user DBs it could stay `degraded` forever, even after a 100%
+successful backfill. The reason was a subtler mismatch: `maintain
+--build-episodes` is user-scoped while `status` aggregated globally,
+so one user's perfect coverage was being diluted by another user's
+unbound memories.
+
+v0.12.2 aligns `status` with the rest of the CLI:
+
+- Default scope is the current user (same as `recall`, `maintain`,
+  `feedback`).
+- `--user <id>` overrides scope to a specific user.
+- `--all-users` / `--global` restores the old DB-wide overview.
+- Text output shows `Scope: user=<id>` or `Scope: all users` so
+  the lens is never ambiguous.
+- JSON output adds a `scope: { kind, userId }` object.
+
+### Upgrade
+
+```bash
+npm i -g memrosetta@0.12.2
+memrosetta status                 # your user — should be 'ready' after backfill
+memrosetta status --all-users     # DB-wide overview, like 0.12.0/0.12.1
+```
+
+Patch-only release, CLI + umbrella:
+
+- `@memrosetta/cli@0.12.2`
+- `memrosetta@0.12.2`
+
+(`@memrosetta/types`, `@memrosetta/core`, `@memrosetta/mcp` stay at
+0.12.0.)
+
+Credit to Codex (Windows verification session) for pinpointing the
+scope mismatch between `build-episodes` (user-scoped) and `status`
+(globally-scoped).
+
+---
+
 ## v0.12.1 — 2026-04-17
 
 **Fix: `status` no longer lies about recall readiness on partial

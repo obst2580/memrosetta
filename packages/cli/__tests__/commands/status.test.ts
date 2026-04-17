@@ -16,6 +16,11 @@ vi.mock('../../src/engine.js', () => ({
   getDefaultDbPath: vi.fn().mockReturnValue('/tmp/test-status.db'),
 }));
 
+vi.mock('../../src/hooks/config.js', () => ({
+  getConfig: vi.fn().mockReturnValue({}),
+  getDefaultUserId: vi.fn().mockReturnValue('testuser'),
+}));
+
 vi.mock('node:fs', async (importOriginal) => {
   const original = await importOriginal() as Record<string, unknown>;
   return {
@@ -73,6 +78,39 @@ describe('status command', () => {
     expect(parsed.integrations.codex).toBe(false);
     expect(parsed.integrations.gemini).toBe(true);
     expect(parsed.integrations.mcp).toBe(true);
+  });
+
+  it('defaults scope to current user', async () => {
+    await run({
+      args: [],
+      format: 'json',
+      noEmbeddings: true,
+    });
+    const written = stdoutSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written);
+    expect(parsed.scope).toEqual({ kind: 'user', userId: 'testuser' });
+  });
+
+  it('--all-users switches scope to global', async () => {
+    await run({
+      args: ['--all-users'],
+      format: 'json',
+      noEmbeddings: true,
+    });
+    const written = stdoutSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written);
+    expect(parsed.scope).toEqual({ kind: 'global', userId: null });
+  });
+
+  it('--user <id> overrides the default user', async () => {
+    await run({
+      args: ['--user', 'alice'],
+      format: 'json',
+      noEmbeddings: true,
+    });
+    const written = stdoutSpy.mock.calls[0]?.[0] as string;
+    const parsed = JSON.parse(written);
+    expect(parsed.scope).toEqual({ kind: 'user', userId: 'alice' });
   });
 });
 

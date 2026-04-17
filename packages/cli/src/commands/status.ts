@@ -1,7 +1,8 @@
 import { existsSync, statSync } from 'node:fs';
 import { getDefaultDbPath } from '../engine.js';
 import { output, type OutputFormat } from '../output.js';
-import { getConfig } from '../hooks/config.js';
+import { getConfig, getDefaultUserId } from '../hooks/config.js';
+import { optionalOption, hasFlag } from '../parser.js';
 import { resolveCliVersion } from '../version.js';
 import {
   isClaudeCodeConfigured,
@@ -28,8 +29,25 @@ interface EpisodicStats {
   readonly readiness: RecallReadiness;
 }
 
+type StatusScope = 'user' | 'global';
+
 export async function run(options: StatusOptions): Promise<void> {
-  const { format, db } = options;
+  const { args, format, db } = options;
+
+  // Scope resolution (v0.12.2):
+  //   - default: current user (matches recall / maintain / store)
+  //   - `--all-users` or `--global`: aggregate across every user
+  //   - `--user <id>`: explicit user override
+  //
+  // Before this fix, status was always global while every other
+  // command was user-scoped. On a DB with multiple users, backfill
+  // could 100% succeed for the caller's user and status would still
+  // say `degraded` because other users' unbound memories were
+  // dragging the global binding coverage below the 95% threshold.
+  const globalScope = hasFlag(args, '--all-users') || hasFlag(args, '--global');
+  const userOverride = optionalOption(args, '--user');
+  const scope: StatusScope = globalScope ? 'global' : 'user';
+  const userId = globalScope ? null : (userOverride ?? getDefaultUserId());
 
   const config = getConfig();
   const dbPath = db ?? config.dbPath ?? getDefaultDbPath();
@@ -62,8 +80,12 @@ export async function run(options: StatusOptions): Promise<void> {
       dbConn.pragma('journal_mode = WAL');
 
       const countRow = dbConn
-        .prepare('SELECT COUNT(*) as count FROM memories')
-        .get() as { count: number };
+        .prepare(
+          userId
+            ? 'SELECT COUNT(*) as count FROM memories WHERE user_id = ?'
+            : 'SELECT COUNT(*) as count FROM memories',
+        )
+        .get(...(userId ? [userId] : [])) as { count: number };
       memoryCount = countRow.count;
 
       const userRows = dbConn
@@ -71,28 +93,51 @@ export async function run(options: StatusOptions): Promise<void> {
         .all() as readonly { user_id: string }[];
       userList = userRows.map((r) => r.user_id);
 
-      // Quality stats
-      const freshRow = dbConn.prepare(
-        'SELECT COUNT(*) as c FROM memories WHERE is_latest = 1 AND invalidated_at IS NULL',
-      ).get() as { c: number };
+      // Quality stats — scoped the same way as memoryCount so
+      // "Fresh / memoryCount" is always apples-to-apples.
+      const freshRow = dbConn
+        .prepare(
+          userId
+            ? 'SELECT COUNT(*) as c FROM memories WHERE is_latest = 1 AND invalidated_at IS NULL AND user_id = ?'
+            : 'SELECT COUNT(*) as c FROM memories WHERE is_latest = 1 AND invalidated_at IS NULL',
+        )
+        .get(...(userId ? [userId] : [])) as { c: number };
       qualityFresh = freshRow.c;
 
-      const invalidatedRow = dbConn.prepare(
-        'SELECT COUNT(*) as c FROM memories WHERE invalidated_at IS NOT NULL',
-      ).get() as { c: number };
+      const invalidatedRow = dbConn
+        .prepare(
+          userId
+            ? 'SELECT COUNT(*) as c FROM memories WHERE invalidated_at IS NOT NULL AND user_id = ?'
+            : 'SELECT COUNT(*) as c FROM memories WHERE invalidated_at IS NOT NULL',
+        )
+        .get(...(userId ? [userId] : [])) as { c: number };
       qualityInvalidated = invalidatedRow.c;
 
-      const relationsRow = dbConn.prepare(
-        'SELECT COUNT(DISTINCT src_memory_id) + COUNT(DISTINCT dst_memory_id) as c FROM memory_relations',
-      ).get() as { c: number };
+      const relationsRow = dbConn
+        .prepare(
+          userId
+            ? `SELECT COUNT(DISTINCT mid) as c FROM (
+                 SELECT src_memory_id as mid FROM memory_relations
+                   WHERE src_memory_id IN (SELECT memory_id FROM memories WHERE user_id = ?)
+                 UNION
+                 SELECT dst_memory_id as mid FROM memory_relations
+                   WHERE dst_memory_id IN (SELECT memory_id FROM memories WHERE user_id = ?)
+               )`
+            : 'SELECT COUNT(DISTINCT src_memory_id) + COUNT(DISTINCT dst_memory_id) as c FROM memory_relations',
+        )
+        .get(...(userId ? [userId, userId] : [])) as { c: number };
       qualityWithRelations = relationsRow.c;
 
-      const avgRow = dbConn.prepare(
-        'SELECT AVG(activation_score) as avg FROM memories WHERE is_latest = 1',
-      ).get() as { avg: number | null };
+      const avgRow = dbConn
+        .prepare(
+          userId
+            ? 'SELECT AVG(activation_score) as avg FROM memories WHERE is_latest = 1 AND user_id = ?'
+            : 'SELECT AVG(activation_score) as avg FROM memories WHERE is_latest = 1',
+        )
+        .get(...(userId ? [userId] : [])) as { avg: number | null };
       qualityAvgActivation = avgRow.avg ?? 0;
 
-      episodic = readEpisodicStats(dbConn, memoryCount);
+      episodic = readEpisodicStats(dbConn, memoryCount, userId);
 
       dbConn.close();
     } catch {
@@ -114,13 +159,15 @@ export async function run(options: StatusOptions): Promise<void> {
     process.stdout.write(
       `Database: ${dbPath} (${exists ? `exists, ${sizeFormatted}` : 'not found'})\n`,
     );
+    const scopeLabel = scope === 'global' ? 'all users' : `user=${userId}`;
+    process.stdout.write(`Scope:    ${scopeLabel}\n`);
     process.stdout.write(`Memories: ${memoryCount}\n`);
     if (userList.length > 0) {
       process.stdout.write(
-        `Users: ${userList.length} (${userList.join(', ')})\n`,
+        `Users in DB: ${userList.length} (${userList.join(', ')})\n`,
       );
     } else {
-      process.stdout.write('Users: 0\n');
+      process.stdout.write('Users in DB: 0\n');
     }
 
     if (memoryCount > 0) {
@@ -179,6 +226,10 @@ export async function run(options: StatusOptions): Promise<void> {
         exists,
         sizeBytes,
         sizeFormatted,
+      },
+      scope: {
+        kind: scope,
+        userId,
       },
       memories: memoryCount,
       users: userList,
@@ -265,8 +316,15 @@ export function deriveReadiness(input: {
 function readEpisodicStats(
   dbConn: import('better-sqlite3').Database,
   memoryCount: number,
+  userId: string | null,
 ): EpisodicStats {
-  const countOr = (table: string): number => {
+  // Scope-aware count helpers. When userId is supplied, every count
+  // is filtered to that user via the appropriate join (bindings go
+  // through memories.user_id; episodes via episodes.user_id;
+  // episodic_index via episodes.user_id; constructs via
+  // construct_exemplars.user_id, with a fallback for schemas that
+  // predate the user_id column on that table).
+  const countAll = (table: string): number => {
     try {
       const row = dbConn.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get() as
         | { c: number }
@@ -276,10 +334,51 @@ function readEpisodicStats(
       return 0;
     }
   };
-  const episodes = countOr('episodes');
-  const bindings = countOr('memory_episodic_bindings');
-  const index = countOr('episodic_index');
-  const constructs = countOr('construct_exemplars');
+  const countScoped = (sql: string, ...params: unknown[]): number => {
+    try {
+      const row = dbConn.prepare(sql).get(...params) as { c: number } | undefined;
+      return row?.c ?? 0;
+    } catch {
+      return 0;
+    }
+  };
+
+  let episodes: number;
+  let bindings: number;
+  let index: number;
+  let constructs: number;
+
+  if (userId) {
+    episodes = countScoped('SELECT COUNT(*) AS c FROM episodes WHERE user_id = ?', userId);
+    bindings = countScoped(
+      `SELECT COUNT(*) AS c
+         FROM memory_episodic_bindings b
+         JOIN memories m ON m.memory_id = b.memory_id
+        WHERE m.user_id = ?`,
+      userId,
+    );
+    index = countScoped(
+      `SELECT COUNT(*) AS c
+         FROM episodic_index ei
+         JOIN episodes e ON e.episode_id = ei.episode_id
+        WHERE e.user_id = ?`,
+      userId,
+    );
+    // construct_exemplars has no user_id column; scope via the
+    // construct_memory_id join to memories.
+    constructs = countScoped(
+      `SELECT COUNT(*) AS c
+         FROM construct_exemplars ce
+         JOIN memories m ON m.memory_id = ce.construct_memory_id
+        WHERE m.user_id = ?`,
+      userId,
+    );
+  } else {
+    episodes = countAll('episodes');
+    bindings = countAll('memory_episodic_bindings');
+    index = countAll('episodic_index');
+    constructs = countAll('construct_exemplars');
+  }
 
   const readiness = deriveReadiness({ memoryCount, episodes, bindings, index });
 

@@ -2,6 +2,45 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.12.2] - 2026-04-17
+
+**Fix: `status` now scopes to the current user, matching `recall` and `maintain`.**
+
+Codex's v0.12.1 verification exposed a deeper scope mismatch. `maintain
+--build-episodes` is user-scoped (operates on `--user` or the default
+user), and `recall` is user-scoped, but `status` aggregated across
+every user in the DB. On a multi-user DB the practical consequence was
+that one user could back their own memories up to 100% coverage and
+`status` would still say `degraded`, because another user's unbound
+memories dragged the global binding coverage below the 95% threshold.
+
+### Changed
+
+- `memrosetta status` now defaults to the current user's scope
+  (matching `maintain`, `recall`, `store`, `feedback`, `quality`).
+  All counts (memories, fresh/invalidated, bindings, episodes, index,
+  constructs, relations, avg activation) are filtered to that user.
+- New flags on `status`:
+  - `--user <id>` — override the user (same semantics as on other
+    commands).
+  - `--all-users` / `--global` — aggregate across every user for a
+    DB-wide overview.
+- `status` text output now prints `Scope: user=<id>` or
+  `Scope: all users` so callers can tell which lens they're looking
+  through.
+- `status` JSON output adds a new `scope: { kind: "user" | "global",
+  userId: string | null }` object.
+- The `users` key in JSON output is renamed to the existing
+  `Users in DB:` semantics in text output (list of DISTINCT user_ids
+  in the DB regardless of scope); it's still a full list so operators
+  can pick an `--all-users` or `--user <other>` follow-up.
+
+### Notes
+
+If you run `status` without arguments after upgrading, you may see a
+different `memories` count than on 0.12.1 — that's the scope shift,
+not missing data. To get the old DB-wide view back, add `--all-users`.
+
 ## [0.12.1] - 2026-04-17
 
 **Fix: `status` readiness no longer reports `ready` on partially-bound DBs.**
