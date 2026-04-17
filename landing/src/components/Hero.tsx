@@ -3,6 +3,8 @@ import { content } from '../i18n'
 import { InlineCode } from './CodeBlock'
 
 const GITHUB_URL = 'https://github.com/obst2580/memrosetta'
+const LOGIN_URL =
+  'https://login.liliplanet.net?redirect=https://memrosetta.liliplanet.net/auth/callback'
 
 interface HeroProps {
   readonly lang: Lang
@@ -10,97 +12,114 @@ interface HeroProps {
 
 export function Hero({ lang }: HeroProps) {
   const t = content[lang].hero
+  const isLoggedIn =
+    typeof window !== 'undefined' &&
+    Boolean(localStorage.getItem('memrosetta_token'))
 
   return (
-    <section className="relative overflow-hidden px-6 pt-28 pb-20 md:px-8 md:pt-40 md:pb-32">
-      {/* Background illustration */}
+    <section className="relative overflow-hidden px-6 pt-32 pb-24 md:px-8 md:pt-48 md:pb-40">
+      {/* Background — neurons, very subtle */}
       <div
-        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-35"
+        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-25"
         style={{ backgroundImage: 'url(/hero-bg.png)' }}
       />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/40 via-white/80 to-white" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/50 via-white/85 to-white" />
 
-      <div className="relative mx-auto max-w-5xl">
-        <div className="grid gap-12 md:grid-cols-[1fr_auto] md:items-end">
-          {/* Left column — asymmetric, left-aligned */}
-          <div className="max-w-2xl">
-            {/* Badge */}
-            <div className="mb-6 inline-flex items-center gap-2 border-b border-amber-400/40 pb-1 text-xs font-medium tracking-wide text-amber-700 uppercase">
-              <span className="h-1 w-4 bg-amber-500" />
-              {t.badge}
-            </div>
+      <div className="relative mx-auto max-w-4xl">
+        {/* Meta line — badge above everything */}
+        <div
+          className="mb-10 font-mono text-[11px] tracking-[0.2em] uppercase"
+          style={{ color: 'oklch(0.55 0.08 65)' }}
+        >
+          {t.badge}
+        </div>
 
-            {/* Title — solid color, no gradient */}
-            <h1 className="mb-6 font-[Bricolage_Grotesque] text-5xl font-extrabold tracking-tight md:text-7xl lg:text-8xl" style={{ color: 'oklch(0.22 0.01 85)' }}>
-              Mem<span style={{ color: 'oklch(0.52 0.14 65)' }}>Rosetta</span>
-            </h1>
+        {/* Title — oversized, editorial weight */}
+        <h1
+          className="mb-6 font-[Bricolage_Grotesque] font-extrabold tracking-tight"
+          style={{
+            fontSize: 'clamp(3.5rem, 9vw, 7rem)',
+            lineHeight: 0.95,
+            color: 'oklch(0.20 0.01 85)',
+          }}
+        >
+          Mem<span style={{ color: 'oklch(0.52 0.14 65)' }}>Rosetta</span>
+        </h1>
 
-            {/* Subtitle — serif body */}
-            <p className="mb-10 max-w-lg text-xl leading-relaxed font-medium" style={{ color: 'oklch(0.40 0.01 85)' }}>
-              {t.subtitle}
-            </p>
+        {/* Tagline — serif, italic for editorial feel */}
+        <p
+          className="mb-10 max-w-3xl font-[Source_Serif_4] italic"
+          style={{
+            fontSize: 'clamp(1.5rem, 3vw, 2.25rem)',
+            lineHeight: 1.3,
+            color: 'oklch(0.32 0.02 65)',
+          }}
+        >
+          {t.tagline}
+        </p>
 
-            {/* Install command */}
-            <div className="mb-5">
-              <InlineCode copyable>{t.install}</InlineCode>
-            </div>
+        {/* Subtitle — body prose */}
+        <p
+          className="mb-12 max-w-2xl font-[Source_Serif_4] leading-relaxed"
+          style={{
+            fontSize: 'clamp(1rem, 1.4vw, 1.2rem)',
+            color: 'oklch(0.42 0.01 85)',
+          }}
+        >
+          {t.subtitle}
+        </p>
 
-            {/* Actions row */}
-            <div className="flex flex-wrap items-center gap-4">
-              <a
-                href={GITHUB_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition-all hover:border-zinc-400 hover:shadow-sm"
-              >
-                <GitHubIcon />
-                <span>GitHub</span>
-              </a>
-              {!localStorage.getItem('memrosetta_token') && (
-                <a
-                  href="https://login.liliplanet.net?redirect=https://memrosetta.liliplanet.net/auth/callback"
-                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white transition-all hover:opacity-90"
-                  style={{ backgroundColor: 'oklch(0.52 0.14 65)' }}
-                >
-                  Login / Sign Up
-                </a>
-              )}
-            </div>
-          </div>
+        {/* Install command */}
+        <div className="mb-4">
+          <InlineCode copyable>{t.install}</InlineCode>
+        </div>
 
-          {/* Right column — compact stats, vertical */}
-          <div className="hidden md:flex md:flex-col md:gap-6 md:border-l md:border-zinc-200 md:pl-8">
-            <StatItem value={t.stats.mrr.value} label={t.stats.mrr.label} />
-            <StatItem value={t.stats.cost.value} label={t.stats.cost.label} />
-            <StatItem value={t.stats.setup.value} label={t.stats.setup.label} />
-          </div>
+        {/* Byline under install */}
+        <p
+          className="mb-10 font-[Source_Serif_4] text-sm"
+          style={{ color: 'oklch(0.55 0.01 85)' }}
+        >
+          {t.byline}
+        </p>
+
+        {/* Actions — minimal, horizontal */}
+        <div className="flex flex-wrap items-center gap-3">
+          {!isLoggedIn && (
+            <a
+              href={LOGIN_URL}
+              className="inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
+              style={{ backgroundColor: 'oklch(0.45 0.14 65)' }}
+            >
+              Get started
+              <span aria-hidden="true">→</span>
+            </a>
+          )}
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-md border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 transition-all hover:border-zinc-400 hover:shadow-sm"
+          >
+            <GitHubIcon />
+            <span>GitHub</span>
+          </a>
+          <a
+            href="#how"
+            className="inline-flex items-center gap-2 px-2 py-2.5 text-sm font-medium transition-all hover:underline"
+            style={{ color: 'oklch(0.42 0.05 65)' }}
+          >
+            How it remembers →
+          </a>
         </div>
       </div>
     </section>
   )
 }
 
-function StatItem({
-  value,
-  label,
-}: {
-  readonly value: string
-  readonly label: string
-}) {
-  return (
-    <div className="flex items-baseline gap-2">
-      <span className="font-mono text-lg font-bold text-zinc-900">
-        {value}
-      </span>
-      <span className="text-sm font-medium text-zinc-500">{label}</span>
-    </div>
-  )
-}
-
 function GitHubIcon() {
   return (
     <svg
-      className="h-5 w-5"
+      className="h-4 w-4"
       fill="currentColor"
       viewBox="0 0 24 24"
       aria-hidden="true"

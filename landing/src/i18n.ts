@@ -7,15 +7,75 @@ export const content = {
       github: 'GitHub',
     },
     hero: {
-      badge: 'Open source -- MIT License',
+      badge: 'Brain-inspired memory · MIT open source',
       title: 'MemRosetta',
-      subtitle: 'Your brain, on every device. One memory shared across all your AI tools and machines.',
+      tagline: 'Memory that survives every session.',
+      subtitle:
+        'AI tools start from a blank slate every time. MemRosetta gives your AI a real memory — one that persists across sessions, tools, and devices. Built on how the human brain actually stores and recalls.',
       install: 'npm install -g memrosetta',
-      stats: {
-        mrr: { value: '18k+', label: 'memories synced' },
-        cost: { value: '1 brain', label: 'all devices, all AI tools' },
-        setup: { value: '1 cmd', label: 'to start' },
-      },
+      byline: 'Local-first SQLite. Optional self-host or hosted cloud sync.',
+    },
+    brainScience: {
+      title: 'How it remembers',
+      subtitle: 'Not another vector database. A memory engine modeled on the human brain.',
+      pillars: [
+        {
+          label: 'Storage',
+          title: 'Atomic memory with activation decay',
+          body:
+            'Every fact, preference, and decision is stored as a single atomic unit, not a text chunk. Each memory has an activation score — frequently recalled memories stay bright, unused ones fade. ACT-R activation + Ebbinghaus forgetting curve, the way your own brain rates what to remember.',
+          citations: 'Anderson 1993, Ebbinghaus 1885',
+        },
+        {
+          label: 'Retrieval',
+          title: 'Spreading activation, not just keyword match',
+          body:
+            'Recalling one memory automatically activates related ones through the relation graph and Hebbian co-access edges. "Memories that fire together, wire together." One seed search spreads across semantic and associative neighbors — exactly what happens in your head.',
+          citations: 'Hebb 1949, Collins & Loftus 1975, HippoRAG 2024',
+        },
+        {
+          label: 'Reconstruction',
+          title: 'Verbatim + gist, reassembled on demand',
+          body:
+            'Humans do not store the raw text of every conversation — they keep the gist and reconstruct details when needed. v1.0 adds pattern/procedure memory with dual verbatim+gist storage, and reconstructRecall() lets an LLM adapt a past prompt to a new context while citing evidence.',
+          citations: 'Bartlett 1932, Reyna & Brainerd Fuzzy Trace',
+        },
+      ],
+    },
+    threePaths: {
+      title: 'Three ways to use it',
+      subtitle: 'Your memory, your terms. From single-device local to hosted cloud.',
+      paths: [
+        {
+          name: 'Local only',
+          subtitle: 'Default. Zero setup.',
+          body:
+            'One SQLite file at ~/.memrosetta/memories.db. All your AI tools on this machine share it through MCP. Offline forever. No account, no server, no sync.',
+          auth: 'None',
+          cta: 'npm install -g memrosetta',
+          primary: false,
+        },
+        {
+          name: 'Self-hosted sync',
+          subtitle: 'Your devices, your server.',
+          body:
+            'Run @memrosetta/sync-server on your own PostgreSQL. Every device keeps a full local SQLite copy and syncs through your hub. Shared API key for authentication — no external account needed.',
+          auth: 'API key (Bearer token)',
+          cta: 'Self-host docs',
+          primary: false,
+        },
+        {
+          name: 'Liliplanet Cloud',
+          subtitle: 'Hosted. Free tier.',
+          body:
+            'Log in with Google, Kakao, Naver, or email via login.liliplanet.net. Your memories sync automatically across every device you sign into. Managed backups, no server to run.',
+          auth: 'JWT via login.liliplanet.net (OAuth/OIDC)',
+          cta: 'Login / Sign up',
+          primary: true,
+        },
+      ],
+      note:
+        'Same engine across all three. The only difference is where your memory lives and who issues the auth.',
     },
     problem: {
       title: 'The Forgetting Problem',
@@ -470,15 +530,75 @@ memrosetta maintain`,
       github: 'GitHub',
     },
     hero: {
-      badge: '오픈소스 -- MIT 라이선스',
+      badge: '뇌과학 기반 기억 · MIT 오픈소스',
       title: 'MemRosetta',
-      subtitle: '나의 뇌를 모든 기기에서 공유. AI 도구와 장비에 관계없이 하나의 기억.',
+      tagline: '세션이 끝나도 기억은 남습니다.',
+      subtitle:
+        'AI 도구는 매번 백지에서 시작합니다. MemRosetta는 AI에게 진짜 기억을 줍니다. 세션, 도구, 기기를 넘어 이어지는 기억. 인간 뇌가 저장하고 떠올리는 방식 그대로.',
       install: 'npm install -g memrosetta',
-      stats: {
-        mrr: { value: '18k+', label: '동기화된 기억' },
-        cost: { value: '1 뇌', label: '모든 기기, 모든 AI 도구' },
-        setup: { value: '1 명령', label: '으로 시작' },
-      },
+      byline: '로컬 우선 SQLite. 선택적 직접 호스팅 또는 관리형 클라우드 sync.',
+    },
+    brainScience: {
+      title: '어떻게 기억하는가',
+      subtitle: '또 다른 벡터 DB가 아닙니다. 인간 뇌를 본뜬 기억 엔진입니다.',
+      pillars: [
+        {
+          label: '저장',
+          title: '활성화 감쇠를 가진 원자적 기억',
+          body:
+            '사실, 선호, 결정을 텍스트 청크가 아닌 원자 단위로 저장합니다. 각 기억은 활성화 점수를 가지며 — 자주 떠올린 기억은 또렷해지고, 쓰지 않은 기억은 점점 희미해집니다. ACT-R 활성화 + 에빙하우스 망각 곡선, 뇌가 기억을 평가하는 방식 그대로.',
+          citations: 'Anderson 1993, Ebbinghaus 1885',
+        },
+        {
+          label: '인출',
+          title: '확산 활성화 — 단순 키워드 매칭이 아닙니다',
+          body:
+            '한 기억을 떠올리면 relation 그래프와 Hebbian co-access 엣지를 타고 연관된 기억이 자동으로 활성화됩니다. "같이 발화하는 뉴런은 같이 엮인다." 하나의 쿼리가 의미적·연상적 이웃으로 퍼져나갑니다 — 머릿속에서 일어나는 일 그대로.',
+          citations: 'Hebb 1949, Collins & Loftus 1975, HippoRAG 2024',
+        },
+        {
+          label: '재구성',
+          title: '원문 + 요지 이중 저장, 필요할 때 재조합',
+          body:
+            '인간은 대화의 원문을 저장하지 않습니다 — 핵심을 남기고 필요할 때 재구성합니다. v1.0에서 pattern/procedure 메모리 타입과 verbatim+gist 이중 저장이 추가됩니다. reconstructRecall()은 LLM이 과거 프롬프트를 새 맥락에 맞게 재구성하되, 증거 메모리 ID를 함께 반환합니다.',
+          citations: 'Bartlett 1932, Reyna & Brainerd Fuzzy Trace',
+        },
+      ],
+    },
+    threePaths: {
+      title: '세 가지 사용 방식',
+      subtitle: '당신의 기억, 당신의 방식으로. 단일 기기 로컬부터 관리형 클라우드까지.',
+      paths: [
+        {
+          name: '로컬 전용',
+          subtitle: '기본값. 설정 불필요.',
+          body:
+            '~/.memrosetta/memories.db에 SQLite 파일 하나. 이 기기의 모든 AI 도구가 MCP를 통해 공유합니다. 영구 오프라인. 계정 없음, 서버 없음, 동기화 없음.',
+          auth: '없음',
+          cta: 'npm install -g memrosetta',
+          primary: false,
+        },
+        {
+          name: '직접 호스팅 sync',
+          subtitle: '내 기기, 내 서버.',
+          body:
+            '본인 PostgreSQL 위에 @memrosetta/sync-server를 운영합니다. 모든 기기는 로컬 SQLite 전체를 가지면서 내 허브로 동기화합니다. 공유 API key 인증 — 외부 계정 불필요.',
+          auth: 'API key (Bearer 토큰)',
+          cta: '직접 호스팅 가이드',
+          primary: false,
+        },
+        {
+          name: 'Liliplanet Cloud',
+          subtitle: '관리형. 무료 티어 제공.',
+          body:
+            'login.liliplanet.net을 통해 Google, 카카오, 네이버, 이메일로 로그인합니다. 로그인한 모든 기기에서 기억이 자동 동기화됩니다. 백업 관리형, 서버 운영 불필요.',
+          auth: 'login.liliplanet.net을 통한 JWT (OAuth/OIDC)',
+          cta: '로그인 / 가입',
+          primary: true,
+        },
+      ],
+      note:
+        '세 방식 모두 같은 엔진을 사용합니다. 차이는 기억이 어디 저장되고 누가 인증을 발급하는지뿐.',
     },
     problem: {
       title: '망각 문제',

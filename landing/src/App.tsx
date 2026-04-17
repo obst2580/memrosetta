@@ -2,42 +2,35 @@ import { useState } from 'react'
 import type { Lang } from './i18n'
 import { Header } from './components/Header'
 import { Hero } from './components/Hero'
-import { Usage } from './components/Usage'
 import { Problem } from './components/Problem'
-import { Demo } from './components/Demo'
-import { QuickStart } from './components/QuickStart'
+import { BrainScience } from './components/BrainScience'
+import { ThreePaths } from './components/ThreePaths'
 import { Compatibility } from './components/Compatibility'
-import { HowItWorks } from './components/HowItWorks'
-import { NotAnotherRag } from './components/NotAnotherRag'
-import { Features } from './components/Features'
-import { Architecture } from './components/Architecture'
-import { Comparison } from './components/Comparison'
+import { QuickStart } from './components/QuickStart'
 import { Footer } from './components/Footer'
 import { AuthCallback } from './components/AuthCallback'
 
 function App() {
   const [lang, setLang] = useState<Lang>('en')
 
-  // Simple hash-based routing for auth callback
+  // Simple path-based routing for auth callback
   const path = window.location.pathname
   if (path === '/auth/callback') {
     return <AuthCallback />
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'oklch(0.985 0.005 85)' }}>
+    <div
+      className="min-h-screen"
+      style={{ backgroundColor: 'oklch(0.99 0.005 85)' }}
+    >
       <Header lang={lang} onLangChange={setLang} />
       <Hero lang={lang} />
-      <Usage lang={lang} />
       <Problem lang={lang} />
-      <Demo lang={lang} />
-      <QuickStart lang={lang} />
+      <BrainScience lang={lang} />
+      <ThreePaths lang={lang} />
       <Compatibility lang={lang} />
-      <HowItWorks lang={lang} />
-      <NotAnotherRag lang={lang} />
-      <Features lang={lang} />
-      <Architecture lang={lang} />
-      <Comparison lang={lang} />
+      <QuickStart lang={lang} />
       <Footer lang={lang} />
     </div>
   )
