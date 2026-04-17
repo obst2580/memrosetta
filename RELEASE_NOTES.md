@@ -5,6 +5,95 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.10.0 — 2026-04-17
+
+**Reconstructive Memory kernel.**
+
+v0.10.0 is the first release where MemRosetta is no longer "FTS with
+extra tricks." Store and recall now route through a brain-inspired
+architecture grounded in:
+
+- **Hippocampal Memory Indexing Theory** (Teyler & DiScenna 1986) —
+  sparse cues that point at episodes
+- **Fuzzy Trace Theory** (Reyna & Brainerd 1995) — verbatim + gist
+  dual representation
+- **Tulving 3-system** — episodic / semantic / procedural as an
+  orthogonal axis next to product roles
+- **Goal-State Preservation** — every memory carries *what problem
+  was being solved*
+
+### The big new thing: `memrosetta recall`
+
+```bash
+memrosetta recall \
+    --query "code review prompt for typescript" \
+    --intent reuse \
+    --language typescript \
+    --topic code-review \
+    --format text
+```
+
+Pick one of five intents:
+- `reuse` — adapt procedural patterns to a new context
+- `explain` — narrative of what happened and why
+- `decide` — evidence list for a pending decision
+- `browse` — everything related, ranked
+- `verify` — strict verbatim + source only
+
+The CLI has a dedicated text renderer (confidence bar, warnings
+above the artifact, evidence table with system/role/confidence/
+binding). The same kernel is exposed as the MCP tool
+`memrosetta_reconstruct_recall`.
+
+### Layer A is always on; Layer B is opt-in
+
+Layer A (source monitoring, event segmentation, goal-state memory,
+dual representation, 2-axis type system, hippocampal indexing,
+pattern completion) runs on every `store()` / `reconstructRecall()`.
+Layer B (pattern separation, novelty scoring, consolidation queue,
+prototype induction scaffolding) ships the tables and helpers but
+keeps runtime behaviour behind engine flags:
+
+```ts
+createEngine({
+  dbPath: '/path/to/db',
+  layerB: {
+    enableNoveltyScoring: true,
+    enablePatternSeparation: true,
+    enableConsolidation: true,
+  },
+});
+```
+
+### Benchmarks
+
+A new v1.0 reconstructive recall suite ships under
+`benchmarks/src/scenarios/v1-recall/`:
+- `goal_state_preservation` — same cue under different goal types
+- `source_fidelity` — verify intent surfaces verbatim
+- `reuse_fit` — procedural memory survives state-vector shift
+- `context_preserving_transfer` — shared topic cue carries across
+  state vectors
+
+These cover the baseline behavioural guarantees for the v1.0 kernel.
+Stress, scale, cross-user, and query-native scenarios remain future
+work.
+
+### Schema migration
+
+Additive only. Schema versions v9 → v15 all add new tables /
+columns; `memories.source_id`, `memory_type`, and `content` stay
+populated so existing search paths continue to work. Run once and
+you're on v15.
+
+### Numbers
+
+- 22 new core test files, 485 core tests (baseline 332 → +153)
+- Workspace: 1118 tests passing, typecheck clean
+- 12 external review rounds (Codex), every must-fix addressed
+
+---
+
 ## v0.9.1 — 2026-04-16
 
 **Search quality + duplicate cleanup.**

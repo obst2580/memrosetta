@@ -2,6 +2,110 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.10.0] - 2026-04-17
+
+**Reconstructive Memory kernel — Layer A + Layer B scaffolding.**
+
+A substantial architectural addition implementing the v4 agreement
+(see `docs/reconstructive-memory-spec.md`). Every store and recall
+now routes through brain-inspired primitives instead of a bag of
+FTS tricks.
+
+### Added — Layer A (Day-one, always on)
+
+- **Source Monitoring** — `source_attestations` table captures
+  provenance per memory (chat / document / observation / reflection /
+  tool_output) with structured speaker + confidence. Attestations
+  are audit-permanent (never deleted on memory invalidation).
+  Schema v9.
+- **Event Segmentation** — `episodes` + `segments` +
+  `memory_episodic_bindings` with coarse boundaries (session, repo,
+  gap, goal_reset) and fine boundaries (task_mode, intent, branch,
+  tool, prediction_error). `state_vector_json` on segments is a
+  first-class retrieval input. Schema v10.
+- **Goal-State Memory** — `goals` + `goal_memory_links`. Captures
+  "what problem was being solved" alongside every memory with full
+  lifecycle (horizon, priority, blocked_by, abandon_reason,
+  reopened_at, owner_agent) and structured success criteria.
+  Schema v11.
+- **Dual Representation** — verbatim (immutable raw trace) + gist
+  (mutable abstraction) columns on memories, with
+  `memory_gists_versions` archive for every gist rewrite.
+  Schema v12.
+- **Tulving 2-axis Type System** — `memory_system` ∈ {episodic,
+  semantic, procedural} × `memory_role` (open union). Legacy
+  `memory_type` remains as compatibility backfill. `memory_aliases`
+  with DB-level cap trigger (max 3 per memory, confidence ≥ 0.7).
+  Schema v13.
+- **Hippocampal Indexing** — `episodic_index` with bipolar cues (+1
+  positive, -1 anti-cue), bounded Hebbian decay per feature family,
+  canonical cue normalisation via `cue_aliases`, and family-specific
+  caps (who 1-2, topic 3-6, entity 4-8, …). Schema v14.
+- **Pattern Completion + Reconstructive Recall** — MINERVA-free
+  kernel that scores episodes by positive/negative cue overlap,
+  applies recency + goal-fit boost, completes missing features from
+  retrieved episodes, and emits evidence-bound artifacts. 5-intent
+  routing: `reuse`, `explain`, `decide`, `browse`, `verify`. 4 hook
+  seams reserved for Layer C.
+
+### Added — Layer B (Day-one, flags OFF)
+
+- **memory_constructs + construct_exemplars** with structured slots,
+  anti-patterns, `abstraction_level` 1-5. Schema v15.
+- **Pattern Separation** — two-threshold exemplar classification on
+  store.
+- **Novelty / Prediction Error** — Jaccard-based language-agnostic
+  scoring with density penalty.
+- **Consolidation Queue** — abstraction + maintenance subqueues.
+- **Full Anti-Interference** — diversity penalty, goal compatibility,
+  abstraction gating.
+- **Engine LayerB flags**: `enableNoveltyScoring`,
+  `enablePatternSeparation`, `enableConsolidation` (all default OFF).
+
+### Added — Surface
+
+- **`memrosetta recall`** CLI command with 5 intents, state-vector
+  flags (`--project/--repo/--language/--framework/--task-mode/
+  --actor/--topic`), and a custom text formatter (confidence bar,
+  warnings, evidence table, completed features).
+- **`memrosetta_reconstruct_recall`** MCP tool with zod-validated
+  13-family cue enum + full StateVector schema.
+- **`engine.reconstructRecall(input, hooks?)`** on `IMemoryEngine`.
+  Automatically increments construct `reuse_count` on recall.
+
+### Added — Benchmarks
+
+- **v1.0 reconstructive recall suite** (benchmarks/src/scenarios/
+  v1-recall/): `goal_state_preservation`, `source_fidelity`,
+  `reuse_fit`, `context_preserving_transfer`. Baseline behavioural
+  guarantees only — stress / scale / cross-user / query-native
+  scenarios remain future work.
+
+### Changed
+
+- Version bumps: core 0.7.0 → 0.10.0, cli 0.9.1 → 0.10.0,
+  types 0.4.0 → 0.10.0, umbrella 0.9.1 → 0.10.0, mcp 0.4.6 → 0.5.0.
+- Schema versions v9 → v15. Migrations are additive — the legacy
+  `memories.source_id`, `memory_type`, and `content` columns all
+  remain populated.
+- 12 Codex review rounds across Layer A / Layer B / surface /
+  benchmarks. Every must-fix addressed (notably: INSERT OR IGNORE →
+  ON CONFLICT DO NOTHING, atomicity across all `storeMemory`
+  variants, segment/episode FK consistency, DB-level alias cap
+  trigger, cue extraction pipeline, construct reuse accounting).
+
+### Tests
+
+- Core: 22 test files, 485 tests (baseline 332 → +153).
+- Workspace: 1118 tests passing, typecheck clean.
+
+### Obsidian source of truth
+
+- `2026-04-17-1054-v1.0-합의안-v4-최종.md` (approved-by-self-judgment)
+- `docs/reconstructive-memory-spec.md` (repo mirror)
+
+---
+
 ## [0.9.1] - 2026-04-16
 
 ### Added
