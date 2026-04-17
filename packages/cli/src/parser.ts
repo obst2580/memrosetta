@@ -15,6 +15,7 @@ export interface ParsedArgs {
 const COMMANDS = new Set([
   'store',
   'search',
+  'recall',
   'ingest',
   'get',
   'count',
