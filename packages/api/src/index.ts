@@ -1,11 +1,9 @@
 import { serve } from '@hono/node-server';
 import { SqliteMemoryEngine } from '@memrosetta/core';
-import { HuggingFaceEmbedder } from '@memrosetta/embeddings';
 import { createApp } from './app.js';
 
 const PORT = parseInt(process.env.PORT ?? '3100', 10);
 const DB_PATH = process.env.DB_PATH ?? './memrosetta.db';
-const ENABLE_EMBEDDINGS = process.env.ENABLE_EMBEDDINGS !== 'false';
 
 function getApiKeysFromEnv(): string[] {
   const raw = process.env.MEMROSETTA_API_KEYS || process.env.SERVICE_KEY || '';
@@ -13,18 +11,8 @@ function getApiKeysFromEnv(): string[] {
 }
 
 async function main(): Promise<void> {
-  // Initialize engine
-  const embedder = ENABLE_EMBEDDINGS ? new HuggingFaceEmbedder() : undefined;
-  if (embedder) {
-    process.stdout.write('Loading embedding model...\n');
-    await embedder.initialize();
-    process.stdout.write('Embedding model ready\n');
-  }
-
-  const engine = new SqliteMemoryEngine({
-    dbPath: DB_PATH,
-    embedder,
-  });
+  // v0.11: HF embedder removed. Core is LLM-free.
+  const engine = new SqliteMemoryEngine({ dbPath: DB_PATH });
   await engine.initialize();
   process.stdout.write(`Database initialized: ${DB_PATH}\n`);
 

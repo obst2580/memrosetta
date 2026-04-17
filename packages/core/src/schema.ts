@@ -16,7 +16,6 @@ CREATE TABLE memories (
   confidence      REAL DEFAULT 1.0,
   salience        REAL DEFAULT 1.0,
   is_latest       INTEGER NOT NULL DEFAULT 1,
-  embedding       BLOB,
   keywords        TEXT,
   event_date_start TEXT,
   event_date_end   TEXT,
@@ -610,13 +609,36 @@ CREATE INDEX IF NOT EXISTS idx_construct_exemplars_exemplar
   ON construct_exemplars(exemplar_memory_id);
 `;
 
+// v0.11: SchemaOptions (vectorEnabled, embeddingDimension) removed
+// together with the HF embedder and sqlite-vec integration.
 export interface SchemaOptions {
-  readonly vectorEnabled?: boolean;
-  readonly embeddingDimension?: number;
+  // reserved for future options; intentionally empty after HF removal.
 }
 
-function schemaV2(dim: number): string {
-  return `CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories USING vec0(embedding float[${dim}]);`;
+/**
+ * v16: Drop the sqlite-vec virtual table and the `memories.embedding`
+ * BLOB column. These existed to support HF-based vector search via
+ * sqlite-vec. v0.11 removes that entire code path — Core is now
+ * LLM-free and offline-capable; the hippocampal index + Tulving
+ * type system + pattern completion do the retrieval work instead.
+ *
+ * Applied imperatively (not as a static SQL blob) because the
+ * `embedding` column may not exist on fresh installs (post-v0.11
+ * SCHEMA_V1 has no embedding column), and SQLite does not support
+ * `ALTER TABLE ... DROP COLUMN IF EXISTS`.
+ */
+function applySchemaV16(db: Database.Database): void {
+  try {
+    db.exec('DROP TABLE IF EXISTS vec_memories');
+  } catch {
+    // vec_memories may be a VIRTUAL TABLE with sqlite-vec not loaded —
+    // swallow so the migration keeps moving.
+  }
+  const hasEmbedding = (db.prepare('PRAGMA table_info(memories)').all() as readonly { name: string }[])
+    .some((col) => col.name === 'embedding');
+  if (hasEmbedding) {
+    db.exec('ALTER TABLE memories DROP COLUMN embedding');
+  }
 }
 
 const SCHEMA_V3 = `
@@ -639,27 +661,19 @@ CREATE INDEX idx_memories_tier ON memories(tier);
 CREATE INDEX idx_memories_activation ON memories(activation_score);
 `;
 
-export function ensureSchema(db: Database.Database, options?: SchemaOptions): void {
+export function ensureSchema(db: Database.Database, _options?: SchemaOptions): void {
   const hasVersionTable = db.prepare(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
   ).get();
 
-  const dim = options?.embeddingDimension ?? 384;
-
   if (!hasVersionTable) {
-    db.exec('CREATE TABLE schema_version (version INTEGER NOT NULL, embedding_dimension INTEGER DEFAULT 384)');
+    // v0.11: schema_version no longer stores embedding_dimension — the
+    // vec_memories virtual table and HF embedder paths were removed.
+    db.exec('CREATE TABLE schema_version (version INTEGER NOT NULL)');
     db.exec(SCHEMA_V1);
 
     let version = 1;
-    if (options?.vectorEnabled) {
-      db.exec(schemaV2(dim));
-      version = 2;
-    }
-    // v6 migration tables, v7 brain-inspired retrieval, v8 relation
-    // expansion, v9 source_attestations, v10 episodes/segments/bindings,
-    // v11 goal-state memory, v12 dual representation, v13 2-axis type
-    // system + memory_aliases, v14 hippocampal indexing + cue_aliases,
-    // v15 Layer B scaffolding (memory_constructs + construct_exemplars).
+    // Fresh install skips v2 (vec_memories) — removed in v0.11.
     db.exec(SCHEMA_V6);
     db.exec(SCHEMA_V7);
     db.exec(SCHEMA_V9);
@@ -669,8 +683,9 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
     db.exec(SCHEMA_V13);
     db.exec(SCHEMA_V14);
     db.exec(SCHEMA_V15);
-    version = 15;
-    db.prepare('INSERT INTO schema_version (version, embedding_dimension) VALUES (?, ?)').run(version, dim);
+    applySchemaV16(db);
+    version = 16;
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(version);
     return;
   }
 
@@ -682,10 +697,8 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
     db.prepare('UPDATE schema_version SET version = ?').run(1);
   }
 
-  if (currentVersion < 2 && options?.vectorEnabled) {
-    db.exec(schemaV2(dim));
-    db.prepare('UPDATE schema_version SET version = ?').run(2);
-  }
+  // v2 (vec_memories) skipped — removed in v0.11. Existing DBs get the
+  // drop migration in v16 below.
 
   if (currentVersion < 3) {
     // Only run ALTER TABLE for pre-v3 databases.
@@ -776,43 +789,8 @@ export function ensureSchema(db: Database.Database, options?: SchemaOptions): vo
     db.prepare('UPDATE schema_version SET version = ?').run(15);
   }
 
-  // Ensure vec_memories exists when vector is enabled (handles DB created without vectors)
-  if (options?.vectorEnabled) {
-    const hasVecTable = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='vec_memories'"
-    ).get();
-
-    if (!hasVecTable) {
-      try {
-        db.exec(schemaV2(dim));
-      } catch {
-        // sqlite-vec module not available -- fall back to no vector search
-        process.stderr.write('[memrosetta] sqlite-vec not available, vector search disabled\n');
-      }
-    }
-
-    // Ensure embedding_dimension column exists and handle dimension mismatch
-    const hasDimCol = (db.prepare('PRAGMA table_info(schema_version)').all() as readonly { name: string }[])
-      .some((col) => col.name === 'embedding_dimension');
-
-    if (!hasDimCol) {
-      db.exec('ALTER TABLE schema_version ADD COLUMN embedding_dimension INTEGER DEFAULT 384');
-    }
-
-    const storedDim = (db.prepare('SELECT embedding_dimension FROM schema_version').get() as { embedding_dimension: number | null })
-      ?.embedding_dimension ?? 384;
-
-    if (storedDim !== dim) {
-      process.stderr.write(
-        `[memrosetta] Embedding dimension changed (${storedDim} -> ${dim}). Recreating vector index...\n`,
-      );
-      try { db.exec('DROP TABLE IF EXISTS vec_memories'); } catch { /* ignore */ }
-      try {
-        db.exec(schemaV2(dim));
-        db.prepare('UPDATE schema_version SET embedding_dimension = ?').run(dim);
-      } catch {
-        process.stderr.write('[memrosetta] sqlite-vec not available, vector search disabled\n');
-      }
-    }
+  if (currentVersion < 16) {
+    applySchemaV16(db);
+    db.prepare('UPDATE schema_version SET version = ?').run(16);
   }
 }

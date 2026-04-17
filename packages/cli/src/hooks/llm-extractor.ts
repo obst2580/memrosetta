@@ -4,7 +4,7 @@
  * Fallback order:
  *   1. ANTHROPIC_API_KEY            -> Claude Haiku 4.5
  *   2. OPENAI_API_KEY               -> GPT-4o-mini
- *   3. propositionizer ONNX model   -> @memrosetta/extractor (if available)
+ *   3. (v0.11+) none — clients own fact extraction (see CLAUDE.md principle #1)
  *   4. nothing                      -> attempted = false
  *
  * The MemRosetta core itself never makes LLM calls. This module lives in
@@ -43,7 +43,7 @@ export interface ExtractedMemory {
 
 export interface LlmExtractor {
   readonly memories: readonly ExtractedMemory[];
-  readonly source: 'anthropic' | 'openai' | 'propositionizer' | 'none';
+  readonly source: 'anthropic' | 'openai' | 'none';
   readonly attempted: boolean;
 }
 
@@ -187,34 +187,6 @@ async function extractOpenAI(
   }
 }
 
-async function extractPropositionizer(
-  params: ExtractParams,
-): Promise<ExtractedMemory[] | null> {
-  // Lazy import so the propositionizer ONNX model only loads when needed.
-  try {
-    // @memrosetta/extractor is an optional peer; the CLI must build even
-    // when it is not installed.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const importer = new Function('m', 'return import(m)') as (m: string) => Promise<any>;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod: any = await importer('@memrosetta/extractor').catch(() => null);
-    if (!mod?.PropositionizerDecomposer) return null;
-    const decomposer = new mod.PropositionizerDecomposer();
-    const facts: string[] = await decomposer.decompose(params.text);
-    if (!Array.isArray(facts) || facts.length === 0) return [];
-    return facts.map((content) => ({
-      content,
-      memoryType: 'fact' as MemoryType,
-      confidence: 0.6,
-    }));
-  } catch (err) {
-    process.stderr.write(
-      `[enforce] propositionizer fallback failed: ${err instanceof Error ? err.message : String(err)}\n`,
-    );
-    return null;
-  }
-}
-
 export async function extractWithLLM(
   params: ExtractParams,
 ): Promise<LlmExtractor> {
@@ -230,12 +202,8 @@ export async function extractWithLLM(
     return { memories: openai, source: 'openai', attempted: true };
   }
 
-  // 3. Local propositionizer (best-effort)
-  const local = await extractPropositionizer(params);
-  if (local !== null) {
-    return { memories: local, source: 'propositionizer', attempted: true };
-  }
-
-  // 4. Nothing available.
+  // v0.11: the local propositionizer fallback (HF ONNX model) was
+  // removed. Clients are responsible for fact extraction — see
+  // CLAUDE.md "Core LLM-free" principle.
   return { memories: [], source: 'none', attempted: false };
 }

@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@memrosetta/core": "workspace:*",
-    "@memrosetta/embeddings": "workspace:*",
     "@memrosetta/llm": "workspace:*",
     "@memrosetta/types": "workspace:*",
     "zod": "^3.23.0"

@@ -57,11 +57,11 @@ describe('ensureSchema', () => {
     expect(indexNames).toContain('idx_memories_activation');
   });
 
-  it('sets schema version to 15 for fresh database', () => {
+  it('sets schema version to 16 for fresh database', () => {
     ensureSchema(db);
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(15);
+    expect(row.version).toBe(16);
   });
 
   it('creates v7 brain-inspired tables (memory_coaccess + encoding context columns)', () => {
@@ -110,7 +110,7 @@ describe('ensureSchema', () => {
     expect(() => ensureSchema(db)).not.toThrow();
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(15);
+    expect(row.version).toBe(16);
   });
 
   it('FTS5 syncs with memories table on insert', () => {
@@ -196,17 +196,7 @@ describe('ensureSchema', () => {
     }).toThrow();
   });
 
-  it('stores embedding_dimension in schema_version for fresh database', () => {
-    ensureSchema(db, { vectorEnabled: false, embeddingDimension: 768 });
-
-    const row = db.prepare('SELECT embedding_dimension FROM schema_version').get() as { embedding_dimension: number };
-    expect(row.embedding_dimension).toBe(768);
-  });
-
-  it('defaults embedding_dimension to 384 when not specified', () => {
-    ensureSchema(db);
-
-    const row = db.prepare('SELECT embedding_dimension FROM schema_version').get() as { embedding_dimension: number };
-    expect(row.embedding_dimension).toBe(384);
-  });
+  // v0.11: embedding_dimension column removed along with vec_memories
+  // and the HF embedder path. Previous tests covering those fields are
+  // removed; schema_version now only carries `version`.
 });

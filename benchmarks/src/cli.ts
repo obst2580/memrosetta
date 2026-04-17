@@ -155,17 +155,17 @@ async function main(): Promise<void> {
         return new SqliteMemoryEngine({ dbPath });
       }
       case 'hybrid': {
+        // v0.11: "hybrid" collapsed into plain sqlite — the HF embedder
+        // path has been removed. Kept as an alias so old shell aliases
+        // continue to work without crashing.
         const { SqliteMemoryEngine } = await import('@memrosetta/core');
-        const { HuggingFaceEmbedder } = await import('@memrosetta/embeddings');
-        const embedder = new HuggingFaceEmbedder();
-        await embedder.initialize();
         const os = await import('node:os');
         const path = await import('node:path');
         const fs = await import('node:fs/promises');
         const tmpDir = path.join(os.tmpdir(), 'memrosetta-bench');
         await fs.mkdir(tmpDir, { recursive: true });
         const dbPath = path.join(tmpDir, `bench-hybrid-${Date.now()}.db`);
-        return new SqliteMemoryEngine({ dbPath, embedder });
+        return new SqliteMemoryEngine({ dbPath });
       }
       default:
         throw new Error(

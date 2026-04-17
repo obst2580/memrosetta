@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rowToMemory, serializeEmbedding } from '../src/mapper.js';
+import { rowToMemory } from '../src/mapper.js';
 import type { MemoryRow } from '../src/mapper.js';
 
 function makeRow(overrides: Partial<MemoryRow> = {}): MemoryRow {
@@ -17,7 +17,6 @@ function makeRow(overrides: Partial<MemoryRow> = {}): MemoryRow {
     confidence: 0.9,
     salience: 0.8,
     is_latest: 1,
-    embedding: null,
     keywords: 'typescript javascript typing',
     event_date_start: null,
     event_date_end: null,
@@ -90,12 +89,6 @@ describe('rowToMemory', () => {
     expect(memory).not.toHaveProperty('sourceId');
   });
 
-  it('omits embedding when null', () => {
-    const row = makeRow({ embedding: null });
-    const memory = rowToMemory(row);
-    expect(memory).not.toHaveProperty('embedding');
-  });
-
   it('converts event_date_start to eventDateStart', () => {
     const row = makeRow({ event_date_start: '2026-04-01T09:00:00Z' });
     expect(rowToMemory(row).eventDateStart).toBe('2026-04-01T09:00:00Z');
@@ -129,53 +122,7 @@ describe('rowToMemory', () => {
     expect(memory).not.toHaveProperty('invalidatedAt');
   });
 
-  it('deserializes embedding from Buffer', () => {
-    const original = [0.1, 0.2, 0.3, 0.4];
-    const buf = serializeEmbedding(original);
-    const row = makeRow({ embedding: buf });
-    const memory = rowToMemory(row);
-
-    expect(memory.embedding).toBeDefined();
-    expect(memory.embedding!.length).toBe(4);
-    expect(memory.embedding![0]).toBeCloseTo(0.1, 5);
-    expect(memory.embedding![1]).toBeCloseTo(0.2, 5);
-    expect(memory.embedding![2]).toBeCloseTo(0.3, 5);
-    expect(memory.embedding![3]).toBeCloseTo(0.4, 5);
-  });
 });
 
-describe('serializeEmbedding', () => {
-  it('roundtrips correctly with number array', () => {
-    const original = [1.0, 2.5, -3.7, 0.0, 999.999];
-    const buf = serializeEmbedding(original);
-    expect(buf).toBeInstanceOf(Buffer);
-
-    const float32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
-    const result = Array.from(float32);
-
-    expect(result.length).toBe(original.length);
-    result.forEach((val, i) => {
-      // Float32 has less precision than Float64, so use a wider tolerance
-      expect(val).toBeCloseTo(original[i], 2);
-    });
-  });
-
-  it('roundtrips correctly with Float32Array', () => {
-    const original = new Float32Array([0.1, 0.2, 0.3]);
-    const buf = serializeEmbedding(original);
-    expect(buf).toBeInstanceOf(Buffer);
-
-    const float32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
-    const result = Array.from(float32);
-
-    expect(result.length).toBe(original.length);
-    result.forEach((val, i) => {
-      expect(val).toBeCloseTo(original[i], 5);
-    });
-  });
-
-  it('handles empty array', () => {
-    const buf = serializeEmbedding([]);
-    expect(buf.byteLength).toBe(0);
-  });
-});
+// v0.11: serializeEmbedding suite removed — the function was deleted
+// together with the HF embedder integration.

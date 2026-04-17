@@ -9,24 +9,8 @@ export async function getEngine(): Promise<SqliteMemoryEngine> {
   const config = getConfig();
   ensureDir();
 
-  let embedder;
-  if (config.enableEmbeddings) {
-    try {
-      const { HuggingFaceEmbedder } = await import('@memrosetta/embeddings');
-      const preset = config.embeddingPreset ?? 'en';
-      embedder = new HuggingFaceEmbedder({ preset });
-      await embedder.initialize();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      process.stderr.write(
-        `[memrosetta] Failed to load embeddings, continuing without: ${message}\n`,
-      );
-    }
-  }
-
   engineInstance = new SqliteMemoryEngine({
     dbPath: config.dbPath,
-    embedder,
   });
   await engineInstance.initialize();
   return engineInstance;

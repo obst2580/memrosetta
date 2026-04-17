@@ -21,7 +21,6 @@ export interface MemoryRow {
   readonly confidence: number;
   readonly salience: number;
   readonly is_latest: number;
-  readonly embedding: Buffer | null;
   readonly keywords: string | null;
   readonly event_date_start: string | null;
   readonly event_date_end: string | null;
@@ -58,7 +57,6 @@ export function rowToMemory(row: MemoryRow): Memory {
     confidence: row.confidence,
     salience: row.salience,
     isLatest: row.is_latest === 1,
-    ...(row.embedding != null ? { embedding: deserializeEmbedding(row.embedding) } : {}),
     keywords: stringToKeywords(row.keywords),
     ...(row.event_date_start != null ? { eventDateStart: row.event_date_start } : {}),
     ...(row.event_date_end != null ? { eventDateEnd: row.event_date_end } : {}),
@@ -82,12 +80,3 @@ export function rowToMemory(row: MemoryRow): Memory {
   };
 }
 
-function deserializeEmbedding(buf: Buffer): readonly number[] {
-  const float32 = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
-  return Array.from(float32);
-}
-
-export function serializeEmbedding(embedding: readonly number[] | Float32Array): Buffer {
-  const float32 = embedding instanceof Float32Array ? embedding : new Float32Array(embedding);
-  return Buffer.from(float32.buffer, float32.byteOffset, float32.byteLength);
-}

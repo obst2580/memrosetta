@@ -851,6 +851,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] Recency boost + autoRelate expansion + duplicate collapse (v0.9.1)
 - [x] Reconstructive Memory kernel — Layer A + Layer B scaffolding (v0.10.0)
 - [x] `memrosetta recall` + MCP `reconstruct_recall` + v1.0 benchmark suite (v0.10.0)
+- [x] **Hugging Face removal — Core is 100% LLM-free + offline, 1.5 GB → 30 MB install** (v0.11.0)
 - [ ] OAuth authentication (GitHub + Google device-code flow, v0.6.0)
 - [ ] Duplicate memory collapse (exact-content dedupe, v0.5.x)
 - [ ] Sync server 1.0 (promotion from 0.1.x after production validation)

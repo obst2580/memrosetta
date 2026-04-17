@@ -21,7 +21,6 @@
   "dependencies": {
     "@memrosetta/types": "workspace:*",
     "@memrosetta/core": "workspace:*",
-    "@memrosetta/embeddings": "workspace:*",
     "hono": "^4.0.0",
     "@hono/node-server": "^1.0.0",
     "zod": "^3.23.0"

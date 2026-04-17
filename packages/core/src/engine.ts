@@ -14,17 +14,14 @@ import type {
   ReconstructRecallInput,
   ReconstructRecallResult,
 } from '@memrosetta/types';
-import type { Embedder, ContradictionDetector } from '@memrosetta/embeddings';
 import { ensureSchema } from './schema.js';
 import {
   createPreparedStatements,
   storeMemory,
   storeBatchInTransaction,
-  storeMemoryAsync,
-  storeBatchAsync,
   type PreparedStatements,
 } from './store.js';
-import { searchMemories, bruteForceVectorSearch } from './search.js';
+import { searchMemories } from './search.js';
 import { recordCoAccess } from './coaccess.js';
 import {
   createRelationStatements,
@@ -86,9 +83,6 @@ export interface LayerBConfig {
 
 export interface SqliteEngineOptions {
   readonly dbPath: string; // ':memory:' for in-memory, or file path
-  readonly embedder?: Embedder;  // Optional: enables vector search
-  readonly contradictionDetector?: ContradictionDetector;  // Optional: enables NLI-based contradiction detection
-  readonly contradictionThreshold?: number;  // Default: 0.7. Min NLI score to auto-create contradicts relation.
   /** Layer B runtime flags (default all OFF). */
   readonly layerB?: LayerBConfig;
 }
@@ -96,7 +90,6 @@ export interface SqliteEngineOptions {
 interface AutoRelateCandidateRow {
   readonly memory_id: string;
   readonly keywords: string | null;
-  readonly embedding: Buffer | null;
 }
 
 export class SqliteMemoryEngine implements IMemoryEngine {
@@ -105,7 +98,6 @@ export class SqliteMemoryEngine implements IMemoryEngine {
   private relStmts: RelationStatements | null = null;
   private constructStmts: ConstructStatements | null = null;
   private readonly options: SqliteEngineOptions;
-  private vectorEnabled = false;
   /**
    * Layer B consolidation queue. Always exists so tests and admin
    * flows can enqueue jobs; actual runtime integration is
@@ -142,25 +134,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     this.db.pragma('synchronous = NORMAL');
     this.db.pragma('foreign_keys = ON');
 
-    // Load sqlite-vec extension if embedder is provided
-    if (this.options.embedder) {
-      try {
-        const sqliteVec = await import('sqlite-vec');
-        sqliteVec.load(this.db);
-        this.vectorEnabled = true;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        process.stderr.write(
-          `[memrosetta] sqlite-vec not available, falling back to JS cosine similarity: ${message}\n`,
-        );
-        this.vectorEnabled = false;
-      }
-    }
-
-    ensureSchema(this.db, {
-      vectorEnabled: this.vectorEnabled,
-      embeddingDimension: this.options.embedder?.dimension ?? 384,
-    });
+    ensureSchema(this.db);
 
     this.stmts = createPreparedStatements(this.db);
     this.relStmts = createRelationStatements(this.db);
@@ -179,17 +153,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
   async store(input: MemoryInput): Promise<Memory> {
     this.ensureInitialized();
 
-    let memory: Memory;
-    if (this.options.embedder) {
-      memory = await storeMemoryAsync(this.db!, this.stmts!, input, this.options.embedder);
-    } else {
-      memory = storeMemory(this.db!, this.stmts!, input);
-    }
-
-    // Check for contradictions if detector is available
-    if (this.options.contradictionDetector && this.options.embedder) {
-      await this.checkContradictions(memory);
-    }
+    const memory: Memory = storeMemory(this.db!, this.stmts!, input);
 
     // Check for duplicates and auto-create 'updates' relation for very high similarity
     await this.checkDuplicates(memory);
@@ -303,35 +267,16 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     inputs: readonly MemoryInput[],
   ): Promise<readonly Memory[]> {
     this.ensureInitialized();
-    let memories: readonly Memory[];
-    if (this.options.embedder) {
-      memories = await storeBatchAsync(this.db!, this.stmts!, inputs, this.options.embedder);
-    } else {
-      memories = storeBatchInTransaction(this.db!, this.stmts!, inputs);
-    }
+    const memories = storeBatchInTransaction(this.db!, this.stmts!, inputs);
 
     // Run post-store checks for small batches (<=50)
     if (memories.length <= 50) {
       for (const memory of memories) {
-        // Contradiction detection (requires embedder + detector)
-        if (this.options.embedder && this.options.contradictionDetector) {
-          try {
-            await this.checkContradictions(memory);
-          } catch {
-            // Failure should not block storage
-          }
+        try {
+          await this.checkDuplicates(memory);
+        } catch {
+          // Failure should not block storage
         }
-
-        // Duplicate detection (requires embedder)
-        if (this.options.embedder) {
-          try {
-            await this.checkDuplicates(memory);
-          } catch {
-            // Failure should not block storage
-          }
-        }
-
-        // Auto-relate by shared keywords (no embedder needed)
         try {
           await this.autoRelate(memory);
         } catch {
@@ -353,11 +298,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
 
   async search(query: SearchQuery): Promise<SearchResponse> {
     this.ensureInitialized();
-    let queryVec: Float32Array | undefined;
-    if (this.options.embedder) {
-      queryVec = await this.options.embedder.embed(query.query);
-    }
-    const response = searchMemories(this.db!, query, queryVec, this.vectorEnabled);
+    const response = searchMemories(this.db!, query);
 
     // Hebbian co-access: record that these memories were retrieved
     // together so future searches can boost co-accessed neighbors.
@@ -415,20 +356,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       `,
       ).run(uid, uid);
 
-      // 2. Delete from vec_memories if vector table exists
-      if (this.vectorEnabled) {
-        try {
-          db.prepare(`
-            DELETE FROM vec_memories WHERE rowid IN (
-              SELECT id FROM memories WHERE user_id = ?
-            )
-          `).run(uid);
-        } catch {
-          // vec_memories may not exist, ignore
-        }
-      }
-
-      // 3. Delete memories (FTS sync triggers handle FTS cleanup)
+      // 2. Delete memories (FTS sync triggers handle FTS cleanup)
       db.prepare('DELETE FROM memories WHERE user_id = ?').run(uid);
     });
 
@@ -455,18 +383,6 @@ export class SqliteMemoryEngine implements IMemoryEngine {
           SELECT memory_id FROM memories WHERE user_id = ? AND namespace = ?
         )
       `).run(uid, ns, uid, ns);
-
-      if (this.vectorEnabled) {
-        try {
-          db.prepare(`
-            DELETE FROM vec_memories WHERE rowid IN (
-              SELECT id FROM memories WHERE user_id = ? AND namespace = ?
-            )
-          `).run(uid, ns);
-        } catch {
-          // vec_memories may not exist
-        }
-      }
 
       db.prepare('DELETE FROM memories WHERE user_id = ? AND namespace = ?').run(uid, ns);
     });
@@ -563,7 +479,6 @@ export class SqliteMemoryEngine implements IMemoryEngine {
           0.5, // confidence
           0.5, // salience
           1, // is_latest
-          null, // embedding
           null, // keywords
           null, // event_date_start
           null, // event_date_end
@@ -764,112 +679,35 @@ export class SqliteMemoryEngine implements IMemoryEngine {
   }
 
   /**
-   * Check the newly stored memory against existing similar memories
-   * for contradictions using the NLI model.
-   *
-   * If a contradiction is found above the configured threshold,
-   * a 'contradicts' relation is automatically created.
-   *
-   * Graceful degradation: any error during NLI check is silently
-   * swallowed so that memory storage is never blocked.
-   */
-  private async checkContradictions(newMemory: Memory): Promise<void> {
-    const detector = this.options.contradictionDetector;
-    if (!detector || !this.options.embedder) return;
-
-    const threshold = this.options.contradictionThreshold ?? 0.7;
-
-    try {
-      // Compute query vector from the new memory's content
-      const queryVec = await this.options.embedder.embed(newMemory.content);
-
-      // Search for similar existing memories (top 5, same user, only latest)
-      // skipAccessTracking=true: internal check should not inflate access counts
-      const similar = searchMemories(
-        this.db!,
-        {
-          userId: newMemory.userId,
-          query: newMemory.content,
-          limit: 5,
-          filters: { onlyLatest: true },
-        },
-        queryVec,
-        this.vectorEnabled,
-        true, // skipAccessTracking
-      );
-
-      for (const result of similar.results) {
-        // Skip self
-        if (result.memory.memoryId === newMemory.memoryId) continue;
-
-        try {
-          const nliResult = await detector.detect(
-            result.memory.content,
-            newMemory.content,
-          );
-
-          if (
-            nliResult.label === 'contradiction' &&
-            nliResult.score >= threshold
-          ) {
-            await this.relate(
-              newMemory.memoryId,
-              result.memory.memoryId,
-              'contradicts',
-              `NLI confidence: ${nliResult.score.toFixed(3)}`,
-            );
-          }
-        } catch {
-          // NLI check failed for this pair, continue with next
-        }
-      }
-    } catch {
-      // Entire contradiction check failed, memory is still stored
-    }
-  }
-
-  /**
    * Check for near-duplicate memories after storing.
-   * Uses direct cosine similarity (not the combined search score) to avoid
-   * false positives from the multi-factor reranking.
-   * If cosine similarity > 0.95, auto-create an 'updates' relation (new supersedes old).
-   * Only runs for single store() calls, not storeBatch() (too slow for bulk).
+   *
+   * Post HF-removal (v0.11): content-exact match only. The previous
+   * cosine-similarity path required an embedder, which MemRosetta no
+   * longer ships. Exact-content duplicates still get caught by the
+   * `memrosetta dedupe` command (lexical).
    */
   private async checkDuplicates(newMemory: Memory): Promise<void> {
-    if (!this.options.embedder) return;
-
     try {
-      const queryVec = await this.options.embedder.embed(newMemory.content);
-
-      // Use raw vector search (not reranked searchMemories) to find candidates
-      // by pure cosine similarity, avoiding recency/salience bias
-      const candidates = bruteForceVectorSearch(
-        this.db!,
-        queryVec,
-        newMemory.userId,
-        10,
-        { onlyLatest: true },
-      );
-
-      for (const candidate of candidates) {
-        if (candidate.memory.memoryId === newMemory.memoryId) continue;
-
-        // distance is 1 - cosine_similarity for brute force
-        const similarity = 1 - candidate.distance;
-
-        if (similarity > 0.95) {
-          // Very high cosine similarity: likely an update
-          try {
-            await this.relate(
-              newMemory.memoryId,
-              candidate.memory.memoryId,
-              'updates',
-              `Auto-detected duplicate: cosine similarity ${similarity.toFixed(3)}`,
-            );
-          } catch {
-            // Relation may already exist, ignore
-          }
-        }
+      const row = this.db!
+        .prepare(
+          `SELECT memory_id FROM memories
+           WHERE user_id = ? AND memory_id != ? AND content = ?
+             AND is_latest = 1 AND invalidated_at IS NULL
+           LIMIT 1`,
+        )
+        .get(newMemory.userId, newMemory.memoryId, newMemory.content) as
+        | { memory_id: string }
+        | undefined;
+      if (!row) return;
+      try {
+        await this.relate(
+          newMemory.memoryId,
+          row.memory_id,
+          'updates',
+          'Auto-detected exact-content duplicate',
+        );
+      } catch {
+        // Relation may already exist
       }
     } catch {
       // Duplicate check failure should not block storage
@@ -885,21 +723,20 @@ export class SqliteMemoryEngine implements IMemoryEngine {
    * Graceful: errors are silently swallowed.
    */
   private async autoRelate(newMemory: Memory): Promise<void> {
-    if ((!newMemory.keywords || newMemory.keywords.length === 0) && !newMemory.embedding) return;
+    if (!newMemory.keywords || newMemory.keywords.length === 0) return;
 
     try {
-      const keywordList = (newMemory.keywords ?? []).map((keyword) => keyword.toLowerCase());
-      const newEmbedding = newMemory.embedding ? new Float32Array(newMemory.embedding) : null;
+      const keywordList = newMemory.keywords.map((keyword) => keyword.toLowerCase());
 
       const existing = newMemory.namespace
         ? this.db!.prepare(`
-          SELECT memory_id, keywords, embedding FROM memories
+          SELECT memory_id, keywords FROM memories
           WHERE user_id = ? AND namespace = ? AND is_latest = 1 AND memory_id != ?
           AND invalidated_at IS NULL
           ORDER BY learned_at DESC LIMIT 50
         `).all(newMemory.userId, newMemory.namespace, newMemory.memoryId) as readonly AutoRelateCandidateRow[]
         : this.db!.prepare(`
-          SELECT memory_id, keywords, embedding FROM memories
+          SELECT memory_id, keywords FROM memories
           WHERE user_id = ? AND is_latest = 1 AND memory_id != ?
           AND invalidated_at IS NULL
           ORDER BY learned_at DESC LIMIT 50
@@ -910,14 +747,8 @@ export class SqliteMemoryEngine implements IMemoryEngine {
           ? row.keywords.split(' ').map((keyword) => keyword.trim().toLowerCase()).filter(Boolean)
           : [];
         const overlap = keywordList.filter((keyword) => existingKeywords.includes(keyword));
-        const similarity = newEmbedding && row.embedding
-          ? cosineSimilarity(
-            newEmbedding,
-            new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4),
-          )
-          : 0;
 
-        if (overlap.length >= 2 || similarity > 0.7) {
+        if (overlap.length >= 2) {
           // Check if any relation already exists between these memories
           // (e.g., from checkDuplicates creating an 'updates' relation)
           const existingRelation = this.db!.prepare(
@@ -937,9 +768,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
               newMemory.memoryId,
               row.memory_id,
               'extends',
-              overlap.length >= 2
-                ? `Auto: ${overlap.length} shared keywords (${overlap.join(', ')})`
-                : `Auto: cosine similarity ${similarity.toFixed(3)}`,
+              `Auto: ${overlap.length} shared keywords (${overlap.join(', ')})`,
             );
           } catch {
             // Relation may already exist
@@ -956,23 +785,6 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       throw new Error('Engine not initialized. Call initialize() first.');
     }
   }
-}
-
-function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  if (a.length !== b.length || a.length === 0) return 0;
-
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-
-  if (normA === 0 || normB === 0) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
 // Factory function for convenience

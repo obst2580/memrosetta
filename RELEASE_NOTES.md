@@ -5,6 +5,100 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.11.0 — 2026-04-17
+
+**BREAKING. Core is now 100% LLM-free and offline.**
+
+v0.11 removes Hugging Face Transformers.js entirely — no vector
+search, no NLI contradiction detector, no propositionizer, no
+`sqlite-vec`, no `onnxruntime-node`, no ~1.5 GB install footprint.
+Every HF code path is deleted along with `@memrosetta/embeddings`
+and `@memrosetta/extractor` packages.
+
+### Why
+
+Windows users kept crashing with `TypeError: fetch failed` during
+HF model download. On constrained networks that Codex / Claude Code
+often run on (corporate proxies, captive portals, first-run
+offline), memrosetta was effectively unusable until the model was
+cached. The tradeoff — a >1 GB binary download before the first
+successful `store()` — did not match the project's Core LLM-free
+principle.
+
+### What stays (the whole v1.0 kernel)
+
+- Source Monitoring + episodes/segments/goals
+- Dual representation (verbatim + gist) + audit versions
+- Tulving 2-axis type system + memory_aliases
+- **Hippocampal indexing** — the retrieval backbone
+- **Pattern Completion** with 5 intents (reuse/explain/decide/browse/verify)
+- `reconstructRecall` + Progressive-disclosure-friendly evidence return
+- Layer B scaffolding (pattern separation, novelty, consolidation queue)
+- Full Anti-Interference (diversity + goal_compat + abstraction)
+- engine LayerB flags
+- CLI `memrosetta recall --format text` human-readable renderer
+- MCP `memrosetta_reconstruct_recall` tool
+- All v1.0 reconstructive benchmarks (goal_state_preservation,
+  source_fidelity, reuse_fit, context_preserving_transfer)
+
+### What's gone
+
+- `@memrosetta/embeddings` (HuggingFaceEmbedder, ContradictionDetector)
+- `@memrosetta/extractor` (propositionizer)
+- `sqlite-vec` dependency + `vec_memories` virtual table
+- `memories.embedding` BLOB column
+- `storeMemoryAsync`, `storeBatchAsync`, `bruteForceVectorSearch`,
+  `vectorSearch`, `rrfMerge*`, `convexCombinationMerge`
+- Engine options `embedder`, `contradictionDetector`, `contradictionThreshold`
+- `ENABLE_EMBEDDINGS` / `MEMROSETTA_EMBEDDINGS` env vars (ignored)
+- CLI `--no-embeddings` is now a no-op (kept for script compat)
+
+### How retrieval still works without embeddings
+
+Pattern completion uses the hippocampal episodic index — sparse cue
+bundles (13 feature families, canonicalized, bipolar polarity,
+Hebbian-decayed) that point back at memories through
+`memory_episodic_bindings`. Recall takes natural-language query +
+structured state vector, decomposes into cues, scores episodes by
+cue overlap with recency + goal-fit boosts, expands to memories,
+and completes missing features from the neighbor episodes. No
+vector math, no model inference, fully deterministic.
+
+For workloads that genuinely want semantic similarity, run an
+embedder client-side (OpenAI, Voyage, local) and drive recall via
+the `cues` / `state_vector` inputs. Core stays pluggable.
+
+### Install
+
+```bash
+npm install -g memrosetta@0.11.0     # ~30 MB. No postinstall downloads.
+memrosetta init --codex              # or --claude-code, --cursor, --gemini
+memrosetta recall --query "…" --intent reuse --format text
+```
+
+### Migration from v0.10
+
+- Existing DBs: schema v16 runs on next open. Drops
+  `vec_memories` and `memories.embedding` if present. Additive,
+  no data loss beyond the dropped vectors (which were regeneratable
+  anyway).
+- API compatibility: `engine.store()` / `engine.search()` /
+  `engine.reconstructRecall()` keep the same signatures minus the
+  removed optional ML params. `engine.search()` no longer takes
+  a query-vector — just pass a `SearchQuery`.
+- `Memory` objects no longer carry an `embedding` field.
+
+### Tests
+
+Workspace: **1059 tests passing**. Core: 22 files / 435 tests.
+
+### Aligned versions
+
+`memrosetta`, `@memrosetta/cli`, `@memrosetta/core`,
+`@memrosetta/types`, `@memrosetta/mcp` = **0.11.0**.
+
+---
+
 ## v0.10.0 — 2026-04-17
 
 **Reconstructive Memory kernel.**

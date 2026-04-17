@@ -47,8 +47,8 @@ function insertMemory(
       INSERT INTO memories (
         memory_id, user_id, namespace, project, memory_type, content, raw_text,
         document_date, learned_at, source_id, confidence, salience, is_latest,
-        embedding, keywords, event_date_start, event_date_end, invalidated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        keywords, event_date_start, event_date_end, invalidated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       memoryId,
       'user1',
@@ -67,7 +67,6 @@ function insertMemory(
       null,
       null,
       null,
-      null,
     );
     return;
   }
@@ -76,8 +75,8 @@ function insertMemory(
     INSERT INTO memories (
       memory_id, user_id, namespace, memory_type, content, raw_text,
       document_date, learned_at, source_id, confidence, salience, is_latest,
-      embedding, keywords, event_date_start, event_date_end, invalidated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      keywords, event_date_start, event_date_end, invalidated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     memoryId,
     'user1',

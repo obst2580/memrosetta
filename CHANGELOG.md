@@ -2,6 +2,103 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.11.0] - 2026-04-17
+
+**BREAKING. Core is now 100% LLM-free and offline.**
+
+The Hugging Face Transformers.js integration is gone. Every code path
+that depended on it — vector search, contradiction detection, the
+propositionizer-based fact extractor, `sqlite-vec` — has been removed
+together with the model downloads, the `onnxruntime-node` native
+binary, and the ~1.5 GB install footprint that came with them.
+
+v1.0 reconstructive memory stays intact: **Layer A** (source
+monitoring, event segmentation, goal-state memory, dual
+representation, 2-axis type system, hippocampal indexing, pattern
+completion, recall) runs on every store and recall exactly as before.
+The hippocampal index + cue-driven pattern completion do the
+retrieval work that the HF embedder used to do — without calling out
+to model servers, without needing an internet connection, and
+without an `ERR_UNSUPPORTED_ESM_URL_SCHEME` on Windows.
+
+### Removed
+
+- `@memrosetta/embeddings` package (HuggingFaceEmbedder + NLI
+  ContradictionDetector). Deleted from the workspace.
+- `@memrosetta/extractor` package (propositionizer ONNX decomposer).
+  Deleted from the workspace.
+- `sqlite-vec`, `@huggingface/transformers`, `onnxruntime-node`
+  dependencies.
+- `storeMemoryAsync`, `storeBatchAsync` — no more async/embedding
+  variants; `storeMemory` is the single sync entry point.
+- `bruteForceVectorSearch`, `vectorSearch`, `rrfMerge`,
+  `rrfMergeWeighted`, `convexCombinationMerge`, `serializeEmbedding`
+  from `@memrosetta/core` exports.
+- `memories.embedding` BLOB column and the `vec_memories` virtual
+  table (schema v16 migration drops them idempotently).
+- `SchemaOptions.vectorEnabled` / `SchemaOptions.embeddingDimension`
+  and the `schema_version.embedding_dimension` column.
+- `SqliteEngineOptions.embedder` /
+  `SqliteEngineOptions.contradictionDetector` — Core API no longer
+  accepts ML models.
+- `HuggingFaceEmbedder` fallback paths in CLI / MCP / API / benchmarks.
+- `Memory.embedding: readonly number[]` field.
+
+### Changed
+
+- `engine.search()` is FTS-only with hippocampal cue boost + 3-factor
+  reranking. No queryVec / useVecTable parameters.
+- `checkDuplicates()` uses exact-content match; cosine similarity
+  path removed.
+- `autoRelate()` triggers on ≥ 2 shared keywords only. Cosine
+  similarity branch removed.
+- CLI `--no-embeddings` flag kept as a no-op for backwards
+  compatibility (so existing scripts don't break). Actual embeddings
+  are always off.
+- Schema migrates to v16. Upgrade path is additive for existing DBs:
+  the migration drops `vec_memories` + `memories.embedding` if they
+  exist, otherwise it is a no-op. Fresh installs never create those
+  objects.
+
+### Why
+
+1. Windows + Codex users kept hitting `TypeError: fetch failed` during
+   HF model fetch, which killed the MCP process before handshake.
+2. Install size dropped from ~1.5 GB to ~30 MB.
+3. Core LLM-free principle (CLAUDE.md #1) is now enforced: fact
+   extraction, compression, and contradiction detection are all the
+   client's responsibility.
+4. v1.0 kernel does not need embeddings — hippocampal indexing +
+   pattern completion provide structural retrieval that is more
+   interpretable and provenance-aware than semantic similarity.
+
+### Migration
+
+For users running v0.10.x:
+
+- Existing DBs upgrade cleanly on next open (schema v16 runs).
+- `engine.store()` / `engine.search()` / `engine.reconstructRecall()`
+  keep the same signatures sans the removed optional params.
+- If you depended on semantic similarity search, inject cues
+  explicitly via the `cues` field on `MemoryInput` or pass them to
+  `reconstructRecall({ cues: [...] })`. Pattern completion will
+  recover missing features from the episode index.
+- If you need semantic similarity for a specific use case, run an
+  external embedder client-side and pass the result through your
+  own pipeline before calling `store()`. Core remains pluggable but
+  no longer ships an embedder.
+
+### Tests
+
+Workspace: **1059 tests passing**. Core: 22 files / 435 tests.
+
+### Versions
+
+- `memrosetta`, `@memrosetta/cli`, `@memrosetta/core`,
+  `@memrosetta/types`, `@memrosetta/mcp`: 0.11.0 (aligned).
+
+---
+
 ## [0.10.0] - 2026-04-17
 
 **Reconstructive Memory kernel — Layer A + Layer B scaffolding.**

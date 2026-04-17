@@ -575,61 +575,7 @@ describe('Auto-relate on store (keyword overlap)', () => {
     ).toBe(true);
   });
 
-  it('auto-creates extends relation for cosine similarity above threshold', async () => {
-    class ModeratelySimilarEmbedder {
-      readonly dimension = 384;
-
-      async initialize(): Promise<void> {}
-      async close(): Promise<void> {}
-
-      async embed(text: string): Promise<Float32Array> {
-        const vec = new Float32Array(384);
-        if (text.includes('base')) {
-          vec[0] = 1;
-          return vec;
-        }
-        if (text.includes('related')) {
-          vec[0] = 0.8;
-          vec[1] = 0.6;
-          return vec;
-        }
-        vec[1] = 1;
-        return vec;
-      }
-
-      async embedBatch(texts: readonly string[]): Promise<readonly Float32Array[]> {
-        const results: Float32Array[] = [];
-        for (const text of texts) {
-          results.push(await this.embed(text));
-        }
-        return results;
-      }
-    }
-
-    await engine.close();
-    engine = new SqliteMemoryEngine({ dbPath: ':memory:', embedder: new ModeratelySimilarEmbedder() });
-    await engine.initialize();
-
-    const base = await engine.store(
-      makeInput({
-        content: 'base vector memory',
-        keywords: ['alpha'],
-      }),
-    );
-
-    const related = await engine.store(
-      makeInput({
-        content: 'related vector memory',
-        keywords: ['beta'],
-      }),
-    );
-
-    const relations = await engine.getRelations(related.memoryId);
-    const autoExtends = relations.filter(
-      (relation) => relation.relationType === 'extends' && relation.dstMemoryId === base.memoryId,
-    );
-
-    expect(autoExtends).toHaveLength(1);
-    expect(autoExtends[0].reason).toContain('cosine similarity');
-  });
+  // v0.11: cosine-similarity autoRelate branch removed with the HF
+  // embedder. Keyword overlap (>=2 shared keywords) is now the only
+  // trigger for automatic `extends` relations.
 });

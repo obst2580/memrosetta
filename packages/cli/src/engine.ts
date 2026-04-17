@@ -11,8 +11,12 @@ let cachedDbPath: string | null = null;
 
 interface EngineOptions {
   readonly db?: string;
+  /**
+   * @deprecated v0.11: kept for backwards-compatible CLI flag parsing.
+   * HF embedder + sqlite-vec paths were removed; this flag is now a
+   * no-op. Retained so `--no-embeddings` does not break existing usage.
+   */
   readonly noEmbeddings?: boolean;
-  readonly embeddingPreset?: 'en' | 'multilingual' | 'ko';
 }
 
 async function createEngineInstance(options: EngineOptions) {
@@ -26,19 +30,7 @@ async function createEngineInstance(options: EngineOptions) {
 
   const { SqliteMemoryEngine } = await import('@memrosetta/core');
 
-  let embedder;
-  if (!options.noEmbeddings && config.enableEmbeddings !== false) {
-    try {
-      const { HuggingFaceEmbedder } = await import('@memrosetta/embeddings');
-      const preset = options.embeddingPreset ?? config.embeddingPreset ?? 'en';
-      embedder = new HuggingFaceEmbedder({ preset });
-      await embedder.initialize();
-    } catch {
-      // Embeddings not available, proceed with FTS-only
-    }
-  }
-
-  const engine = new SqliteMemoryEngine({ dbPath, embedder });
+  const engine = new SqliteMemoryEngine({ dbPath });
   await engine.initialize();
   return engine;
 }

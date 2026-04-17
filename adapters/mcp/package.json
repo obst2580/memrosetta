@@ -1,6 +1,6 @@
 {
   "name": "@memrosetta/mcp",
-  "version": "0.5.0",
+  "version": "0.11.0",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
@@ -26,7 +26,6 @@
   },
   "dependencies": {
     "@memrosetta/core": "workspace:*",
-    "@memrosetta/embeddings": "workspace:*",
     "@memrosetta/sync-client": "workspace:*",
     "@memrosetta/types": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.0.0",

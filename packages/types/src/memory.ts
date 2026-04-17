@@ -168,7 +168,6 @@ export interface Memory extends MemoryInput {
   readonly memoryId: string;
   readonly learnedAt: string;
   readonly isLatest: boolean;
-  readonly embedding?: readonly number[];
   /** Memory tier: hot (working memory), warm (recent), cold (archived). Engine-managed. */
   readonly tier: MemoryTier;
   /** ACT-R activation score (0-1). Engine-managed. */

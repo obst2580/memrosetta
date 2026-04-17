@@ -1,6 +1,6 @@
 {
   "name": "@memrosetta/core",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,11 +25,7 @@
   "dependencies": {
     "@memrosetta/types": "workspace:*",
     "better-sqlite3": "^11.0.0",
-    "nanoid": "^5.0.0",
-    "sqlite-vec": "^0.1.7"
-  },
-  "optionalDependencies": {
-    "@memrosetta/embeddings": "workspace:*"
+    "nanoid": "^5.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",

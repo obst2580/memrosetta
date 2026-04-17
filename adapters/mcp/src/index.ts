@@ -3,7 +3,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SqliteMemoryEngine } from '@memrosetta/core';
-import { HuggingFaceEmbedder } from '@memrosetta/embeddings';
 import { SyncClient, ensureSyncSchema } from '@memrosetta/sync-client';
 import { registerTools } from './tools.js';
 import type { SyncRecorder } from './sync-recorder.js';
@@ -27,7 +26,9 @@ const VERSION = resolveMcpVersion();
 
 interface MemRosettaConfig {
   readonly dbPath?: string;
+  /** @deprecated v0.11 — HF embedder removed. Field kept for config-file back-compat; ignored at runtime. */
   readonly enableEmbeddings?: boolean;
+  /** @deprecated v0.11 — HF embedder removed. Field kept for config-file back-compat; ignored at runtime. */
   readonly embeddingPreset?: string;
   readonly syncEnabled?: boolean;
   readonly syncServerUrl?: string;
@@ -158,25 +159,13 @@ const DB_PATH =
   config.dbPath ??
   join(homedir(), '.memrosetta', 'memories.db');
 
-const ENABLE_EMBEDDINGS =
-  process.env.MEMROSETTA_EMBEDDINGS !== 'false' &&
-  config.enableEmbeddings !== false;
-
-const EMBEDDING_PRESET =
-  config.embeddingPreset ?? 'en';
-
 async function main(): Promise<void> {
   mkdirSync(dirname(DB_PATH), { recursive: true });
 
-  // Initialize embedder (optional)
-  let embedder: HuggingFaceEmbedder | undefined;
-  if (ENABLE_EMBEDDINGS) {
-    embedder = new HuggingFaceEmbedder({ preset: EMBEDDING_PRESET as 'en' | 'multilingual' | 'ko' });
-    await embedder.initialize();
-  }
-
-  // Initialize engine
-  const engine = new SqliteMemoryEngine({ dbPath: DB_PATH, embedder });
+  // v0.11: HF embedder / sqlite-vec paths removed. Core is now
+  // LLM-free and fully offline. Retrieval uses hippocampal indexing
+  // + FTS5 instead of vector search.
+  const engine = new SqliteMemoryEngine({ dbPath: DB_PATH });
   await engine.initialize();
 
   // Initialize sync (optional)
