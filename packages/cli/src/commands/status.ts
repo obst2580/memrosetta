@@ -18,7 +18,7 @@ interface StatusOptions {
   readonly noEmbeddings: boolean;
 }
 
-type RecallReadiness = 'ready' | 'degraded' | 'empty' | 'unknown';
+export type RecallReadiness = 'ready' | 'degraded' | 'empty' | 'unknown';
 
 interface EpisodicStats {
   readonly episodes: number;
@@ -214,12 +214,50 @@ function formatSize(bytes: number): string {
 }
 
 /**
+ * Coverage ratio below which we still call the layer `degraded` even
+ * if every table is non-empty. Without this guard, a DB where only
+ * 46% of memories have episodic bindings (the exact state Codex
+ * observed on the Windows upgrade) would be classified `ready`,
+ * hiding the fact that more than half the user's memories are still
+ * invisible to the reconstructive kernel.
+ */
+export const READY_BINDING_COVERAGE = 0.95;
+
+/**
+ * Pure function extracted for testability. Given the four layer
+ * counts plus the total live memory count, return the readiness
+ * verdict. No I/O, no side effects.
+ */
+export function deriveReadiness(input: {
+  readonly memoryCount: number;
+  readonly episodes: number;
+  readonly bindings: number;
+  readonly index: number;
+}): RecallReadiness {
+  const { memoryCount, episodes, bindings, index } = input;
+  if (memoryCount === 0) return 'empty';
+  if (episodes === 0 && bindings === 0) return 'empty';
+  if (
+    episodes > 0 &&
+    bindings > 0 &&
+    index > 0 &&
+    bindings / Math.max(1, memoryCount) >= READY_BINDING_COVERAGE
+  ) {
+    return 'ready';
+  }
+  return 'degraded';
+}
+
+/**
  * Read v1.0 episodic layer counts and derive a single `readiness`
  * verdict that `recall` can be evaluated against:
  *
- * - `ready`    → episodes + index + bindings all populated.
- * - `degraded` → some tables non-empty but not all (usually index
- *                missing or bindings never written — partial backfill).
+ * - `ready`    → episodes + index + bindings all populated AND at
+ *                least READY_BINDING_COVERAGE of live memories are
+ *                bound to an episode. Less than that is a partial
+ *                backfill, which is surfaced as `degraded`.
+ * - `degraded` → some tables non-empty but not all, OR binding
+ *                coverage is below the ready threshold.
  * - `empty`    → memories exist but none of episodes/bindings do.
  *                This is the state where `recall` cannot reconstruct.
  * - `unknown`  → read failed (likely pre-v10 schema).
@@ -243,16 +281,7 @@ function readEpisodicStats(
   const index = countOr('episodic_index');
   const constructs = countOr('construct_exemplars');
 
-  let readiness: RecallReadiness;
-  if (memoryCount === 0) {
-    readiness = 'empty';
-  } else if (episodes === 0 && bindings === 0) {
-    readiness = 'empty';
-  } else if (episodes > 0 && bindings > 0 && index > 0) {
-    readiness = 'ready';
-  } else {
-    readiness = 'degraded';
-  }
+  const readiness = deriveReadiness({ memoryCount, episodes, bindings, index });
 
   return { episodes, bindings, index, constructs, readiness };
 }

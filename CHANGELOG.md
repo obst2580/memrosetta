@@ -2,6 +2,36 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.12.1] - 2026-04-17
+
+**Fix: `status` readiness no longer reports `ready` on partially-bound DBs.**
+
+Codex's Windows verification of v0.12.0 found a DB in a mid-state —
+21510 memories but only 9934 episodic bindings (~46% coverage),
+because pre-v0.12 Claude-Code hooks had written episode bindings for
+some memories but not others. The old readiness logic only checked
+"are all four tables non-empty?" and classified this as `ready`,
+masking the fact that more than half the store was still invisible
+to the reconstructive kernel.
+
+### Changed
+
+- `memrosetta status` readiness verdict now requires binding coverage
+  ≥ 95% of live memories in addition to all four tables being
+  non-empty. Below that threshold the verdict is `degraded` with a
+  hint pointing at `memrosetta maintain --build-episodes`, which is
+  idempotent and will only backfill the remaining unbound memories.
+- `deriveReadiness()` is now exported from the status command for
+  direct unit testing of the verdict matrix.
+
+### Notes
+
+No schema change, no action required for fresh v0.12.0 installs.
+Users on pre-v0.12 hook-driven DBs who already saw `readiness: ready`
+are encouraged to re-run `memrosetta status` on 0.12.1 — if it drops
+to `degraded`, a one-time `memrosetta maintain --build-episodes`
+will close the gap.
+
 ## [0.12.0] - 2026-04-17
 
 **Fix: `recall` no longer dies silently on pre-v0.12 memory stores.**

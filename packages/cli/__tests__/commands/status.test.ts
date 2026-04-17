@@ -25,7 +25,7 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
-import { run } from '../../src/commands/status.js';
+import { run, deriveReadiness } from '../../src/commands/status.js';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -73,5 +73,87 @@ describe('status command', () => {
     expect(parsed.integrations.codex).toBe(false);
     expect(parsed.integrations.gemini).toBe(true);
     expect(parsed.integrations.mcp).toBe(true);
+  });
+});
+
+describe('deriveReadiness', () => {
+  it('returns empty for a brand-new DB', () => {
+    expect(
+      deriveReadiness({ memoryCount: 0, episodes: 0, bindings: 0, index: 0 }),
+    ).toBe('empty');
+  });
+
+  it('returns empty when memories exist but episodic layer does not', () => {
+    // This is the v0.11 upgrade baseline — memories accumulated but
+    // no episode/binding write ever happened.
+    expect(
+      deriveReadiness({
+        memoryCount: 21510,
+        episodes: 0,
+        bindings: 0,
+        index: 0,
+      }),
+    ).toBe('empty');
+  });
+
+  it('returns ready when every table is populated and bindings cover ≥95% of memories', () => {
+    expect(
+      deriveReadiness({
+        memoryCount: 100,
+        episodes: 10,
+        bindings: 100,
+        index: 30,
+      }),
+    ).toBe('ready');
+    // Exactly at the 95% threshold
+    expect(
+      deriveReadiness({
+        memoryCount: 100,
+        episodes: 10,
+        bindings: 95,
+        index: 30,
+      }),
+    ).toBe('ready');
+  });
+
+  it('returns degraded for a partial-bind state (Codex Windows observation)', () => {
+    // The exact numbers Codex reported after upgrading:
+    // 9934 bindings / 21510 memories = ~46% — well below the 95%
+    // ready threshold. Prior to the fix this was classified `ready`,
+    // hiding the fact that more than half the store was invisible to
+    // the recall kernel.
+    expect(
+      deriveReadiness({
+        memoryCount: 21510,
+        episodes: 22,
+        bindings: 9934,
+        index: 116,
+      }),
+    ).toBe('degraded');
+  });
+
+  it('returns degraded when one of the tables is missing', () => {
+    // episodes and bindings but no index — e.g. a pre-v0.12 hook that
+    // wrote binding rows but skipped the hippocampal cue pass.
+    expect(
+      deriveReadiness({
+        memoryCount: 100,
+        episodes: 5,
+        bindings: 100,
+        index: 0,
+      }),
+    ).toBe('degraded');
+  });
+
+  it('returns degraded just below the coverage threshold', () => {
+    // 94/100 = 94% — one memory shy of ready.
+    expect(
+      deriveReadiness({
+        memoryCount: 100,
+        episodes: 10,
+        bindings: 94,
+        index: 10,
+      }),
+    ).toBe('degraded');
   });
 });

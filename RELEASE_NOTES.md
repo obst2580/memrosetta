@@ -5,6 +5,43 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.12.1 — 2026-04-17
+
+**Fix: `status` no longer lies about recall readiness on partial
+upgrades.**
+
+The v0.12.0 readiness check only asked "are episodes, bindings, and
+index all non-empty?" and answered `ready` even when bindings covered
+a tiny fraction of the user's memories. Codex found a real Windows
+instance where 9934 / 21510 memories were bound (~46%) and the
+status command cheerfully said `readiness: ready`, hiding the
+problem the readiness signal was supposed to surface.
+
+v0.12.1 tightens the threshold: `ready` now additionally requires
+binding coverage ≥ 95% of live memories. Anything less is
+`degraded`, which keeps the actionable hint visible so the operator
+knows to re-run the backfill command.
+
+Patch-only release, CLI and umbrella bumped:
+
+- `@memrosetta/cli@0.12.1`
+- `memrosetta@0.12.1`
+
+(`@memrosetta/types`, `@memrosetta/core`, `@memrosetta/mcp` stay at
+0.12.0 — the fix is purely in the CLI readiness formula.)
+
+### Recommended check after upgrade
+
+```bash
+npm i -g memrosetta@0.12.1
+memrosetta status
+# If readiness now reads 'degraded' where 0.12.0 said 'ready':
+memrosetta maintain --build-episodes      # idempotent, finishes the job
+memrosetta status                          # expect readiness=ready
+```
+
+---
+
 ## v0.12.0 — 2026-04-17
 
 **`recall` is no longer silently empty after upgrading.**
