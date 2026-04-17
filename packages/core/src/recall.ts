@@ -12,6 +12,7 @@ import { INTENT_ROUTING } from '@memrosetta/types';
 import { patternComplete } from './pattern-complete.js';
 import type { HippocampalStatements } from './hippocampal.js';
 import { applyAntiInterference as applyFullAntiInterference } from './anti-interference.js';
+import { searchMemories } from './search.js';
 
 /**
  * Reconstructive Recall API (v4 §6, §8).
@@ -344,10 +345,53 @@ export async function reconstructRecall(
   });
 
   if (completion.supportingEpisodes.length === 0) {
-    warnings.push({
-      kind: 'no_episodes_matched',
-      message: 'No episodes matched the provided cues',
-    });
+    // Distinguish "write-side gap" (episodic layer is empty for this
+    // user at all) from "recall-side miss" (layer exists but no cues
+    // hit). The former is actionable via backfill; the latter is a
+    // genuine query-evidence mismatch.
+    const episodicLayerEmpty = isEpisodicLayerEmpty(db, input.userId);
+    if (episodicLayerEmpty) {
+      // Opt-in degraded fallback: only kicks in for non-strict
+      // intents. verify and reuse still fail closed — recall's
+      // contract is that verify == verbatim-only, and wrapping
+      // lexical search hits as "evidence" would violate that.
+      const degradedOk =
+        input.allowDegraded === true &&
+        !INTENT_ROUTING[input.intent].strictProvenance &&
+        input.intent === 'browse';
+
+      if (degradedOk) {
+        const fallback = buildDegradedFallback(db, input, hooks);
+        warnings.push({
+          kind: 'episodic_layer_empty',
+          message:
+            'Episodic layer is empty for this user — no episodes or bindings exist yet.',
+          hint: "Run 'memrosetta maintain --build-episodes' to backfill episodes from existing memories.",
+        });
+        warnings.push({
+          kind: 'degraded_search_fallback',
+          message:
+            'Returned lexical search results in place of reconstructive recall (confidence capped).',
+          hint: 'Not reconstructive recall — verbatim/gist traceability is not guaranteed for this intent.',
+        });
+        return {
+          ...(await fallback),
+          warnings,
+        };
+      }
+
+      warnings.push({
+        kind: 'episodic_layer_empty',
+        message:
+          'Episodic layer is empty for this user — no episodes or bindings exist yet.',
+        hint: "Run 'memrosetta maintain --build-episodes' to backfill episodes from existing memories, or wait for store() to accumulate new ones once auto-bind is enabled.",
+      });
+    } else {
+      warnings.push({
+        kind: 'no_episodes_matched',
+        message: 'No episodes matched the provided cues',
+      });
+    }
   }
 
   // 4. Anti-interference (Step 9 full pipeline)
@@ -424,4 +468,108 @@ export async function reconstructRecall(
   });
 
   return result;
+}
+
+/**
+ * Degraded fallback: when the episodic layer is empty but the caller
+ * explicitly opted in with `allowDegraded` and the intent is `browse`,
+ * serve lexical search results wrapped as recall evidence.
+ *
+ * Contract:
+ *   - confidence is capped at 0.4 (below any real recall)
+ *   - evidence is marked with the memory's system/role but NO
+ *     episodeId (since no episode exists)
+ *   - supportingEpisodes is always empty
+ *   - artifact header explicitly labels the result as degraded
+ *
+ * Strict intents never reach this path; their routing keeps them
+ * honest even if `allowDegraded` is true.
+ */
+async function buildDegradedFallback(
+  db: Database.Database,
+  input: ReconstructRecallInput,
+  hooks: RecallHookRegistry,
+): Promise<Omit<ReconstructRecallResult, 'warnings'>> {
+  const limit = Math.max(1, input.maxEvidence ?? 5);
+  const searchResponse = searchMemories(
+    db,
+    { userId: input.userId, query: input.query, limit },
+    /* skipAccessTracking */ true,
+  );
+
+  const evidence: RecallEvidence[] = searchResponse.results.map((r) => ({
+    memoryId: r.memory.memoryId,
+    role: r.memory.memoryRole,
+    system: r.memory.memorySystem,
+    confidence: Math.min(0.4, r.score ?? 0.2),
+    verbatimContent: r.memory.verbatim ?? r.memory.content,
+    gistContent: r.memory.gist,
+  }));
+
+  await hooks.fire('on_evidence_assembly', {
+    evidence,
+    intent: input.intent,
+    stateVector: input.context,
+  });
+
+  const headerLines = [
+    '[degraded: lexical search fallback — episodic layer empty]',
+    '',
+  ];
+  const bodyLines = evidence.map((e, i) => {
+    const body =
+      (e.gistContent ?? e.verbatimContent ?? '').replace(/\s+/g, ' ').trim() ||
+      '(no body)';
+    return `${i + 1}. ${body}`;
+  });
+  const artifact = [...headerLines, ...bodyLines].join('\n') || '(no results)';
+
+  await hooks.fire('post_synthesis', {
+    artifact,
+    evidence,
+    confidence: 0.3,
+  });
+
+  return {
+    artifact,
+    artifactFormat: INTENT_ROUTING[input.intent].outputFormat,
+    intent: input.intent,
+    evidence,
+    completedFeatures: [],
+    supportingEpisodes: [],
+    confidence: evidence.length > 0 ? 0.3 : 0,
+  };
+}
+
+/**
+ * Detect whether the episodic layer is uninitialized for a given
+ * user. Used by recall to distinguish a write-side gap (no episodes
+ * exist at all → backfill can fix it) from a recall-side miss (layer
+ * populated but cues didn't hit anything).
+ *
+ * Checked tables: episodes + memory_episodic_bindings. If both are
+ * empty for this user, we treat the layer as "not materialized yet".
+ */
+export function isEpisodicLayerEmpty(
+  db: Database.Database,
+  userId: string,
+): boolean {
+  try {
+    const epRow = db
+      .prepare('SELECT COUNT(*) AS c FROM episodes WHERE user_id = ?')
+      .get(userId) as { c: number } | undefined;
+    if ((epRow?.c ?? 0) > 0) return false;
+    const bindRow = db
+      .prepare(
+        `SELECT COUNT(*) AS c
+           FROM memory_episodic_bindings b
+           JOIN memories m ON m.memory_id = b.memory_id
+          WHERE m.user_id = ?`,
+      )
+      .get(userId) as { c: number } | undefined;
+    return (bindRow?.c ?? 0) === 0;
+  } catch {
+    // Missing tables → v9 schema. Treat as empty.
+    return true;
+  }
 }

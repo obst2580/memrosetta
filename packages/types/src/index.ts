@@ -91,6 +91,8 @@ export type {
   CompressResult,
   TierConfig,
   MemoryQuality,
+  BuildEpisodesOptions,
+  BuildEpisodesResult,
 } from './engine.js';
 
 export type {

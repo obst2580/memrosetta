@@ -6,7 +6,7 @@ import type {
 } from '@memrosetta/types';
 import { getEngine } from '../engine.js';
 import { output, outputError, type OutputFormat } from '../output.js';
-import { requireOption, optionalOption } from '../parser.js';
+import { requireOption, optionalOption, hasFlag } from '../parser.js';
 import { getDefaultUserId } from '../hooks/config.js';
 import { formatRecallResult } from '../formatters/recall.js';
 
@@ -83,6 +83,8 @@ export async function run(options: RecallOptions): Promise<void> {
         .map((value) => ({ featureType: 'topic' as FeatureFamily, featureValue: value }))
     : undefined;
 
+  const allowDegraded = hasFlag(args, '--allow-degraded');
+
   const engine = await getEngine({ db, noEmbeddings });
   const result = await engine.reconstructRecall({
     userId,
@@ -91,6 +93,7 @@ export async function run(options: RecallOptions): Promise<void> {
     cues,
     intent,
     maxEvidence,
+    allowDegraded,
   });
 
   if (format === 'text') {

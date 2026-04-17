@@ -18,8 +18,18 @@ interface StatusOptions {
   readonly noEmbeddings: boolean;
 }
 
+type RecallReadiness = 'ready' | 'degraded' | 'empty' | 'unknown';
+
+interface EpisodicStats {
+  readonly episodes: number;
+  readonly bindings: number;
+  readonly index: number;
+  readonly constructs: number;
+  readonly readiness: RecallReadiness;
+}
+
 export async function run(options: StatusOptions): Promise<void> {
-  const { format, db, noEmbeddings } = options;
+  const { format, db } = options;
 
   const config = getConfig();
   const dbPath = db ?? config.dbPath ?? getDefaultDbPath();
@@ -33,7 +43,13 @@ export async function run(options: StatusOptions): Promise<void> {
   let qualityInvalidated = 0;
   let qualityWithRelations = 0;
   let qualityAvgActivation = 0;
-  const embeddingsEnabled = !noEmbeddings && config.enableEmbeddings !== false;
+  let episodic: EpisodicStats = {
+    episodes: 0,
+    bindings: 0,
+    index: 0,
+    constructs: 0,
+    readiness: 'unknown',
+  };
 
   if (exists) {
     const stat = statSync(dbPath);
@@ -76,6 +92,8 @@ export async function run(options: StatusOptions): Promise<void> {
       ).get() as { avg: number | null };
       qualityAvgActivation = avgRow.avg ?? 0;
 
+      episodic = readEpisodicStats(dbConn, memoryCount);
+
       dbConn.close();
     } catch {
       // DB may not be initialized yet
@@ -104,10 +122,6 @@ export async function run(options: StatusOptions): Promise<void> {
     } else {
       process.stdout.write('Users: 0\n');
     }
-    const embeddingModelLabel = getEmbeddingModelLabel();
-    process.stdout.write(
-      `Embeddings: ${embeddingsEnabled ? `enabled (${embeddingModelLabel})` : 'disabled'}\n`,
-    );
 
     if (memoryCount > 0) {
       process.stdout.write('\nQuality:\n');
@@ -118,6 +132,23 @@ export async function run(options: StatusOptions): Promise<void> {
       process.stdout.write(`  With relations:         ${qualityWithRelations}\n`);
       process.stdout.write(
         `  Avg activation:         ${qualityAvgActivation.toFixed(2)}\n`,
+      );
+
+      process.stdout.write('\nRecall readiness:\n');
+      process.stdout.write(
+        `  Episodes:               ${episodic.episodes}\n`,
+      );
+      process.stdout.write(
+        `  Episodic bindings:      ${episodic.bindings}\n`,
+      );
+      process.stdout.write(
+        `  Episodic index entries: ${episodic.index}\n`,
+      );
+      process.stdout.write(
+        `  Construct exemplars:    ${episodic.constructs}\n`,
+      );
+      process.stdout.write(
+        `  Status:                 ${episodic.readiness}${readinessHint(episodic.readiness)}\n`,
       );
     }
 
@@ -157,9 +188,13 @@ export async function run(options: StatusOptions): Promise<void> {
         withRelations: qualityWithRelations,
         avgActivation: qualityAvgActivation,
       },
-      embeddings: embeddingsEnabled,
-      embeddingModel: getEmbeddingModelLabel(),
-      embeddingPreset: getConfig().embeddingPreset ?? 'en',
+      recall: {
+        episodes: episodic.episodes,
+        episodicBindings: episodic.bindings,
+        episodicIndex: episodic.index,
+        constructExemplars: episodic.constructs,
+        readiness: episodic.readiness,
+      },
       integrations: {
         claudeCode: claudeCodeStatus,
         cursor: cursorStatus,
@@ -178,14 +213,54 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-const PRESET_MODEL_LABELS: Record<string, string> = {
-  en: 'bge-small-en-v1.5',
-  multilingual: 'multilingual-e5-small',
-  ko: 'ko-sroberta-multitask',
-};
+/**
+ * Read v1.0 episodic layer counts and derive a single `readiness`
+ * verdict that `recall` can be evaluated against:
+ *
+ * - `ready`    → episodes + index + bindings all populated.
+ * - `degraded` → some tables non-empty but not all (usually index
+ *                missing or bindings never written — partial backfill).
+ * - `empty`    → memories exist but none of episodes/bindings do.
+ *                This is the state where `recall` cannot reconstruct.
+ * - `unknown`  → read failed (likely pre-v10 schema).
+ */
+function readEpisodicStats(
+  dbConn: import('better-sqlite3').Database,
+  memoryCount: number,
+): EpisodicStats {
+  const countOr = (table: string): number => {
+    try {
+      const row = dbConn.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get() as
+        | { c: number }
+        | undefined;
+      return row?.c ?? 0;
+    } catch {
+      return 0;
+    }
+  };
+  const episodes = countOr('episodes');
+  const bindings = countOr('memory_episodic_bindings');
+  const index = countOr('episodic_index');
+  const constructs = countOr('construct_exemplars');
 
-function getEmbeddingModelLabel(): string {
-  const config = getConfig();
-  const preset = config.embeddingPreset ?? 'en';
-  return PRESET_MODEL_LABELS[preset] ?? preset;
+  let readiness: RecallReadiness;
+  if (memoryCount === 0) {
+    readiness = 'empty';
+  } else if (episodes === 0 && bindings === 0) {
+    readiness = 'empty';
+  } else if (episodes > 0 && bindings > 0 && index > 0) {
+    readiness = 'ready';
+  } else {
+    readiness = 'degraded';
+  }
+
+  return { episodes, bindings, index, constructs, readiness };
+}
+
+function readinessHint(r: RecallReadiness): string {
+  if (r === 'empty')
+    return "  ← run 'memrosetta maintain --build-episodes' to enable recall";
+  if (r === 'degraded')
+    return "  ← partial; consider re-running 'memrosetta maintain --build-episodes'";
+  return '';
 }

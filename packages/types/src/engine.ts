@@ -14,6 +14,44 @@ export interface MaintenanceResult {
   readonly removed: number;
 }
 
+/**
+ * Options for v1.0 episode backfill. Coarse scaffold — the backfill
+ * groups existing memories into episodes so the recall kernel has
+ * something to index against. Fine-grained episode segmentation is
+ * Layer B's responsibility.
+ */
+export interface BuildEpisodesOptions {
+  /**
+   * Grouping granularity. Defaults to `'project-day'`:
+   *   - `'project-day'`   : one episode per (project, YYYY-MM-DD)
+   *   - `'day'`           : one episode per YYYY-MM-DD (project ignored)
+   *   - `'source'`        : one episode per source_id (falls back to project-day
+   *                         when source_id is null)
+   */
+  readonly granularity?: 'project-day' | 'day' | 'source';
+  /**
+   * If false, skip memories that already have a binding in
+   * memory_episodic_bindings. Default: true.
+   */
+  readonly skipAlreadyBound?: boolean;
+  /**
+   * If true, run as a dry-run — compute groups and counts without
+   * writing. Default: false.
+   */
+  readonly dryRun?: boolean;
+}
+
+/** Result of a `buildEpisodes` backfill run. */
+export interface BuildEpisodesResult {
+  readonly scannedMemories: number;
+  readonly alreadyBound: number;
+  readonly skippedMissingDate: number;
+  readonly episodesCreated: number;
+  readonly memoriesBound: number;
+  readonly cuesIndexed: number;
+  readonly dryRun: boolean;
+}
+
 /** Result of a compress operation. */
 export interface CompressResult {
   readonly compressed: number;
@@ -77,6 +115,17 @@ export interface IMemoryEngine {
 
   /** Run full maintenance: recompute activations, update tiers, compress. */
   maintain(userId: string): Promise<MaintenanceResult>;
+
+  /**
+   * Backfill episodes from existing memories. Groups memories by
+   * project+date (or other granularities) and creates episode rows
+   * with bindings + sparse cue index, so the v1.0 recall kernel has
+   * something to pattern-complete against.
+   */
+  buildEpisodes(
+    userId: string,
+    options?: BuildEpisodesOptions,
+  ): Promise<BuildEpisodesResult>;
 
   /** Promote or demote a memory to a specific tier. */
   setTier(memoryId: string, tier: MemoryTier): Promise<void>;

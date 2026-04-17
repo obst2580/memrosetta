@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { mockMaintain } = vi.hoisted(() => {
+const { mockMaintain, mockBuildEpisodes } = vi.hoisted(() => {
   const mockMaintain = vi.fn();
-  return { mockMaintain };
+  const mockBuildEpisodes = vi.fn();
+  return { mockMaintain, mockBuildEpisodes };
 });
 
 vi.mock('../../src/engine.js', () => ({
   getEngine: vi.fn().mockImplementation(async () => ({
     maintain: mockMaintain,
+    buildEpisodes: mockBuildEpisodes,
     close: vi.fn(),
   })),
   closeEngine: vi.fn(),
@@ -34,6 +36,7 @@ describe('maintain command', () => {
       .mockImplementation(() => true);
     process.exitCode = undefined;
     mockMaintain.mockReset();
+    mockBuildEpisodes.mockReset();
   });
 
   afterEach(() => {
@@ -131,5 +134,88 @@ describe('maintain command', () => {
     });
 
     expect(mockMaintain).toHaveBeenCalledWith('testuser');
+  });
+
+  describe('--build-episodes', () => {
+    it('calls buildEpisodes and NOT maintain', async () => {
+      mockBuildEpisodes.mockResolvedValue({
+        scannedMemories: 10,
+        alreadyBound: 0,
+        skippedMissingDate: 0,
+        episodesCreated: 3,
+        memoriesBound: 10,
+        cuesIndexed: 7,
+        dryRun: false,
+      });
+
+      await run({
+        args: ['--build-episodes', '--user', 'obst'],
+        format: 'json',
+        noEmbeddings: true,
+      });
+
+      expect(mockMaintain).not.toHaveBeenCalled();
+      expect(mockBuildEpisodes).toHaveBeenCalledWith('obst', {
+        granularity: 'project-day',
+        dryRun: false,
+      });
+    });
+
+    it('passes dryRun flag through', async () => {
+      mockBuildEpisodes.mockResolvedValue({
+        scannedMemories: 0,
+        alreadyBound: 0,
+        skippedMissingDate: 0,
+        episodesCreated: 0,
+        memoriesBound: 0,
+        cuesIndexed: 0,
+        dryRun: true,
+      });
+
+      await run({
+        args: ['--build-episodes', '--dry-run', '--user', 'obst'],
+        format: 'json',
+        noEmbeddings: true,
+      });
+
+      expect(mockBuildEpisodes).toHaveBeenCalledWith('obst', {
+        granularity: 'project-day',
+        dryRun: true,
+      });
+    });
+
+    it('rejects invalid granularity with exit 1', async () => {
+      await run({
+        args: ['--build-episodes', '--granularity', 'bogus'],
+        format: 'json',
+        noEmbeddings: true,
+      });
+
+      expect(process.exitCode).toBe(1);
+      expect(mockBuildEpisodes).not.toHaveBeenCalled();
+    });
+
+    it('accepts --granularity day', async () => {
+      mockBuildEpisodes.mockResolvedValue({
+        scannedMemories: 0,
+        alreadyBound: 0,
+        skippedMissingDate: 0,
+        episodesCreated: 0,
+        memoriesBound: 0,
+        cuesIndexed: 0,
+        dryRun: false,
+      });
+
+      await run({
+        args: ['--build-episodes', '--granularity', 'day'],
+        format: 'json',
+        noEmbeddings: true,
+      });
+
+      expect(mockBuildEpisodes).toHaveBeenCalledWith('testuser', {
+        granularity: 'day',
+        dryRun: false,
+      });
+    });
   });
 });

@@ -12,7 +12,8 @@ export type EpisodeBoundaryReason =
   | 'repo_switch'
   | 'gap'
   | 'goal_reset'
-  | 'explicit';
+  | 'explicit'
+  | 'backfill';
 
 export type SegmentBoundaryReason =
   | 'task_mode'

@@ -84,6 +84,13 @@ export interface CompletedFeature {
  *   verbatim content (strict provenance violation)
  * - no_episodes_matched: cues present, episodes queried, but
  *   zero hits in the hippocampal index
+ * - episodic_layer_empty: the entire episodic layer is uninitialized
+ *   for this user (no episodes, no bindings). Distinguished from
+ *   `no_episodes_matched` because this is a write-side gap, not a
+ *   recall-side miss — ask the caller to run episode backfill.
+ * - degraded_search_fallback: `allowDegraded` was set, the episodic
+ *   layer was empty, and the kernel served lexical search results
+ *   instead of true reconstructive recall. Confidence is capped.
  * - intent_mismatch: evidence was found but the intent's routing
  *   filter rejected all candidates
  *
@@ -99,9 +106,12 @@ export interface RecallWarning {
     | 'low_confidence'
     | 'provenance_gap'
     | 'no_episodes_matched'
+    | 'episodic_layer_empty'
+    | 'degraded_search_fallback'
     | 'intent_mismatch';
   readonly message: string;
   readonly memoryId?: string;
+  readonly hint?: string;
 }
 
 export interface ReconstructRecallInput {
@@ -114,6 +124,16 @@ export interface ReconstructRecallInput {
   readonly sourceTypes?: readonly MemorySystem[];
   readonly maxEvidence?: number;
   readonly includeExemplars?: boolean;
+  /**
+   * Opt-in fallback: if the episodic layer is empty (write-side gap)
+   * AND the intent is non-strict (`browse`), return lexical search
+   * results wrapped as evidence instead of an empty artifact. The
+   * result is clearly marked — confidence is capped, a
+   * `degraded_search_fallback` warning is emitted, and the artifact
+   * header states the degradation explicitly. Strict intents
+   * (`verify`) still fail closed even with this flag on.
+   */
+  readonly allowDegraded?: boolean;
 }
 
 export interface ReconstructRecallResult {

@@ -38,10 +38,16 @@ describe('episodes + segments + bindings (v4 reconstructive-memory)', () => {
     db.close();
   });
 
+  // Tests in this file exercise low-level binding primitives directly.
+  // Since v0.12 `storeMemory` auto-binds to any open episode for the
+  // user, we opt out here so bindings are only written by the test's
+  // explicit `bindMemoryToEpisode` calls — otherwise helper test
+  // fixtures would pre-bind and hide what we're asserting.
   const baseInput: MemoryInput = {
     userId: 'user-1',
     memoryType: 'fact',
     content: 'episodic memory test fact',
+    autoBindEpisode: false,
   };
 
   describe('schema', () => {
@@ -295,6 +301,66 @@ describe('episodes + segments + bindings (v4 reconstructive-memory)', () => {
       expect(getBindingsByMemory(stmts.episode, memories[0].memoryId)).toHaveLength(1);
       expect(getBindingsByMemory(stmts.episode, memories[1].memoryId)).toHaveLength(0);
       expect(getBindingsByMemory(stmts.episode, memories[2].memoryId)).toHaveLength(1);
+    });
+  });
+
+  describe('storeMemory auto-bind to open episode (v0.12)', () => {
+    // Without this auto-bind, long-running sessions that call store()
+    // without threading an episodeId through every write would leak
+    // orphan memories — the exact root cause behind the
+    // `episodic_layer_empty` recall warning.
+    const autoInput: MemoryInput = {
+      userId: 'user-1',
+      memoryType: 'fact',
+      content: 'auto bind fixture',
+    };
+
+    it('binds to the open episode when no episodeId is provided', () => {
+      const ep = insertEpisode(stmts.episode, { userId: 'user-1' });
+      const memory = storeMemory(db, stmts, autoInput);
+
+      const bindings = getBindingsByMemory(stmts.episode, memory.memoryId);
+      expect(bindings).toHaveLength(1);
+      expect(bindings[0].episodeId).toBe(ep.episodeId);
+    });
+
+    it('prefers explicit episodeId over the open episode', () => {
+      insertEpisode(stmts.episode, { userId: 'user-1' }); // open decoy
+      const explicit = insertEpisode(stmts.episode, { userId: 'user-1' });
+      // The decoy is "older open"; explicit episode may not be the one
+      // getOpenEpisodeForUser returns. Caller's episodeId must win.
+      const memory = storeMemory(db, stmts, {
+        ...autoInput,
+        episodeId: explicit.episodeId,
+      });
+
+      const bindings = getBindingsByMemory(stmts.episode, memory.memoryId);
+      expect(bindings).toHaveLength(1);
+      expect(bindings[0].episodeId).toBe(explicit.episodeId);
+    });
+
+    it('autoBindEpisode: false disables the fallback', () => {
+      insertEpisode(stmts.episode, { userId: 'user-1' });
+      const memory = storeMemory(db, stmts, {
+        ...autoInput,
+        autoBindEpisode: false,
+      });
+
+      expect(getBindingsByMemory(stmts.episode, memory.memoryId)).toHaveLength(0);
+    });
+
+    it('no open episode → no binding (unchanged orphan behavior)', () => {
+      const ep = insertEpisode(stmts.episode, { userId: 'user-1' });
+      closeEpisode(stmts.episode, ep.episodeId);
+
+      const memory = storeMemory(db, stmts, autoInput);
+      expect(getBindingsByMemory(stmts.episode, memory.memoryId)).toHaveLength(0);
+    });
+
+    it("does not bind across users (user-2's open episode is irrelevant)", () => {
+      insertEpisode(stmts.episode, { userId: 'user-2' });
+      const memory = storeMemory(db, stmts, autoInput);
+      expect(getBindingsByMemory(stmts.episode, memory.memoryId)).toHaveLength(0);
     });
   });
 });

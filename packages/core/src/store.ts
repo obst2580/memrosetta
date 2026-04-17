@@ -10,6 +10,7 @@ import {
 import {
   bindMemoryToEpisode,
   createEpisodeStatements,
+  getOpenEpisodeForUser,
   type EpisodeStatements,
 } from './episodes.js';
 import {
@@ -74,15 +75,43 @@ export function createPreparedStatements(db: Database.Database): PreparedStateme
   };
 }
 
+/**
+ * Resolve which episode this memory should bind to at store time.
+ *
+ * Priority:
+ *   1. Explicit `input.episodeId` — caller knows exactly where this
+ *      memory belongs.
+ *   2. Open episode for the user — a session-level anchor set up by
+ *      an earlier call to `openEpisode()`. This is the Layer A
+ *      Event-Segmentation write-side integration: without it, a
+ *      producer that calls `store()` in a long-running session
+ *      creates orphan memories that `recall` can never find.
+ *   3. `undefined` — no binding, memory is orphan (pre-v0.12 default).
+ *
+ * Opt-out: `input.autoBindEpisode === false` disables the open-episode
+ * fallback while still honoring an explicit `episodeId`. This is for
+ * ingestion paths (e.g. bulk backfill) that manage episodes externally.
+ */
+function resolveEpisodeTarget(
+  stmts: PreparedStatements,
+  input: MemoryInput,
+): string | undefined {
+  if (input.episodeId) return input.episodeId;
+  if (input.autoBindEpisode === false) return undefined;
+  const open = getOpenEpisodeForUser(stmts.episode, input.userId);
+  return open?.episodeId;
+}
+
 function maybeRegisterCues(
   db: Database.Database,
   stmts: PreparedStatements,
   input: MemoryInput,
+  episodeId: string | undefined,
 ): void {
-  if (!input.episodeId || !input.cues || input.cues.length === 0) return;
+  if (!episodeId || !input.cues || input.cues.length === 0) return;
   for (const cue of input.cues) {
     reinforceEpisodicCue(db, stmts.hippocampal, {
-      episodeId: input.episodeId,
+      episodeId,
       feature: {
         featureType: cue.featureType,
         featureValue: cue.featureValue,
@@ -97,11 +126,12 @@ function maybeBindEpisode(
   stmts: PreparedStatements,
   memoryId: string,
   input: MemoryInput,
+  episodeId: string | undefined,
 ): void {
-  if (!input.episodeId) return;
+  if (!episodeId) return;
   bindMemoryToEpisode(stmts.episode, {
     memoryId,
-    episodeId: input.episodeId,
+    episodeId,
     segmentId: input.segmentId,
     segmentPosition: input.segmentPosition,
     bindingStrength: input.bindingStrength,
@@ -179,9 +209,10 @@ export function storeMemory(
     );
 
     insertSourceAttestations(stmts.source, memoryId, input.sources);
-    maybeBindEpisode(stmts, memoryId, input);
+    const targetEpisodeId = resolveEpisodeTarget(stmts, input);
+    maybeBindEpisode(stmts, memoryId, input, targetEpisodeId);
     maybeLinkGoal(stmts, memoryId, input);
-    maybeRegisterCues(db, stmts, input);
+    maybeRegisterCues(db, stmts, input, targetEpisodeId);
   });
   writeTxn();
 

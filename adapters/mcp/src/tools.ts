@@ -120,6 +120,7 @@ const reconstructRecallSchema = z.object({
     })
     .optional(),
   maxEvidence: z.number().int().min(1).max(50).optional(),
+  allowDegraded: z.boolean().optional(),
 });
 
 /** MCP tool response shape. */
@@ -527,6 +528,7 @@ export async function handleToolCall(
         cues: validated.cues,
         context: validated.context,
         maxEvidence: validated.maxEvidence,
+        allowDegraded: validated.allowDegraded,
       });
       return {
         content: [

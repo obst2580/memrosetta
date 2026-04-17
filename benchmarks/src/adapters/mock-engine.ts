@@ -171,6 +171,27 @@ export class MockEngine implements IMemoryEngine {
     return { activationUpdated: 0, tiersUpdated: 0, compressed: 0, removed: 0 };
   }
 
+  async buildEpisodes(): Promise<{
+    scannedMemories: number;
+    alreadyBound: number;
+    skippedMissingDate: number;
+    episodesCreated: number;
+    memoriesBound: number;
+    cuesIndexed: number;
+    dryRun: boolean;
+  }> {
+    // Benchmark MockEngine has no episodic layer, so backfill is a no-op.
+    return {
+      scannedMemories: 0,
+      alreadyBound: 0,
+      skippedMissingDate: 0,
+      episodesCreated: 0,
+      memoriesBound: 0,
+      cuesIndexed: 0,
+      dryRun: false,
+    };
+  }
+
   async setTier(memoryId: string, tier: MemoryTier): Promise<void> {
     const memory = this.memories.get(memoryId);
     if (memory) {

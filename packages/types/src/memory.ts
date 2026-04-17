@@ -112,11 +112,20 @@ export interface MemoryInput {
   /**
    * Episode this memory belongs to (coarse event segmentation boundary).
    * If provided, a memory_episodic_bindings row is inserted inside the
-   * same transaction as the memory row. If omitted, no binding is written
-   * and the memory floats outside episodic indexing until Step 2's
-   * automatic boundary detection lands.
+   * same transaction as the memory row. If omitted, the engine falls
+   * back to the user's currently-open episode (if any) so the memory
+   * is not orphaned. Pass `autoBindEpisode: false` to disable that
+   * fallback.
    */
   readonly episodeId?: string;
+  /**
+   * When true (default) and `episodeId` is not provided, the engine
+   * binds this memory to the user's currently-open episode (as
+   * produced by `openEpisode()`). Set to false to force an orphan
+   * write — useful for backfill paths or tests that manage episode
+   * wiring externally.
+   */
+  readonly autoBindEpisode?: boolean;
   /** Segment within the episode, if known (fine-grained boundary). */
   readonly segmentId?: string;
   /** Segment position within the episode (used for ordering). */

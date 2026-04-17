@@ -115,7 +115,11 @@ describe('reconstructRecall (v4 Layer A closed loop)', () => {
       expect(result.evidence.length).toBeGreaterThan(0);
     });
 
-    it('cues provided but no episodes indexed emits no_episodes_matched', async () => {
+    it('cues provided but episodic layer empty emits episodic_layer_empty + hint', async () => {
+      // Before fix: fell through as `no_episodes_matched`, which is
+      // misleading because the layer isn't populated at all (write-
+      // side gap, not a cue mismatch). Fix: distinguish empty layer
+      // from real misses and surface an actionable hint.
       const result = await reconstructRecall(db, stmts.hippocampal, {
         userId: 'user-1',
         query: 'anything',
@@ -123,7 +127,105 @@ describe('reconstructRecall (v4 Layer A closed loop)', () => {
         intent: 'browse',
       });
       expect(result.evidence).toHaveLength(0);
-      expect(result.warnings.some((w) => w.kind === 'no_episodes_matched')).toBe(true);
+      const warn = result.warnings.find((w) => w.kind === 'episodic_layer_empty');
+      expect(warn).toBeDefined();
+      expect(warn?.hint).toContain('memrosetta maintain --build-episodes');
+    });
+
+    it('cues miss populated episodes emits no_episodes_matched (not empty)', async () => {
+      // Populate the layer for a DIFFERENT cue, then recall with a
+      // non-matching one. This proves the empty-layer detection is
+      // scoped correctly — it shouldn't mask a real cue miss.
+      await seedEpisodeWithMemory({
+        userId: 'user-1',
+        content: 'some fact',
+        cueRepo: 'actual-repo',
+      });
+      const result = await reconstructRecall(db, stmts.hippocampal, {
+        userId: 'user-1',
+        query: 'unrelated',
+        cues: [{ featureType: 'repo', featureValue: 'nonexistent' }],
+        intent: 'browse',
+      });
+      // The layer is populated, so we should see either no_episodes_matched
+      // or actual evidence — never episodic_layer_empty.
+      expect(
+        result.warnings.some((w) => w.kind === 'episodic_layer_empty'),
+      ).toBe(false);
+    });
+  });
+
+  describe('allowDegraded fallback (P2 opt-in)', () => {
+    it('returns lexical search hits as evidence when layer is empty + browse + opt-in', async () => {
+      // Seed a memory WITHOUT binding it to any episode so the
+      // episodic layer stays empty but FTS still finds it.
+      storeMemory(db, stmts, {
+        userId: 'user-1',
+        memoryType: 'fact',
+        content: 'hermes github repo location',
+        autoBindEpisode: false,
+      });
+
+      const result = await reconstructRecall(db, stmts.hippocampal, {
+        userId: 'user-1',
+        query: 'hermes',
+        intent: 'browse',
+        allowDegraded: true,
+      });
+
+      expect(result.evidence.length).toBeGreaterThan(0);
+      expect(result.confidence).toBeLessThanOrEqual(0.4);
+      expect(result.artifact).toContain('[degraded');
+      expect(
+        result.warnings.some((w) => w.kind === 'degraded_search_fallback'),
+      ).toBe(true);
+      expect(
+        result.warnings.some((w) => w.kind === 'episodic_layer_empty'),
+      ).toBe(true);
+    });
+
+    it('does NOT fall back for strict verify intent even with allowDegraded', async () => {
+      storeMemory(db, stmts, {
+        userId: 'user-1',
+        memoryType: 'fact',
+        content: 'verification target',
+        autoBindEpisode: false,
+      });
+
+      const result = await reconstructRecall(db, stmts.hippocampal, {
+        userId: 'user-1',
+        query: 'verification',
+        intent: 'verify',
+        allowDegraded: true,
+      });
+
+      expect(
+        result.warnings.some((w) => w.kind === 'degraded_search_fallback'),
+      ).toBe(false);
+      expect(
+        result.warnings.some((w) => w.kind === 'episodic_layer_empty'),
+      ).toBe(true);
+      expect(result.evidence).toHaveLength(0);
+    });
+
+    it('does NOT fall back without the opt-in flag', async () => {
+      storeMemory(db, stmts, {
+        userId: 'user-1',
+        memoryType: 'fact',
+        content: 'some content',
+        autoBindEpisode: false,
+      });
+
+      const result = await reconstructRecall(db, stmts.hippocampal, {
+        userId: 'user-1',
+        query: 'some',
+        intent: 'browse',
+      });
+
+      expect(
+        result.warnings.some((w) => w.kind === 'degraded_search_fallback'),
+      ).toBe(false);
+      expect(result.evidence).toHaveLength(0);
     });
   });
 

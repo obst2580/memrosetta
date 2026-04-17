@@ -13,6 +13,8 @@ import type {
   MaintenanceResult,
   ReconstructRecallInput,
   ReconstructRecallResult,
+  BuildEpisodesOptions,
+  BuildEpisodesResult,
 } from '@memrosetta/types';
 import { ensureSchema } from './schema.js';
 import {
@@ -44,6 +46,17 @@ import {
   recordConstructReuse,
   type ConstructStatements,
 } from './constructs.js';
+import {
+  createEpisodeStatements,
+  insertEpisode,
+  bindMemoryToEpisode,
+} from './episodes.js';
+import {
+  createHippocampalStatements,
+  reinforceEpisodicCue,
+  type HippocampalStatements,
+} from './hippocampal.js';
+import type { FeatureFamily } from '@memrosetta/types';
 
 
 /**
@@ -587,6 +600,207 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     };
   }
 
+  /**
+   * Backfill episodes from existing memories.
+   *
+   * The v1.0 recall kernel pattern-completes against episodes, but
+   * the write path (pre-auto-bind) stored memories without ever
+   * materializing episodes. Users with large pre-existing memory
+   * stores therefore see `recall` always hit `episodic_layer_empty`.
+   *
+   * This method groups is_latest=1 memories by a simple heuristic
+   * (project + YYYY-MM-DD, or other `granularity` option) and:
+   *   1. creates an Episode row per group,
+   *   2. writes memory_episodic_bindings for each memory in the group,
+   *   3. reinforces coarse cues (project, keyword tokens) against the
+   *      episode's row in the episodic_index via the Hebbian path.
+   *
+   * It is explicitly a scaffold: episode_gist stays null, no segment
+   * splits, no Layer B consolidation. Just enough structure that
+   * `patternComplete` can return evidence.
+   *
+   * Safe to re-run. By default memories that already have a binding
+   * are skipped, so repeated calls only materialize newly added
+   * unbound memories.
+   */
+  async buildEpisodes(
+    userId: string,
+    options: BuildEpisodesOptions = {},
+  ): Promise<BuildEpisodesResult> {
+    this.ensureInitialized();
+    const db = this.db!;
+
+    const granularity = options.granularity ?? 'project-day';
+    const skipAlreadyBound = options.skipAlreadyBound ?? true;
+    const dryRun = options.dryRun ?? false;
+
+    const epStmts = createEpisodeStatements(db);
+    const hippoStmts = createHippocampalStatements(db);
+
+    // 1. Scan user's live memories.
+    const rows = db
+      .prepare(
+        `SELECT memory_id, project, learned_at, document_date, source_id,
+                keywords, activity_type
+           FROM memories
+          WHERE user_id = ? AND is_latest = 1`,
+      )
+      .all(userId) as readonly {
+      readonly memory_id: string;
+      readonly project: string | null;
+      readonly learned_at: string | null;
+      readonly document_date: string | null;
+      readonly source_id: string | null;
+      readonly keywords: string | null;
+      readonly activity_type: string | null;
+    }[];
+
+    let alreadyBound = 0;
+    let skippedMissingDate = 0;
+
+    // 2. Build groups.
+    interface GroupRow {
+      readonly memoryId: string;
+      readonly project: string | null;
+      readonly sourceId: string | null;
+      readonly keywords: readonly string[];
+      readonly activityType: string | null;
+      readonly timestamp: string;
+    }
+    const groups = new Map<string, GroupRow[]>();
+
+    const hasBinding = db.prepare(
+      'SELECT 1 FROM memory_episodic_bindings WHERE memory_id = ? LIMIT 1',
+    );
+
+    for (const r of rows) {
+      if (skipAlreadyBound) {
+        const bound = hasBinding.get(r.memory_id);
+        if (bound) {
+          alreadyBound++;
+          continue;
+        }
+      }
+      // document_date ("when the event happened") takes precedence
+      // over learned_at ("when this memory was stored") for grouping,
+      // because backfill is trying to reconstruct when something
+      // actually occurred, not when the DB row was inserted.
+      const timestamp = r.document_date ?? r.learned_at;
+      if (!timestamp) {
+        skippedMissingDate++;
+        continue;
+      }
+      const day = timestamp.slice(0, 10); // YYYY-MM-DD
+
+      let key: string;
+      if (granularity === 'day') {
+        key = day;
+      } else if (granularity === 'source') {
+        key = r.source_id ?? `${r.project ?? 'unbound'}::${day}`;
+      } else {
+        key = `${r.project ?? 'unbound'}::${day}`;
+      }
+
+      const kwList = (r.keywords ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      const bucket = groups.get(key) ?? [];
+      bucket.push({
+        memoryId: r.memory_id,
+        project: r.project,
+        sourceId: r.source_id,
+        keywords: kwList,
+        activityType: r.activity_type,
+        timestamp,
+      });
+      groups.set(key, bucket);
+    }
+
+    if (dryRun) {
+      // Dry run still reports what it would have done. We do not
+      // simulate cue counts — they depend on enforceFamilyCap pruning
+      // which is a runtime effect — but we give the operator enough
+      // to judge the backfill's scope before committing.
+      let dryCues = 0;
+      for (const bucket of groups.values()) {
+        // one 'project' cue per episode (if any) + unique keyword topics
+        const projectCues = bucket[0].project ? 1 : 0;
+        const topics = new Set<string>();
+        for (const m of bucket)
+          for (const k of m.keywords.slice(0, 6)) topics.add(k);
+        dryCues += projectCues + topics.size;
+      }
+      return {
+        scannedMemories: rows.length,
+        alreadyBound,
+        skippedMissingDate,
+        episodesCreated: groups.size,
+        memoriesBound: Array.from(groups.values()).reduce(
+          (n, g) => n + g.length,
+          0,
+        ),
+        cuesIndexed: dryCues,
+        dryRun: true,
+      };
+    }
+
+    // 3. Materialize. One transaction per group so a failure in one
+    // group doesn't nuke the whole run.
+    let episodesCreated = 0;
+    let memoriesBound = 0;
+    let cuesIndexed = 0;
+
+    for (const [, bucket] of groups) {
+      bucket.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      const startedAt = bucket[0].timestamp;
+      const endedAt = bucket[bucket.length - 1].timestamp;
+      const project = bucket[0].project;
+
+      const txn = db.transaction(() => {
+        const episode = insertEpisode(epStmts, {
+          userId,
+          startedAt,
+          boundaryReason: 'backfill',
+        });
+        if (endedAt !== startedAt) {
+          epStmts.updateEpisodeEnd.run(endedAt, episode.episodeId);
+        } else {
+          epStmts.updateEpisodeEnd.run(endedAt, episode.episodeId);
+        }
+        episodesCreated++;
+
+        for (let i = 0; i < bucket.length; i++) {
+          bindMemoryToEpisode(epStmts, {
+            memoryId: bucket[i].memoryId,
+            episodeId: episode.episodeId,
+          });
+          memoriesBound++;
+        }
+
+        cuesIndexed += indexBackfillCues(
+          db,
+          hippoStmts,
+          episode.episodeId,
+          project,
+          bucket,
+        );
+      });
+      txn();
+    }
+
+    return {
+      scannedMemories: rows.length,
+      alreadyBound,
+      skippedMissingDate,
+      episodesCreated,
+      memoriesBound,
+      cuesIndexed,
+      dryRun: false,
+    };
+  }
+
   async setTier(memoryId: string, tier: MemoryTier): Promise<void> {
     this.ensureInitialized();
     this.db!.prepare('UPDATE memories SET tier = ? WHERE memory_id = ?')
@@ -792,4 +1006,77 @@ export function createEngine(
   options: SqliteEngineOptions,
 ): SqliteMemoryEngine {
   return new SqliteMemoryEngine(options);
+}
+
+/**
+ * Write a minimal cue bundle for a backfilled episode:
+ *   - 1 `project` cue (if available)
+ *   - up to 6 `topic` cues per episode drawn from member keywords
+ *   - 1 `activity` cue if any member has activity_type
+ *
+ * Cues are strength 1.0 for the project (the coarsest anchor) and
+ * 0.5 for topics so the recall kernel still ranks explicit project
+ * anchors higher than opportunistic keyword hits. The Hebbian path
+ * itself will rebalance on real recall usage.
+ *
+ * Returns the number of cue rows written so the caller can report it.
+ */
+function indexBackfillCues(
+  _db: import('better-sqlite3').Database,
+  hippo: HippocampalStatements,
+  episodeId: string,
+  project: string | null,
+  bucket: readonly {
+    readonly keywords: readonly string[];
+    readonly activityType: string | null;
+  }[],
+): number {
+  let count = 0;
+  if (project) {
+    reinforceEpisodicCue(_db, hippo, {
+      episodeId,
+      feature: {
+        featureType: 'project' as FeatureFamily,
+        featureValue: project,
+      },
+      activation: 1.0,
+    });
+    count++;
+  }
+
+  const topicCap = 6;
+  const topics = new Set<string>();
+  for (const m of bucket) {
+    for (const k of m.keywords) {
+      if (topics.size >= topicCap) break;
+      topics.add(k);
+    }
+    if (topics.size >= topicCap) break;
+  }
+  for (const t of topics) {
+    reinforceEpisodicCue(_db, hippo, {
+      episodeId,
+      feature: { featureType: 'topic' as FeatureFamily, featureValue: t },
+      activation: 0.5,
+    });
+    count++;
+  }
+
+  const activityTypes = new Set<string>();
+  for (const m of bucket) {
+    if (m.activityType) activityTypes.add(m.activityType);
+  }
+  for (const a of activityTypes) {
+    reinforceEpisodicCue(_db, hippo, {
+      episodeId,
+      feature: {
+        featureType: 'taskMode' as FeatureFamily,
+        featureValue: a,
+      },
+      activation: 0.7,
+    });
+    count++;
+  }
+
+  return count;
 }

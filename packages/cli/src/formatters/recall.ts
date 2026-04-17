@@ -47,6 +47,9 @@ export function formatRecallResult(result: ReconstructRecallResult): string {
     for (const w of result.warnings) {
       const ref = w.memoryId ? ` [${w.memoryId}]` : '';
       lines.push(`  ! ${w.kind}${ref}: ${w.message}`);
+      if (w.hint) {
+        lines.push(`    → ${w.hint}`);
+      }
     }
   }
 
