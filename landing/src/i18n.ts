@@ -286,9 +286,9 @@ memrosetta maintain`,
           memrosetta: 'updates relation, old version preserved',
         },
         {
-          feature: 'Contradictions',
-          rag: 'Both versions returned, AI guesses',
-          memrosetta: 'Auto-detected by NLI model (71MB, local)',
+          feature: 'Retrieval',
+          rag: 'Vector similarity only',
+          memrosetta: 'FTS5 + activation + relation graph + Hebbian co-access',
         },
         {
           feature: 'Time awareness',
@@ -326,21 +326,22 @@ memrosetta maintain`,
         { content: 'Fix: batch size must be 4', type: 'fact' },
       ],
       memrosettaNote:
-        'One fact = one memory. Each has type, timestamps, keywords, relations. Updates create links, contradictions are auto-detected.',
+        'One fact = one memory. Each has type, timestamps, keywords, relations. Updates create `updates` links; contradictions modeled explicitly via relations.',
     },
     features: {
       title: 'Features',
       subtitle: 'Core memory engine plus the recent sync and enforce releases: local-first storage, safer multi-device sync, and hook-driven capture.',
       items: [
         {
-          title: 'Hybrid Search',
+          title: 'FTS5 + Activation Search',
           description:
-            'Three-stage pipeline: FTS5 (BM25) for keyword matching, vector similarity (bge-small-en-v1.5, 33MB) for semantic matching, and Reciprocal Rank Fusion to combine results. Memories found by both methods get boosted. ~3ms latency for 13K memories. Better recall than either approach alone.',
+            'SQLite FTS5 (BM25) keyword and content search boosted by ACT-R activation score, recency decay, relation-graph expansion, and Hebbian co-access edges. No embeddings, no external models. Sub-millisecond on 13K memories.',
         },
         {
-          title: 'Contradiction Detection',
+          badge: 'v0.10',
+          title: 'Reconstructive Recall',
           description:
-            'When a new memory is stored, the NLI model (nli-deberta-v3-xsmall, 71MB, Apache 2.0) checks the top 5 similar existing memories for logical contradictions. Score >= 0.7 triggers auto-creation of a contradicts relation. Runs entirely locally -- no API calls, no LLM needed.',
+            'The hippocampal layer stores bindings rather than raw chunks. `memrosetta recall` (CLI) and `memrosetta_reconstruct_recall` (MCP) return an episode + gist reassembled on demand -- modeled on pattern separation / pattern completion in the human brain.',
         },
         {
           title: 'Adaptive Forgetting',
@@ -408,15 +409,11 @@ memrosetta maintain`,
       packages: [
         {
           name: '@memrosetta/core',
-          description: 'Memory engine: SQLite + FTS5 + sqlite-vec + relation graph. Stores, searches, relates, compresses. Zero LLM dependency -- all intelligence is in the storage and retrieval layer.',
-        },
-        {
-          name: '@memrosetta/embeddings',
-          description: 'Local ML models: bge-small-en-v1.5 (33MB, MIT) for vector embeddings, nli-deberta-v3-xsmall (71MB, Apache 2.0) for contradiction detection. Runs on CPU, no GPU required.',
+          description: 'Memory engine: SQLite + FTS5 + relation graph + reconstructive recall. Stores, searches, relates, compresses. Zero LLM, zero ML dependency (v0.11+).',
         },
         {
           name: '@memrosetta/mcp',
-          description: 'MCP (Model Context Protocol) server exposing 6 tools: store, search, working_memory, relate, invalidate, count. Any MCP-compatible AI tool can connect.',
+          description: 'MCP (Model Context Protocol) server exposing 8 tools: store, search, working_memory, relate, invalidate, count, feedback, reconstruct_recall. Any MCP-compatible AI tool can connect.',
         },
         {
           name: '@memrosetta/claude-code',
@@ -439,7 +436,7 @@ memrosetta maintain`,
           description: 'Optional LLM-based fact extraction from conversation transcripts. Supports OpenAI and Anthropic. Used by Stop Hook layer 2 for higher-quality extraction.',
         },
       ],
-      dependencyGraph: 'cli, mcp, api, sync-client, claude-code --> core --> embeddings',
+      dependencyGraph: 'cli, mcp, api, sync-client, claude-code --> core (SQLite + FTS5, no ML deps)',
     },
     comparison: {
       title: 'Why MemRosetta?',
@@ -811,7 +808,7 @@ memrosetta maintain`,
         {
           feature: '모순 감지',
           rag: '양쪽 다 반환, AI가 추측',
-          memrosetta: 'NLI 모델로 자동 감지 (71MB, 로컬)',
+          memrosetta: 'FTS5 + 활성화 + 관계 그래프 + Hebbian co-access',
         },
         {
           feature: '시간 인식',
@@ -856,14 +853,15 @@ memrosetta maintain`,
       subtitle: '코어 메모리 엔진에 최근 sync와 enforce 릴리즈까지: 로컬 우선 저장, 더 안전한 멀티디바이스 sync, 그리고 hook 기반 캡처.',
       items: [
         {
-          title: '하이브리드 검색',
+          title: 'FTS5 + 활성화 검색',
           description:
-            '3단계 파이프라인: FTS5 (BM25) 키워드 매칭, 벡터 유사도 (bge-small-en-v1.5, 33MB) 시맨틱 매칭, Reciprocal Rank Fusion으로 결과 결합. 두 방법 모두에서 발견된 기억은 부스트. 13K 기억에서 ~3ms 지연. 개별 방식보다 높은 검색 정확도.',
+            'SQLite FTS5 (BM25) 키워드/내용 검색에 ACT-R 활성화 점수, 최근성 감쇠, 관계 그래프 확장, Hebbian co-access 엣지 가중을 결합. 임베딩 없음, 외부 모델 없음. 13K 기억에서 sub-millisecond 지연.',
         },
         {
-          title: '모순 감지',
+          badge: 'v0.10',
+          title: '재구성 회상 (Reconstructive Recall)',
           description:
-            '새 기억 저장 시 NLI 모델(nli-deberta-v3-xsmall, 71MB, Apache 2.0)이 유사한 기존 기억 상위 5개를 논리적 모순 검사. 점수 >= 0.7이면 contradicts 관계 자동 생성. 완전히 로컬 실행 -- API 호출 없음, LLM 불필요.',
+            '해마(hippocampal) 레이어가 원시 청크 대신 binding 을 저장합니다. `memrosetta recall` (CLI) 과 `memrosetta_reconstruct_recall` (MCP) 이 필요할 때 episode + gist 를 재조립해서 반환합니다 — 인간 뇌의 패턴 분리/완성을 모델링한 구조.',
         },
         {
           title: '적응형 망각',
@@ -931,15 +929,11 @@ memrosetta maintain`,
       packages: [
         {
           name: '@memrosetta/core',
-          description: '메모리 엔진: SQLite + FTS5 + sqlite-vec + 관계 그래프. 저장, 검색, 관계 연결, 압축. LLM 의존성 제로 -- 모든 지능은 저장/검색 레이어에 있음.',
-        },
-        {
-          name: '@memrosetta/embeddings',
-          description: '로컬 ML 모델: bge-small-en-v1.5 (33MB, MIT) 벡터 임베딩용, nli-deberta-v3-xsmall (71MB, Apache 2.0) 모순 감지용. CPU에서 실행, GPU 불필요.',
+          description: '메모리 엔진: SQLite + FTS5 + 관계 그래프 + 재구성 회상. 저장, 검색, 관계 연결, 압축. LLM 의존성 제로, ML 의존성 제로 (v0.11+).',
         },
         {
           name: '@memrosetta/mcp',
-          description: 'MCP(Model Context Protocol) 서버. 6개 도구 노출: store, search, working_memory, relate, invalidate, count. MCP 호환 AI 도구라면 무엇이든 연결 가능.',
+          description: 'MCP(Model Context Protocol) 서버. 8개 도구 노출: store, search, working_memory, relate, invalidate, count, feedback, reconstruct_recall. MCP 호환 AI 도구라면 무엇이든 연결 가능.',
         },
         {
           name: '@memrosetta/claude-code',
@@ -962,7 +956,7 @@ memrosetta maintain`,
           description: '대화 트랜스크립트에서 LLM 기반 사실 추출 (선택사항). OpenAI와 Anthropic 지원. Stop Hook 레이어 2에서 더 높은 품질의 추출에 사용.',
         },
       ],
-      dependencyGraph: 'cli, mcp, api, sync-client, claude-code --> core --> embeddings',
+      dependencyGraph: 'cli, mcp, api, sync-client, claude-code --> core (SQLite + FTS5, no ML deps)',
     },
     comparison: {
       title: '왜 MemRosetta인가?',

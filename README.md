@@ -32,7 +32,7 @@ npm install -g memrosetta && memrosetta init --claude-code
   +---------------------------+
   |  store / search / recall  |
   |  PostgreSQL op-log        |
-  |  push + pull (1000/batch) |
+  |  push + pull (400/batch)  |
   +------------+--------------+
                |
                v
@@ -110,7 +110,7 @@ When you run `memrosetta init --claude-code`, three things are set up:
 
 ### 1. MCP Server (memory tools for Claude)
 
-Claude gets 6 memory tools it can call during any session:
+Claude gets 8 memory tools it can call during any session:
 
 **memrosetta_store** -- Claude calls this when it encounters important information:
 - Technical decisions ("We chose PostgreSQL over MySQL because...")
@@ -137,6 +137,11 @@ Claude gets 6 memory tools it can call during any session:
 
 **memrosetta_count** -- Quick check: "How many memories do I have for this project?"
 
+**memrosetta_feedback** -- Records good/bad signals on retrieved memories to tune future ranking.
+
+**memrosetta_reconstruct_recall** (v0.10+) -- Reconstructive recall through the hippocampal
+layer. Returns an episode + gist summary reassembled from stored bindings, not raw chunks.
+
 ### 2. Stop Hook — structured enforcement, not willpower
 
 When a Claude Code session ends, the Stop hook runs
@@ -144,8 +149,8 @@ When a Claude Code session ends, the Stop hook runs
 
 1. Reads the Stop hook event (stdin) and the session transcript (JSONL).
 2. Extracts the last assistant turn and normalizes it.
-3. Runs an LLM extractor (Claude Haiku → GPT-4o-mini → Propositionizer
-   fallback → none) to decompose the turn into atomic facts.
+3. Runs an LLM extractor (Claude Haiku → GPT-4o-mini → rule-based fallback →
+   none) to decompose the turn into atomic facts.
 4. Calls `memrosetta enforce stop`, which stores the resulting memories
    and returns a JSON envelope with `status`, counts, memory ids, and an
    audit footer (`STORED: ...`).
@@ -226,34 +231,38 @@ Your AI tool                    MemRosetta
  we said before"
 ```
 
-The engine handles storage, search, contradiction detection, and forgetting -- all locally, with zero API calls. Your AI decides WHAT to store. MemRosetta decides HOW to store and retrieve it.
+The engine handles storage, search, relation expansion, and forgetting -- all locally, with zero API calls. Your AI decides WHAT to store. MemRosetta decides HOW to store and retrieve it.
 
-### Atomic memories + hybrid search
+### Atomic memories + FTS5 + activation-weighted ranking
 
-MemRosetta stores **atomic memories** -- one fact per record, not text chunks -- in a local SQLite database. Retrieval uses hybrid search that combines keyword matching, semantic similarity, and activation-based ranking.
+MemRosetta stores **atomic memories** -- one fact per record, not text chunks -- in a local SQLite database. Retrieval uses SQLite FTS5 (BM25) keyword search, boosted by activation score, recency, relation graph adjacency, and Hebbian co-access edges.
 
 ```
 Query: "What CSS framework did we choose?"
   |
-  +-- FTS5 (BM25)     keyword match: "CSS", "framework"
-  +-- Vector (KNN)     semantic match: similar meaning
-  +-- RRF Merge        combined ranking
-  |
-  +-- Activation       boost frequently accessed memories
-  +-- Time decay       recent memories rank higher
+  +-- FTS5 (BM25)        keyword + content match on memories + keywords
+  +-- Activation boost   frequently accessed memories rank higher
+  +-- Recency boost      recent memories rank higher (decay 0.99/hr)
+  +-- Relation expansion pull in graph-adjacent memories of top hits
+  +-- Hebbian co-access  memories recalled together get boosted
 ```
+
+Vector / embedding-based semantic search was removed in **v0.11** -- the Hugging
+Face dependency (~1.5 GB) was eliminated in favor of a pure SQLite install that
+stays under 30 MB. FTS5 + activation weighting + Hebbian co-access does the
+heavy lifting now.
 
 ### Memory Lifecycle
 
 ```
 Store                      Search                     Maintain
 -----                      ------                     --------
-Classify (fact/pref/       Hybrid search              Activation scoring
-  decision/event)            (FTS + vector + RRF)       (ACT-R model)
-Store atomically           Activation weighting       Tier compression
-Detect contradictions      Relation expansion           Hot  -> always loaded
-  (NLI model, local)      Time filtering               Warm -> last 30 days
-Link relations                                         Cold -> compressed
+Classify (fact/pref/       FTS5 BM25                  Activation scoring
+  decision/event)          Activation weighting       (ACT-R model)
+Store atomically           Recency boost              Tier compression
+autoRelate to neighbors    Relation expansion           Hot  -> always loaded
+Link relations             Spreading activation         Warm -> last 30 days
+                           Co-access boost              Cold -> compressed
 ```
 
 ### Not Another RAG
@@ -262,62 +271,18 @@ Link relations                                         Cold -> compressed
 |---|---|---|
 | **Unit** | ~400 token text chunks | One fact = one record |
 | **Updates** | Re-index entire document | `updates` relation, old version kept |
-| **Contradictions** | Both returned, AI guesses | Auto-detected by NLI model |
+| **Retrieval** | Vector similarity only | FTS5 + activation + relation graph + co-access |
 | **Time** | None | 4 timestamps per memory |
 | **Forgetting** | Everything weighted equally | ACT-R: used more = ranked higher |
 
-## Search Architecture
+## Reconstructive Memory (v0.10+)
 
-MemRosetta uses a three-stage hybrid search pipeline:
-
-### Stage 1: FTS5 Full-Text Search (BM25)
-
-SQLite's built-in full-text search with BM25 ranking:
-- Tokenizes query into keywords
-- Filters common stop words (the, is, are...)
-- Matches against memory content and keywords
-- Ranks by term frequency * inverse document frequency
-- Speed: ~0.2ms for 13K memories
-
-### Stage 2: Vector Similarity Search (KNN)
-
-Local embedding model (bge-small-en-v1.5, 33MB, MIT license):
-- Converts query and memories to 384-dimensional vectors
-- Uses sqlite-vec for KNN search
-- Catches semantic matches that keywords miss ("UI theme" matches "prefers dark mode" even without shared keywords)
-- Speed: ~3ms for 13K memories
-
-### Stage 3: Reciprocal Rank Fusion (RRF)
-
-Combines results from FTS5 and vector search:
-- `score = 1/(k + rank_fts) + 1/(k + rank_vec)` where `k = 60`
-- Memories found by both methods get boosted
-- Final results weighted by activation score (ACT-R)
-- Frequently accessed memories rank higher
-
-## Contradiction Detection
-
-When a new memory is stored, MemRosetta automatically checks for contradictions:
-
-1. Compute embedding for the new memory
-2. Search for similar existing memories (top 5)
-3. Run NLI (Natural Language Inference) check on each pair
-4. If contradiction score >= 0.7, auto-create `contradicts` relation
-
-```
-Example:
-  Existing: "Our hourly rate is $50"
-  New:      "Our hourly rate is $40"
-  Result:   contradiction detected (score: 0.93)
-            --> auto-creates: new --[contradicts]--> existing
-```
-
-The NLI model (nli-deberta-v3-xsmall) runs entirely locally:
-- Size: 71MB
-- License: Apache 2.0
-- No API calls, no LLM needed
-- Detects logical negation well (0.92+ accuracy on MNLI)
-- Numeric contradictions may not always be caught (model limitation)
+In addition to search, v0.10 introduced a reconstructive-recall layer modeled on
+hippocampal pattern separation / completion. `memrosetta recall` (CLI) and
+`memrosetta_reconstruct_recall` (MCP) let an AI tool pull back a past episode
+plus a gist summary, reconstructed from hippocampal bindings rather than raw
+text chunks. See [docs/reconstructive-memory-spec.md](docs/reconstructive-memory-spec.md)
+for the full spec.
 
 ## Memory Tiers & Adaptive Forgetting
 
@@ -362,9 +327,12 @@ memrosetta maintain
 
 ## Features
 
-**Search** -- Hybrid retrieval combining FTS5 (BM25), vector similarity (bge-small-en-v1.5), and Reciprocal Rank Fusion. Better recall than either approach alone.
+**Search** -- SQLite FTS5 (BM25) keyword + content search, boosted by activation score, recency decay, relation-graph expansion, Hebbian co-access, and spreading activation on the memory graph.
 
-**Contradiction Detection** -- Local NLI model (nli-deberta-v3-xsmall, 71MB) automatically detects when new facts contradict existing ones. No LLM needed.
+**Reconstructive Recall (v0.10+)** -- `memrosetta recall` and the
+`memrosetta_reconstruct_recall` MCP tool return a reconstructed episode + gist
+from the hippocampal layer, not raw text chunks. Models human pattern
+separation / completion.
 
 **Adaptive Forgetting** -- ACT-R activation scoring. Frequently accessed memories rank higher. Unused memories fade but are never deleted.
 
@@ -378,7 +346,11 @@ memrosetta maintain
 
 **Optional Multi-Device Sync** -- Local-first remains the default. When opted in, each device keeps its SQLite and syncs through an append-only operation log hosted on your own PostgreSQL. CRDT-free, idempotent, works offline.
 
-**900+ tests across 25 test files.**
+**100 % local, zero ML dependency (v0.11+).** Install drops from ~1.5 GB to
+~30 MB. No Hugging Face, no sqlite-vec, no local inference. FTS5 + activation
++ reconstructive recall is the whole stack.
+
+**950+ tests across 75 test files.**
 
 ## MCP Tools
 
@@ -387,11 +359,13 @@ When connected via MCP, your AI tool gets these capabilities:
 | Tool | Description |
 |------|-------------|
 | `memrosetta_store` | Save an atomic memory |
-| `memrosetta_search` | Hybrid search across past memories |
+| `memrosetta_search` | FTS5 + activation + relation-expansion search |
 | `memrosetta_working_memory` | Get highest-priority context (~3K tokens) |
 | `memrosetta_relate` | Link related memories |
 | `memrosetta_invalidate` | Mark a memory as outdated |
 | `memrosetta_count` | Count stored memories |
+| `memrosetta_feedback` | Record retrieval feedback (good/bad) to tune ranking |
+| `memrosetta_reconstruct_recall` | Reconstructive recall (v0.10+): episode + gist reassembled from hippocampal bindings |
 
 ## REST API
 
@@ -679,12 +653,8 @@ Verify with `GET /sync/health` — expect `{"status":"ok","db":"ok"}`.
 
 ```typescript
 import { SqliteMemoryEngine } from '@memrosetta/core';
-import { HuggingFaceEmbedder } from '@memrosetta/embeddings';
 
-const embedder = new HuggingFaceEmbedder();
-await embedder.initialize();
-
-const engine = new SqliteMemoryEngine({ dbPath: './memories.db', embedder });
+const engine = new SqliteMemoryEngine({ dbPath: './memories.db' });
 await engine.initialize();
 
 // Store
@@ -695,7 +665,7 @@ await engine.store({
   keywords: ['dark-mode', 'ui'],
 });
 
-// Search (hybrid: keyword + semantic)
+// Search (FTS5 BM25 + activation + relation expansion)
 const results = await engine.search({
   userId: 'alice',
   query: 'UI theme preference',
@@ -708,6 +678,9 @@ await engine.relate(memA.memoryId, memB.memoryId, 'updates', 'Changed preference
 // Working memory (~3K tokens of highest-priority context)
 const context = await engine.workingMemory('alice', 3000);
 
+// Reconstructive recall (v0.10+)
+const recalled = await engine.reconstructRecall('alice', 'auth decisions');
+
 // Maintenance (recompute activation scores, compress old memories)
 await engine.maintain('alice');
 
@@ -716,47 +689,20 @@ await engine.close();
 
 ## Language Support
 
-MemRosetta supports multiple embedding models for different languages:
-
-| Language | Flag | Model | Dimension |
-|----------|------|-------|-----------|
-| English (default) | -- | bge-small-en-v1.5 (33MB) | 384 |
-| Multilingual (94 langs) | `--lang multi` | multilingual-e5-small (100MB) | 384 |
-| Korean | `--lang ko` | ko-sroberta-multitask (110MB) | 768* |
-
-*Korean model uses 768 dimensions. Requires a fresh database if switching from English/multilingual (384 dim).
-
-```bash
-memrosetta init --claude-code                # English (default)
-memrosetta init --claude-code --lang multi   # Multilingual
-memrosetta init --claude-code --lang ko      # Korean
-memrosetta init --gemini                     # Gemini (same flags apply)
-```
-
-As a library:
-
-```typescript
-import { HuggingFaceEmbedder } from '@memrosetta/embeddings';
-
-// Preset
-const embedder = new HuggingFaceEmbedder({ preset: 'multilingual' });
-
-// Custom model
-const custom = new HuggingFaceEmbedder({ modelId: 'Xenova/some-model' });
-```
+SQLite FTS5 handles any language out of the box. For Korean queries MemRosetta
+applies natural-language FTS5 preprocessing (added in v0.5.2); no language
+flag is required. Vector/embedding-based language models were removed in v0.11.
 
 ## Packages
 
 | Package | Description |
 |---------|-------------|
-| `@memrosetta/core` | Memory engine: SQLite + FTS5 + vector + NLI |
-| `@memrosetta/embeddings` | Local embeddings (bge-small-en-v1.5) + NLI (nli-deberta-v3-xsmall) |
-| `@memrosetta/cli` | Command-line interface |
-| `@memrosetta/mcp` | MCP server for AI tool integration |
+| `@memrosetta/core` | Memory engine: SQLite + FTS5 + relation graph + reconstructive recall. Zero LLM, zero ML deps. |
+| `@memrosetta/cli` | Command-line interface (22 commands including `recall`, `search`, `sync`) |
+| `@memrosetta/mcp` | MCP server for AI tool integration (8 tools) |
 | `@memrosetta/api` | REST API (Hono) -- single-node self-host, not a multi-tenant cloud API |
 | `@memrosetta/claude-code` | Claude Code integration (hooks + init) |
 | `@memrosetta/llm` | LLM-based fact extraction (OpenAI/Anthropic) -- optional |
-| `@memrosetta/extractor` | Multilingual atomic fact decomposition (Propositionizer-mT5) -- optional |
 | `@memrosetta/sync-client` | Local outbox/inbox for optional multi-device sync |
 | `@memrosetta/sync-server` | Self-hostable Hono sync hub (pre-1.0, not on `latest`) |
 | `@memrosetta/postgres` | PostgreSQL adapter for the sync hub (pre-1.0, not on `latest`) |
@@ -768,21 +714,22 @@ Evaluated on [LoCoMo](https://github.com/snap-research/locomo) (1,986 QA pairs, 
 | Method | Precision@5 | MRR | Latency (p50) | LLM Required |
 |--------|:-----------:|:---:|:-------------:|:------------:|
 | FTS5 only | 0.0087 | 0.0298 | 0.4ms | No |
-| Hybrid (FTS + Vector) | 0.0030 | 0.0111 | 4.2ms | No |
-| **Hybrid + Fact Extraction** | **0.0311** | **0.0572** | **4.0ms** | **Yes (external)** |
+| **FTS + Fact Extraction** | **0.0311** | **0.0572** | **4.0ms** | **Yes (external)** |
 
-On LoCoMo's conversation-turn data, FTS5 keyword matching outperforms hybrid for precision. Hybrid adds value when queries are semantically fuzzy or use different wording than stored memories. Fact extraction (atomic memory pre-processing) delivers the highest accuracy with **single-hop 23.8%**.
+On LoCoMo's conversation-turn data, FTS5 keyword matching provides the no-LLM
+baseline. Fact extraction (atomic memory pre-processing) delivers the highest
+accuracy with **single-hop 23.8%**.
 
-Fact extraction uses an external LLM (e.g., OpenAI, Anthropic) to pre-process conversation transcripts into atomic facts before storage. The core search engine operates without any LLM.
+Fact extraction uses an external LLM (e.g., OpenAI, Anthropic) to pre-process
+conversation transcripts into atomic facts before storage. The core search
+engine operates without any LLM.
 
-> Benchmark results may vary slightly across environments due to differences in
-> SQLite versions, embedding model quantization, and hardware. Run `pnpm bench:*`
-> to reproduce on your machine.
+> Hybrid vector+FTS benchmarks were retired in v0.11 when Hugging Face
+> embeddings were removed. Legacy numbers are preserved in git history.
 
 ```bash
 pnpm bench:sqlite                    # FTS only
-pnpm bench:hybrid                    # Hybrid search
-pnpm bench:hybrid --converter fact --llm-provider openai  # With LLM extraction
+pnpm bench:sqlite --converter fact --llm-provider openai  # With LLM extraction
 ```
 
 ## Comparison
@@ -791,7 +738,7 @@ pnpm bench:hybrid --converter fact --llm-provider openai  # With LLM extraction
 |---|---|---|---|---|
 | Runs locally | Cloud | Cloud | Cloud + Local | **SQLite, no server** |
 | Core LLM dep | Yes | Yes | Yes | **None (AI tool is the client)** |
-| Contradiction detection | No | No | No | **Yes (NLI, local)** |
+| Reconstructive recall | No | No | No | **Yes (hippocampal, v0.10+)** |
 | Forgetting model | No | No | No | **Yes (ACT-R)** |
 | Time model | No | No | No | **4 timestamps** |
 | Relational versioning | No | No | No | **5 relation types** |
@@ -806,7 +753,7 @@ git clone https://github.com/obst2580/memrosetta.git
 cd memrosetta
 pnpm install
 pnpm build             # Build all packages (required before first test)
-pnpm test              # 696+ tests
+pnpm test              # 950+ tests across 75 test files
 pnpm bench:mock        # Quick benchmark (no LLM needed)
 ```
 
@@ -820,8 +767,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 ## Roadmap
 
 - [x] Atomic memory CRUD + SQLite + FTS5
-- [x] Vector search + hybrid retrieval (RRF)
-- [x] NLI contradiction detection
 - [x] Time model (4 timestamps, invalidation)
 - [x] Hierarchical compression (Hot/Warm/Cold)
 - [x] Adaptive forgetting (ACT-R)
@@ -829,12 +774,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] CLI + REST API + MCP server
 - [x] Claude Code integration
 - [x] LoCoMo benchmarks
-- [x] Multilingual embeddings (Korean, multilingual, configurable presets)
 - [x] Codex integration
 - [x] Gemini integration
 - [x] CI pipeline (build + typecheck + test)
 - [x] Optional multi-device sync (self-hosted op log hub)
-- [x] Multilingual fact decomposition (Propositionizer-mT5)
 - [x] Bidirectional sync (pull applies ops into the local graph, v0.4.6)
 - [x] CLI write paths participate in sync (v0.4.7)
 - [x] Shared `syncUserId` across a user's devices (v0.4.5)
@@ -852,8 +795,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] Reconstructive Memory kernel — Layer A + Layer B scaffolding (v0.10.0)
 - [x] `memrosetta recall` + MCP `reconstruct_recall` + v1.0 benchmark suite (v0.10.0)
 - [x] **Hugging Face removal — Core is 100% LLM-free + offline, 1.5 GB → 30 MB install** (v0.11.0)
-- [ ] OAuth authentication (GitHub + Google device-code flow, v0.6.0)
-- [ ] Duplicate memory collapse (exact-content dedupe, v0.5.x)
+- [x] Recall self-healing empty episodic layer (v0.12.0)
+- [x] Status readiness scoring with user-scoped counts (v0.12.1 – v0.12.2)
 - [ ] Sync server 1.0 (promotion from 0.1.x after production validation)
 - [ ] Profile builder (stable + dynamic user profiles)
 - [ ] Stable/volatile memory classification
@@ -873,7 +816,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
               v                          v                   v
        +-------------+          +-------------+      +-----------+
        | MCP Server  |          | MCP Server  |      | REST API  |
-       | (6 tools)   |          | (6 tools)   |      | (Hono)    |
+       | (8 tools)   |          | (8 tools)   |      | (Hono)    |
        +------+------+          +------+------+      +-----+-----+
               |                          |                   |
               v                          v                   v
@@ -891,7 +834,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
                  +------------------+
                  | PostgreSQL       |
                  | push/pull ops    |
-                 | 1000 ops/batch   |
+                 | 500/batch server |
+                 | 400/batch client |
                  +------------------+
                          |
                          v
@@ -899,11 +843,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
                  | memrosetta core  |
                  +------------------+
                  | SQLite + FTS5    |
-                 | bge-small embed  |
-                 | NLI contradict   |
+                 | Relation graph   |
+                 | Hebbian coaccess |
+                 | Reconstructive   |
+                 |   recall (v0.10) |
                  | ACT-R forgetting |
                  | Hot/Warm/Cold    |
-                 | 0 LLM calls     |
+                 | 0 LLM calls      |
                  +------------------+
 ```
 
@@ -911,15 +857,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 | Package | Role |
 |---------|------|
-| `@memrosetta/core` | Memory engine: store, search, relate, compress. SQLite + FTS5 + sqlite-vec. Zero LLM dependency. |
-| `@memrosetta/embeddings` | Local ML: bge-small-en-v1.5 (33MB) for vectors, nli-deberta-v3-xsmall (71MB) for contradictions. CPU only. |
-| `@memrosetta/cli` | CLI tool: store, search, relate, maintain, compress, ingest, sync, migrate, enforce, init/reset. |
-| `@memrosetta/mcp` | MCP server: 6 tools (store, search, working_memory, relate, invalidate, count). |
+| `@memrosetta/core` | Memory engine: store, search, relate, compress, reconstructive recall. SQLite + FTS5 + relation graph. Zero LLM, zero ML deps. |
+| `@memrosetta/cli` | CLI tool (22 commands): store, search, recall, relate, maintain, compress, ingest, sync, migrate, dedupe, duplicates, feedback, update, enforce, init/reset, status, clear, count, get, invalidate, working-memory. |
+| `@memrosetta/mcp` | MCP server: 8 tools (store, search, working_memory, relate, invalidate, count, feedback, reconstruct_recall). |
 | `@memrosetta/sync-client` | Local-first sync: outbox/inbox in SQLite, push/pull through your sync hub. |
 | `@memrosetta/sync-server` | Self-hosted hub: Hono + PostgreSQL, op-log replication, cursor-based pagination. |
 | `@memrosetta/api` | REST API: Hono HTTP server for same-machine or LAN access. |
 | `@memrosetta/types` | Shared TypeScript interfaces. |
-| `@memrosetta/extractor` | Optional: Propositionizer-mT5 for multilingual fact decomposition. |
 | `memrosetta` | Umbrella npm package: installs core + cli + mcp + all binaries. |
 
 ### Design Principles

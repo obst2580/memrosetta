@@ -13,8 +13,7 @@ interface QuickStartProps {
 }
 
 const PACKAGES = [
-  { name: '@memrosetta/core', en: 'Memory engine: SQLite + FTS5 + vector + NLI', ko: '메모리 엔진: SQLite + FTS5 + 벡터 + NLI' },
-  { name: '@memrosetta/embeddings', en: 'Local embeddings (bge-small-en-v1.5) + NLI', ko: '로컬 임베딩 (bge-small-en-v1.5) + NLI' },
+  { name: '@memrosetta/core', en: 'Memory engine: SQLite + FTS5 + relation graph + reconstructive recall', ko: '메모리 엔진: SQLite + FTS5 + 관계 그래프 + 재구성 회상' },
   { name: '@memrosetta/mcp', en: 'MCP server for AI tool integration', ko: 'AI 도구 연동용 MCP 서버' },
   { name: '@memrosetta/claude-code', en: 'Claude Code integration (hooks + init)', ko: 'Claude Code 통합 (hooks + init)' },
   { name: '@memrosetta/cli', en: 'Command-line interface', ko: '커맨드라인 인터페이스' },
