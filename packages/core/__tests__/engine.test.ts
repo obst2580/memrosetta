@@ -273,6 +273,39 @@ describe('SqliteMemoryEngine', () => {
     });
   });
 
+  describe('search with currentContext', () => {
+    it('boosts memories whose stored context signature matches currentContext', async () => {
+      await engine.store(
+        makeInput({
+          content: 'Shared target about auth retry',
+          project: 'other',
+          namespace: 'general',
+          keywords: ['frontend'],
+        }),
+      );
+      await engine.store(
+        makeInput({
+          content: 'Shared target about auth retry',
+          project: 'memrosetta',
+          namespace: 'layer-b',
+          keywords: ['auth', 'sqlite'],
+        }),
+      );
+
+      const response = await engine.search({
+        userId: 'user-1',
+        query: 'shared target auth retry',
+        currentContext: {
+          project: 'memrosetta',
+          namespace: 'layer-b',
+          keywords: ['auth', 'sqlite'],
+        },
+      });
+
+      expect(response.results[0].memory.project).toBe('memrosetta');
+    });
+  });
+
   // -----------------------------------------------------------------------
   // Relate
   // -----------------------------------------------------------------------

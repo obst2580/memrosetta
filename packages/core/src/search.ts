@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { Memory, SearchQuery, SearchResponse, SearchResult, SearchFilters } from '@memrosetta/types';
 import { rowToMemory, type MemoryRow } from './mapper.js';
+import { applyContextSignatureBoost } from './context.js';
 
 // Characters that have special meaning in FTS5 query syntax, plus common
 // punctuation that should be stripped for clean token matching.
@@ -705,7 +706,8 @@ export function searchMemories(
   const weighted = applyThreeFactorReranking(ftsResults);
   const boosted = applyKeywordBoost(weighted, queryTokens);
   const contextBoosted = applyContextBoost(db, boosted, contextFilters);
-  const coAccessBoosted = applyCoAccessBoost(db, contextBoosted);
+  const signatureBoosted = applyContextSignatureBoost(contextBoosted, query.currentContext);
+  const coAccessBoosted = applyCoAccessBoost(db, signatureBoosted);
   const spreadBoosted = applySpreadingBoost(db, coAccessBoosted);
   const finalResults = deduplicateResults(spreadBoosted);
 

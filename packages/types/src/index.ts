@@ -80,6 +80,7 @@ export type {
 
 export type {
   SearchQuery,
+  SearchCurrentContext,
   SearchFilters,
   MatchType,
   SearchResult,

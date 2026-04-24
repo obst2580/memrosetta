@@ -247,6 +247,11 @@ CREATE INDEX IF NOT EXISTS idx_source_attestations_ref
   ON source_attestations(source_kind, source_ref);
 `;
 
+const SCHEMA_V20 = `
+ALTER TABLE memories ADD COLUMN context_signature TEXT;
+CREATE INDEX IF NOT EXISTS idx_memories_context_signature ON memories(context_signature);
+`;
+
 /**
  * v10: episodes + segments + memory_episodic_bindings for event
  * segmentation and hippocampal indexing (v4 reconstructive-memory spec).
@@ -772,7 +777,8 @@ export function ensureSchema(db: Database.Database, _options?: SchemaOptions): v
     db.exec(SCHEMA_V17);
     db.exec(SCHEMA_V18);
     db.exec(SCHEMA_V19);
-    version = 19;
+    db.exec(SCHEMA_V20);
+    version = 20;
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(version);
     return;
   }
@@ -895,5 +901,10 @@ export function ensureSchema(db: Database.Database, _options?: SchemaOptions): v
   if (currentVersion < 19) {
     db.exec(SCHEMA_V19);
     db.prepare('UPDATE schema_version SET version = ?').run(19);
+  }
+
+  if (currentVersion < 20) {
+    db.exec(SCHEMA_V20);
+    db.prepare('UPDATE schema_version SET version = ?').run(20);
   }
 }

@@ -554,6 +554,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
           null, // gist_extracted_model
           'semantic', // memory_system — summaries are semantic abstractions
           'fact', // memory_role — summary is a fact by convention
+          null, // context_signature
         );
         compressed++;
 

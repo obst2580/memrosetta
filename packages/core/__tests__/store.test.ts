@@ -86,6 +86,23 @@ describe('store', () => {
       expect(memory.isLatest).toBe(true);
     });
 
+    it('captures a deterministic context signature at store time', () => {
+      const memory = storeMemory(db, stmts, {
+        ...baseInput,
+        project: 'memrosetta',
+        namespace: 'layer-b',
+        keywords: ['auth', 'sqlite'],
+      });
+
+      const row = db
+        .prepare('SELECT context_signature FROM memories WHERE memory_id = ?')
+        .get(memory.memoryId) as { context_signature: string };
+
+      expect(row.context_signature).toContain('project:memrosetta');
+      expect(row.context_signature).toContain('namespace:layer-b');
+      expect(row.context_signature).toContain('kw:auth');
+    });
+
     it('handles optional fields (namespace, rawText, documentDate, sourceId, keywords)', () => {
       const memory = storeMemory(db, stmts, baseInput);
 

@@ -1,5 +1,13 @@
 import type { Memory, MemoryType, MemoryState, SourceAttestation } from './memory.js';
 
+export interface SearchCurrentContext {
+  readonly namespace?: string;
+  readonly project?: string;
+  readonly episodeId?: string;
+  readonly keywords?: readonly string[];
+  readonly timeBucket?: string;
+}
+
 export interface SearchQuery {
   readonly userId: string;
   readonly query: string;
@@ -7,6 +15,7 @@ export interface SearchQuery {
   readonly limit?: number;
   readonly filters?: SearchFilters;
   readonly includeSource?: boolean;
+  readonly currentContext?: SearchCurrentContext;
 }
 
 export interface SearchFilters {

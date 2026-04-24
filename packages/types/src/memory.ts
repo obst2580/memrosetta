@@ -207,6 +207,7 @@ export interface Memory extends MemoryInput {
    */
   readonly memorySystem?: MemorySystem;
   readonly memoryRole?: MemoryRole;
+  readonly contextSignature?: string;
 }
 
 export interface MemoryCueInput {

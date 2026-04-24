@@ -57,11 +57,11 @@ describe('ensureSchema', () => {
     expect(indexNames).toContain('idx_memories_activation');
   });
 
-  it('sets schema version to 19 for fresh database', () => {
+  it('sets schema version to 20 for fresh database', () => {
     ensureSchema(db);
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(19);
+    expect(row.version).toBe(20);
   });
 
   it('creates consolidation_jobs at v17', () => {
@@ -130,7 +130,19 @@ describe('ensureSchema', () => {
     expect(() => ensureSchema(db)).not.toThrow();
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(19);
+    expect(row.version).toBe(20);
+  });
+
+  it('adds nullable context_signature to memories', () => {
+    ensureSchema(db);
+
+    const cols = db
+      .prepare('PRAGMA table_info(memories)')
+      .all() as readonly { name: string; notnull: number }[];
+    const contextSignature = cols.find((c) => c.name === 'context_signature');
+
+    expect(contextSignature).toBeDefined();
+    expect(contextSignature!.notnull).toBe(0);
   });
 
   it('does not CHECK-gate source_kind labels', () => {

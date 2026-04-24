@@ -41,6 +41,7 @@ export interface MemoryRow {
   readonly gist_extracted_model: string | null;
   readonly memory_system: string | null;
   readonly memory_role: string | null;
+  readonly context_signature: string | null;
 }
 
 export function rowToMemory(row: MemoryRow): Memory {
@@ -77,6 +78,6 @@ export function rowToMemory(row: MemoryRow): Memory {
     ...(row.gist_extracted_model != null ? { gistExtractedModel: row.gist_extracted_model } : {}),
     ...(row.memory_system != null ? { memorySystem: row.memory_system as MemorySystem } : {}),
     ...(row.memory_role != null ? { memoryRole: row.memory_role as MemoryRole } : {}),
+    ...(row.context_signature != null ? { contextSignature: row.context_signature } : {}),
   };
 }
-

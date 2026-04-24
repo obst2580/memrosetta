@@ -30,6 +30,7 @@ import {
   type HippocampalStatements,
 } from './hippocampal.js';
 import { resolveStoreSalience } from './salience.js';
+import { coarseTimeBucket, computeContextSignature, recentKeywordUnion } from './context.js';
 
 export interface PreparedStatements {
   readonly insertMemory: Database.Statement;
@@ -60,9 +61,9 @@ export function createPreparedStatements(db: Database.Database): PreparedStateme
         project, activity_type,
         verbatim_content, gist_content, gist_confidence,
         gist_extracted_at, gist_extracted_model,
-        memory_system, memory_role
+        memory_system, memory_role, context_signature
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `),
     getById: db.prepare('SELECT * FROM memories WHERE id = ?'),
     getByMemoryId: db.prepare('SELECT * FROM memories WHERE memory_id = ?'),
@@ -170,6 +171,13 @@ export function storeMemory(
   const keywords = keywordsToString(input.keywords);
   const axes = resolveMemoryAxes(input);
   const salience = resolveStoreSalience(input);
+  const recentRows = db
+    .prepare('SELECT keywords FROM memories WHERE user_id = ? ORDER BY learned_at DESC LIMIT 5')
+    .all(input.userId) as readonly { keywords: string | null }[];
+  const contextSignature = computeContextSignature(input, {
+    recentKeywords: recentKeywordUnion(recentRows),
+    timeBucket: coarseTimeBucket(new Date(learnedAt)),
+  });
 
   // Atomic: memory row, source attestations, and episodic binding must
   // persist together so the audit trail cannot diverge if the process
@@ -208,6 +216,7 @@ export function storeMemory(
       input.gistExtractedModel ?? null,
       axes.memorySystem,
       axes.memoryRole,
+      contextSignature.length > 0 ? contextSignature : null,
     );
 
     insertSourceAttestations(stmts.source, memoryId, input.sources);
