@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { mockMaintain, mockBuildEpisodes } = vi.hoisted(() => {
+const { mockMaintain, mockBuildEpisodes, mockRunConsolidation } = vi.hoisted(() => {
   const mockMaintain = vi.fn();
   const mockBuildEpisodes = vi.fn();
-  return { mockMaintain, mockBuildEpisodes };
+  const mockRunConsolidation = vi.fn();
+  return { mockMaintain, mockBuildEpisodes, mockRunConsolidation };
 });
 
 vi.mock('../../src/engine.js', () => ({
   getEngine: vi.fn().mockImplementation(async () => ({
     maintain: mockMaintain,
     buildEpisodes: mockBuildEpisodes,
+    runConsolidation: mockRunConsolidation,
     close: vi.fn(),
   })),
   closeEngine: vi.fn(),
@@ -37,6 +39,7 @@ describe('maintain command', () => {
     process.exitCode = undefined;
     mockMaintain.mockReset();
     mockBuildEpisodes.mockReset();
+    mockRunConsolidation.mockReset();
   });
 
   afterEach(() => {
@@ -216,6 +219,34 @@ describe('maintain command', () => {
         granularity: 'day',
         dryRun: false,
       });
+    });
+  });
+
+  describe('--consolidate', () => {
+    it('runs pending consolidation jobs and NOT standard maintenance', async () => {
+      mockRunConsolidation.mockResolvedValue({
+        processed: 2,
+        done: 1,
+        failed: 1,
+        retried: 0,
+        jobs: [],
+      });
+
+      await run({
+        args: ['--consolidate', '--user', 'obst'],
+        format: 'json',
+        noEmbeddings: true,
+      });
+
+      expect(mockMaintain).not.toHaveBeenCalled();
+      expect(mockBuildEpisodes).not.toHaveBeenCalled();
+      expect(mockRunConsolidation).toHaveBeenCalledWith('obst');
+      const written = stdoutSpy.mock.calls[0]?.[0] as string;
+      const parsed = JSON.parse(written);
+      expect(parsed.userId).toBe('obst');
+      expect(parsed.processed).toBe(2);
+      expect(parsed.done).toBe(1);
+      expect(parsed.failed).toBe(1);
     });
   });
 });

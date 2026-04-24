@@ -36,7 +36,7 @@ import { generateMemoryId, nowIso, keywordsToString } from './utils.js';
 import { computeActivation, computeEbbinghaus } from './activation.js';
 import { determineTier, estimateTokens } from './tiers.js';
 import { computeNoveltyScore } from './novelty.js';
-import { ConsolidationQueue } from './consolidation.js';
+import { ConsolidationQueue, type ConsolidationJob } from './consolidation.js';
 import {
   reconstructRecall as reconstructRecallInternal,
   RecallHookRegistry,
@@ -100,6 +100,14 @@ export interface SqliteEngineOptions {
   readonly layerB?: LayerBConfig;
 }
 
+export interface ConsolidationRunResult {
+  readonly processed: number;
+  readonly done: number;
+  readonly failed: number;
+  readonly retried: number;
+  readonly jobs: readonly ConsolidationJob[];
+}
+
 interface AutoRelateCandidateRow {
   readonly memory_id: string;
   readonly keywords: string | null;
@@ -152,6 +160,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     this.stmts = createPreparedStatements(this.db);
     this.relStmts = createRelationStatements(this.db);
     this.constructStmts = createConstructStatements(this.db);
+    this.consolidation.attach(this.db);
   }
 
   async close(): Promise<void> {
@@ -160,6 +169,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       this.db = null;
       this.stmts = null;
       this.relStmts = null;
+      this.consolidation.detach();
     }
   }
 
@@ -227,7 +237,9 @@ export class SqliteMemoryEngine implements IMemoryEngine {
 
     if (layerB.enableConsolidation) {
       this.consolidation.enqueue({
+        userId: memory.userId,
         kind: 'gist_refinement',
+        dedupKey: `gist_refinement:${memory.memoryId}`,
         payload: {
           memoryId: memory.memoryId,
           noveltyScore: novelty.score,
@@ -598,6 +610,39 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       compressed: compressResult.compressed,
       removed: compressResult.removed,
     };
+  }
+
+  async runConsolidation(
+    userId: string,
+    options: {
+      readonly limit?: number;
+      readonly maxAttempts?: number;
+    } = {},
+  ): Promise<ConsolidationRunResult> {
+    this.ensureInitialized();
+    const db = this.db!;
+    const limit = options.limit ?? 50;
+    const maxAttempts = options.maxAttempts ?? 3;
+    let processed = 0;
+    let done = 0;
+    let failed = 0;
+    let retried = 0;
+    const jobs: ConsolidationJob[] = [];
+
+    while (processed < limit) {
+      const job =
+        (await this.consolidation.runNext(db, 'abstraction', { userId, maxAttempts })) ??
+        (await this.consolidation.runNext(db, 'maintenance', { userId, maxAttempts }));
+      if (!job) break;
+
+      processed++;
+      jobs.push(job);
+      if (job.status === 'done') done++;
+      else if (job.status === 'failed') failed++;
+      else if (job.status === 'pending') retried++;
+    }
+
+    return { processed, done, failed, retried, jobs };
   }
 
   /**

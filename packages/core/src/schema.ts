@@ -609,6 +609,29 @@ CREATE INDEX IF NOT EXISTS idx_construct_exemplars_exemplar
   ON construct_exemplars(exemplar_memory_id);
 `;
 
+const SCHEMA_V17 = `
+CREATE TABLE IF NOT EXISTS consolidation_jobs (
+  id         TEXT PRIMARY KEY,
+  kind       TEXT NOT NULL,
+  payload    TEXT NOT NULL,
+  status     TEXT NOT NULL CHECK(status IN ('pending', 'running', 'done', 'failed')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  user_id    TEXT NOT NULL,
+  dedup_key  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_consolidation_jobs_pending
+  ON consolidation_jobs(user_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_consolidation_jobs_kind_status
+  ON consolidation_jobs(kind, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_consolidation_jobs_active_dedupe
+  ON consolidation_jobs(user_id, kind, dedup_key)
+  WHERE dedup_key IS NOT NULL AND status IN ('pending', 'running');
+`;
+
 // v0.11: SchemaOptions (vectorEnabled, embeddingDimension) removed
 // together with the HF embedder and sqlite-vec integration.
 export interface SchemaOptions {
@@ -684,7 +707,8 @@ export function ensureSchema(db: Database.Database, _options?: SchemaOptions): v
     db.exec(SCHEMA_V14);
     db.exec(SCHEMA_V15);
     applySchemaV16(db);
-    version = 16;
+    db.exec(SCHEMA_V17);
+    version = 17;
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(version);
     return;
   }
@@ -792,5 +816,10 @@ export function ensureSchema(db: Database.Database, _options?: SchemaOptions): v
   if (currentVersion < 16) {
     applySchemaV16(db);
     db.prepare('UPDATE schema_version SET version = ?').run(16);
+  }
+
+  if (currentVersion < 17) {
+    db.exec(SCHEMA_V17);
+    db.prepare('UPDATE schema_version SET version = ?').run(17);
   }
 }

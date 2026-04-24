@@ -514,7 +514,7 @@ POST /api/memories/mem-abc123/invalidate
 | `invalidate` | Mark a memory as invalidated |
 | `ingest` | Ingest conversation from JSONL transcript |
 | `working-memory` | Show working memory for a user |
-| `maintain` | Run maintenance (scores + tiers + compression) |
+| `maintain` | Run maintenance, or `--consolidate` for Layer B jobs |
 | `compress` | Run compression only |
 | `status` | Show database and integration status |
 | `reset` | Remove integrations |

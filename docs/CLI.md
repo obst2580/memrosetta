@@ -124,6 +124,7 @@ Store an atomic memory.
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `--user` | string | No | system username | User identifier |
+| `--consolidate` | flag | No | - | Process pending Layer B consolidation jobs only |
 | `--content` | string | Yes* | - | Memory content text |
 | `--type` | enum | Yes* | - | `fact`, `preference`, `decision`, `event` |
 | `--namespace` | string | No | - | Category or grouping label |
@@ -682,6 +683,9 @@ Run full maintenance for a user: recompute activation scores, update tiers, and 
 3. Compresses groups of cold memories with very low activation (< 0.1) into summary entries.
 4. Archives (marks not-latest) the original memories that were compressed.
 
+With `--consolidate`, maintain skips the normal activation/tier/compression path
+and processes pending `consolidation_jobs` for the selected user.
+
 **Examples:**
 
 Run maintenance:
@@ -712,6 +716,11 @@ Maintenance completed for user: alice
 Run maintenance for a user with few memories:
 ```bash
 memrosetta maintain --user newuser --format text
+```
+
+Run pending Layer B consolidation jobs:
+```bash
+memrosetta maintain --user alice --consolidate --format text
 ```
 
 Output (text):

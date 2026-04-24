@@ -57,11 +57,31 @@ describe('ensureSchema', () => {
     expect(indexNames).toContain('idx_memories_activation');
   });
 
-  it('sets schema version to 16 for fresh database', () => {
+  it('sets schema version to 17 for fresh database', () => {
     ensureSchema(db);
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(16);
+    expect(row.version).toBe(17);
+  });
+
+  it('creates consolidation_jobs at v17', () => {
+    ensureSchema(db);
+
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='consolidation_jobs'")
+      .all() as readonly { name: string }[];
+    expect(tables).toHaveLength(1);
+
+    const cols = db
+      .prepare('PRAGMA table_info(consolidation_jobs)')
+      .all() as readonly { name: string }[];
+    const colNames = cols.map((c) => c.name);
+    expect(colNames).toContain('id');
+    expect(colNames).toContain('kind');
+    expect(colNames).toContain('payload');
+    expect(colNames).toContain('status');
+    expect(colNames).toContain('user_id');
+    expect(colNames).toContain('dedup_key');
   });
 
   it('creates v7 brain-inspired tables (memory_coaccess + encoding context columns)', () => {
@@ -110,7 +130,7 @@ describe('ensureSchema', () => {
     expect(() => ensureSchema(db)).not.toThrow();
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(16);
+    expect(row.version).toBe(17);
   });
 
   it('FTS5 syncs with memories table on insert', () => {

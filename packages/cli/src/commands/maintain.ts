@@ -13,14 +13,34 @@ interface MaintainOptions {
 
 const VALID_GRANULARITIES = ['project-day', 'day', 'source'] as const;
 
+interface ConsolidationCapableEngine {
+  readonly runConsolidation: (userId: string) => Promise<{
+    readonly processed: number;
+    readonly done: number;
+    readonly failed: number;
+    readonly retried: number;
+    readonly jobs: readonly unknown[];
+  }>;
+}
+
 export async function run(options: MaintainOptions): Promise<void> {
   const { args, format, db, noEmbeddings } = options;
 
   const userId = optionalOption(args, '--user') ?? getDefaultUserId();
   const buildEpisodes = hasFlag(args, '--build-episodes');
+  const consolidate = hasFlag(args, '--consolidate');
   const dryRun = hasFlag(args, '--dry-run');
 
   const engine = await getEngine({ db, noEmbeddings });
+
+  if (buildEpisodes && consolidate) {
+    outputError(
+      '--build-episodes and --consolidate are mutually exclusive.',
+      format,
+    );
+    process.exitCode = 1;
+    return;
+  }
 
   // Dedicated backfill path. Episode materialization is independent
   // of the normal maintenance cycle (activation / tier / compress),
@@ -57,6 +77,23 @@ export async function run(options: MaintainOptions): Promise<void> {
           '\n(dry run — nothing was written. Re-run without --dry-run to apply.)\n',
         );
       }
+      return;
+    }
+
+    output({ userId, ...result }, format);
+    return;
+  }
+
+  if (consolidate) {
+    const result = await (engine as unknown as ConsolidationCapableEngine)
+      .runConsolidation(userId);
+
+    if (format === 'text') {
+      process.stdout.write(`Consolidation completed for user: ${userId}\n`);
+      process.stdout.write(`  Jobs processed: ${result.processed}\n`);
+      process.stdout.write(`  Jobs done:      ${result.done}\n`);
+      process.stdout.write(`  Jobs retried:   ${result.retried}\n`);
+      process.stdout.write(`  Jobs failed:    ${result.failed}\n`);
       return;
     }
 

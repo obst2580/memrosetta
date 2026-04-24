@@ -124,6 +124,7 @@ memrosetta init --claude-code --cursor
 | 옵션 | 타입 | 필수 | 기본값 | 설명 |
 |------|------|------|--------|------|
 | `--user` | string | 아니오 | 시스템 사용자명 | 사용자 식별자 |
+| `--consolidate` | flag | 아니오 | - | pending Layer B consolidation job만 처리 |
 | `--content` | string | 예* | - | 기억 내용 텍스트 |
 | `--type` | enum | 예* | - | `fact`, `preference`, `decision`, `event` |
 | `--namespace` | string | 아니오 | - | 카테고리 또는 그룹 라벨 |
@@ -677,6 +678,9 @@ No working memory found.
 3. 매우 낮은 활성화(< 0.1)의 Cold 기억 그룹을 요약 항목으로 압축합니다.
 4. 압축된 원본 기억을 not-latest로 표시(보관)합니다.
 
+`--consolidate`를 사용하면 일반 활성화/계층/압축 경로를 건너뛰고
+선택한 사용자의 pending `consolidation_jobs`만 처리합니다.
+
 **예제:**
 
 유지보수 실행:
@@ -707,6 +711,11 @@ Maintenance completed for user: alice
 기억이 적은 사용자의 유지보수:
 ```bash
 memrosetta maintain --user newuser --format text
+```
+
+pending Layer B consolidation job 실행:
+```bash
+memrosetta maintain --user alice --consolidate --format text
 ```
 
 출력 (text):

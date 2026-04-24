@@ -23,7 +23,7 @@ Commands:
   invalidate       Mark a memory as invalidated
   feedback         Record feedback on a memory (helpful/not helpful)
   working-memory   Show working memory for a user
-  maintain         Run maintenance (recompute scores, update tiers, compress)
+  maintain         Run maintenance (or --consolidate for Layer B jobs)
   compress         Run compression only
   dedupe           Collapse exact duplicates (invalidate losers + relate)
   update           Update to latest version
@@ -82,8 +82,9 @@ Examples:
   memrosetta reset --all                   # Remove all integrations
   memrosetta store --user obst --content "Prefers TypeScript" --type preference
   memrosetta search --user obst --query "language preference" --format text
-  memrosetta recall --query "code review prompt" --intent reuse --language typescript
-  memrosetta sync enable --server https://your-sync.example.com
+	  memrosetta recall --query "code review prompt" --intent reuse --language typescript
+	  memrosetta maintain --consolidate --format text
+	  memrosetta sync enable --server https://your-sync.example.com
   memrosetta sync status --format text
 `;
 

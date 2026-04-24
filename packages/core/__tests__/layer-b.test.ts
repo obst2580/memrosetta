@@ -301,7 +301,7 @@ describe('Layer B scaffolding (v4 flag-gated components)', () => {
 
   describe('ConsolidationQueue', () => {
     it('enqueues abstraction jobs into the abstraction subqueue', () => {
-      const q = new ConsolidationQueue();
+      const q = new ConsolidationQueue(db);
       q.enqueue({ kind: 'gist_refinement', payload: { memoryId: 'm1' } });
       q.enqueue({ kind: 'novelty_rescoring', payload: {} });
       expect(q.pending('abstraction').length).toBe(1);
@@ -310,30 +310,30 @@ describe('Layer B scaffolding (v4 flag-gated components)', () => {
     });
 
     it('runNext executes registered handler and marks completed', async () => {
-      const q = new ConsolidationQueue();
+      const q = new ConsolidationQueue(db);
       const calls: string[] = [];
       q.register('gist_refinement', async (_db, job) => {
         calls.push(job.id);
       });
       q.enqueue({ kind: 'gist_refinement', payload: { memoryId: 'm1' } });
       const done = await q.runNext(db, 'abstraction');
-      expect(done?.status).toBe('completed');
+      expect(done?.status).toBe('done');
       expect(calls).toHaveLength(1);
     });
 
     it('runNext marks job failed when handler throws', async () => {
-      const q = new ConsolidationQueue();
+      const q = new ConsolidationQueue(db);
       q.register('gist_refinement', async () => {
         throw new Error('boom');
       });
       q.enqueue({ kind: 'gist_refinement', payload: {} });
-      const failed = await q.runNext(db, 'abstraction');
+      const failed = await q.runNext(db, 'abstraction', { maxAttempts: 1 });
       expect(failed?.status).toBe('failed');
       expect(failed?.lastError).toBe('boom');
     });
 
     it('runNext fails gracefully when no handler registered', async () => {
-      const q = new ConsolidationQueue();
+      const q = new ConsolidationQueue(db);
       q.enqueue({ kind: 'prototype_induction', payload: {} });
       const result = await q.runNext(db, 'abstraction');
       expect(result?.status).toBe('failed');
@@ -341,7 +341,7 @@ describe('Layer B scaffolding (v4 flag-gated components)', () => {
     });
 
     it('runNext returns null when no pending job in queue', async () => {
-      const q = new ConsolidationQueue();
+      const q = new ConsolidationQueue(db);
       expect(await q.runNext(db, 'abstraction')).toBeNull();
     });
   });
