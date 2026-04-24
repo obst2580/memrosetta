@@ -24,6 +24,7 @@ import {
   type PreparedStatements,
 } from './store.js';
 import { searchMemories } from './search.js';
+import { getSourceAttestations } from './source.js';
 import { recordCoAccess } from './coaccess.js';
 import {
   createRelationStatements,
@@ -354,7 +355,15 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       recordCoAccess(this.db!, topIds);
     }
 
-    return response;
+    if (!query.includeSource) return response;
+
+    return {
+      ...response,
+      results: response.results.map((result) => ({
+        ...result,
+        sources: getSourceAttestations(this.stmts!.source, result.memory.memoryId),
+      })),
+    };
   }
 
   async relate(

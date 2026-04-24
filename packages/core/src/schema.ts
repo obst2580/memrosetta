@@ -198,7 +198,7 @@ ALTER TABLE memory_relations_v8 RENAME TO memory_relations;
 const SCHEMA_V9 = `
 CREATE TABLE IF NOT EXISTS source_attestations (
   memory_id        TEXT NOT NULL,
-  source_kind      TEXT NOT NULL CHECK(source_kind IN ('chat', 'document', 'observation', 'reflection', 'tool_output')),
+  source_kind      TEXT NOT NULL,
   source_ref       TEXT NOT NULL,
   source_speaker   TEXT,
   confidence       REAL,
@@ -206,6 +206,40 @@ CREATE TABLE IF NOT EXISTS source_attestations (
   PRIMARY KEY (memory_id, source_kind, source_ref),
   FOREIGN KEY (memory_id) REFERENCES memories(memory_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_source_attestations_memory
+  ON source_attestations(memory_id);
+CREATE INDEX IF NOT EXISTS idx_source_attestations_ref
+  ON source_attestations(source_kind, source_ref);
+`;
+
+/**
+ * v19: Source Monitoring labels are intentionally open-ended.
+ *
+ * v9 used a narrow CHECK for provenance shape labels. B-step source
+ * monitoring needs client/tool labels (`mcp`, `cli`, `codex`, etc.)
+ * without tightening DB compatibility, so we rebuild the table without
+ * a source_kind CHECK and keep the same PK/FK/indexes.
+ */
+const SCHEMA_V19 = `
+CREATE TABLE source_attestations_v19 (
+  memory_id        TEXT NOT NULL,
+  source_kind      TEXT NOT NULL,
+  source_ref       TEXT NOT NULL,
+  source_speaker   TEXT,
+  confidence       REAL,
+  attested_at      TEXT NOT NULL,
+  PRIMARY KEY (memory_id, source_kind, source_ref),
+  FOREIGN KEY (memory_id) REFERENCES memories(memory_id)
+);
+
+INSERT INTO source_attestations_v19
+  (memory_id, source_kind, source_ref, source_speaker, confidence, attested_at)
+SELECT memory_id, source_kind, source_ref, source_speaker, confidence, attested_at
+FROM source_attestations;
+
+DROP TABLE source_attestations;
+ALTER TABLE source_attestations_v19 RENAME TO source_attestations;
 
 CREATE INDEX IF NOT EXISTS idx_source_attestations_memory
   ON source_attestations(memory_id);
@@ -737,7 +771,8 @@ export function ensureSchema(db: Database.Database, _options?: SchemaOptions): v
     applySchemaV16(db);
     db.exec(SCHEMA_V17);
     db.exec(SCHEMA_V18);
-    version = 18;
+    db.exec(SCHEMA_V19);
+    version = 19;
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(version);
     return;
   }
@@ -855,5 +890,10 @@ export function ensureSchema(db: Database.Database, _options?: SchemaOptions): v
   if (currentVersion < 18) {
     db.exec(SCHEMA_V18);
     db.prepare('UPDATE schema_version SET version = ?').run(18);
+  }
+
+  if (currentVersion < 19) {
+    db.exec(SCHEMA_V19);
+    db.prepare('UPDATE schema_version SET version = ?').run(19);
   }
 }

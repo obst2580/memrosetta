@@ -1,4 +1,4 @@
-import type { Memory, MemoryType, MemoryState } from './memory.js';
+import type { Memory, MemoryType, MemoryState, SourceAttestation } from './memory.js';
 
 export interface SearchQuery {
   readonly userId: string;
@@ -6,6 +6,7 @@ export interface SearchQuery {
   readonly namespace?: string;
   readonly limit?: number;
   readonly filters?: SearchFilters;
+  readonly includeSource?: boolean;
 }
 
 export interface SearchFilters {
@@ -36,6 +37,7 @@ export interface SearchResult {
   readonly memory: Memory;
   readonly score: number;
   readonly matchType: MatchType;
+  readonly sources?: readonly SourceAttestation[];
 }
 
 export interface SearchResponse {

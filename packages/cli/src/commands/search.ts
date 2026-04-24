@@ -1,7 +1,7 @@
 import type { MemoryType } from '@memrosetta/types';
 import { getEngine } from '../engine.js';
 import { output, outputError, type OutputFormat } from '../output.js';
-import { requireOption, optionalOption } from '../parser.js';
+import { requireOption, optionalOption, hasFlag } from '../parser.js';
 import { getDefaultUserId } from '../hooks/config.js';
 
 interface SearchOptions {
@@ -20,6 +20,7 @@ export async function run(options: SearchOptions): Promise<void> {
   const namespace = optionalOption(args, '--namespace');
   const typesRaw = optionalOption(args, '--types');
   const minConfidenceRaw = optionalOption(args, '--min-confidence');
+  const includeSource = hasFlag(args, '--include-source');
 
   const limit = limitRaw ? parseInt(limitRaw, 10) : 5;
   if (isNaN(limit) || limit < 1) {
@@ -42,6 +43,7 @@ export async function run(options: SearchOptions): Promise<void> {
     query,
     namespace,
     limit,
+    ...(includeSource ? { includeSource: true } : {}),
     filters: {
       memoryTypes,
       minConfidence,

@@ -23,6 +23,10 @@ interface SearchResultItem {
     readonly learnedAt: string;
   };
   readonly score: number;
+  readonly sources?: readonly {
+    readonly sourceKind: string;
+    readonly sourceRef: string;
+  }[];
 }
 
 interface SearchResponseLike {
@@ -74,8 +78,12 @@ function formatText(data: unknown): void {
       const score = result.score.toFixed(2);
       const date = formatDate(result.memory.learnedAt);
       const type = result.memory.memoryType;
+      const sources =
+        result.sources && result.sources.length > 0
+          ? ` sources=${result.sources.map((s) => `${s.sourceKind}:${s.sourceRef}`).join(',')}`
+          : '';
       process.stdout.write(
-        `[${score}] ${result.memory.content} (${type}, ${date})\n`,
+        `[${score}] ${result.memory.content} (${type}, ${date})${sources}\n`,
       );
     }
     process.stdout.write(

@@ -161,4 +161,18 @@ describe('search command', () => {
       }),
     );
   });
+
+  it('should pass includeSource when requested', async () => {
+    await run({
+      args: ['--user', 'obst', '--query', 'test', '--include-source'],
+      format: 'json',
+      noEmbeddings: true,
+    });
+
+    expect(mockSearch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        includeSource: true,
+      }),
+    );
+  });
 });

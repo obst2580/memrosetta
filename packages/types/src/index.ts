@@ -12,6 +12,12 @@ export type {
   MemoryAliasDerivation,
   MemoryCueInput,
 } from './memory.js';
+export {
+  WELL_KNOWN_SOURCE_KINDS,
+} from './source.js';
+export type {
+  WellKnownSourceKind,
+} from './source.js';
 
 export type {
   EpisodeBoundaryReason,

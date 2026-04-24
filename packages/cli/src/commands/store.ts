@@ -1,4 +1,4 @@
-import type { MemoryInput, MemoryType } from '@memrosetta/types';
+import type { MemoryInput, MemoryType, SourceAttestation } from '@memrosetta/types';
 import { getEngine, resolveDbPath } from '../engine.js';
 import { output, outputError, type OutputFormat } from '../output.js';
 import { requireOption, optionalOption, hasFlag } from '../parser.js';
@@ -20,6 +20,24 @@ async function readStdin(): Promise<string> {
     chunks.push(chunk as Buffer);
   }
   return Buffer.concat(chunks).toString('utf-8').trim();
+}
+
+function parseSources(value: unknown): readonly SourceAttestation[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .filter((src): src is Record<string, unknown> => typeof src === 'object' && src !== null)
+    .map((src) => ({
+      sourceKind: String(src.sourceKind ?? src.source_kind ?? 'cli'),
+      sourceRef: String(src.sourceRef ?? src.source_ref ?? 'cli-store'),
+      ...(src.sourceSpeaker || src.source_speaker
+        ? { sourceSpeaker: String(src.sourceSpeaker ?? src.source_speaker) }
+        : {}),
+      ...(typeof src.confidence === 'number' ? { confidence: src.confidence } : {}),
+    }));
+}
+
+function defaultSource(sourceKind: string | undefined, sourceRef: string | undefined): readonly SourceAttestation[] {
+  return [{ sourceKind: sourceKind ?? 'cli', sourceRef: sourceRef ?? 'cli-store' }];
 }
 
 export async function run(options: StoreOptions): Promise<void> {
@@ -52,6 +70,16 @@ export async function run(options: StoreOptions): Promise<void> {
             ? parsed.confidence
             : undefined,
         sourceId: parsed.sourceId ? String(parsed.sourceId) : undefined,
+        sources:
+          parseSources(parsed.sources) ??
+          defaultSource(
+            parsed.sourceKind || parsed.source_kind
+              ? String(parsed.sourceKind ?? parsed.source_kind)
+              : undefined,
+            parsed.sourceRef || parsed.source_ref || parsed.sourceId
+              ? String(parsed.sourceRef ?? parsed.source_ref ?? parsed.sourceId)
+              : undefined,
+          ),
       };
     } catch {
       outputError('Invalid JSON from stdin', format);
@@ -76,6 +104,7 @@ export async function run(options: StoreOptions): Promise<void> {
     const keywordsRaw = optionalOption(args, '--keywords');
     const confidenceRaw = optionalOption(args, '--confidence');
     const sourceId = optionalOption(args, '--source-id');
+    const sourceKind = optionalOption(args, '--source-kind');
     const eventStart = optionalOption(args, '--event-start');
     const eventEnd = optionalOption(args, '--event-end');
 
@@ -87,6 +116,7 @@ export async function run(options: StoreOptions): Promise<void> {
       keywords: keywordsRaw ? keywordsRaw.split(',') : undefined,
       confidence: confidenceRaw ? parseFloat(confidenceRaw) : undefined,
       sourceId,
+      sources: defaultSource(sourceKind, sourceId),
       eventDateStart: eventStart,
       eventDateEnd: eventEnd,
     };

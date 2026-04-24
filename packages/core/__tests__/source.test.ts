@@ -136,22 +136,19 @@ describe('source_attestations (v4 reconstructive-memory)', () => {
       expect(countSourceAttestations(stmts.source, memory.memoryId)).toBe(1);
     });
 
-    it('rejects invalid source_kind via CHECK constraint (production path)', () => {
-      // Post-Codex-review: the helper now uses targeted ON CONFLICT DO NOTHING
-      // so only the actual uniqueness tuple is treated as idempotent. CHECK
-      // violations (and FK violations) are surfaced instead of silently dropped.
+    it('accepts well-known client source labels without a DB CHECK gate', () => {
       const memory = storeMemory(db, stmts, baseInput);
 
-      expect(() => {
+      expect(() =>
         stmts.source.insertAttestation.run(
           memory.memoryId,
-          'invalid_kind',
+          'mcp',
           'ref-1',
           null,
           null,
           new Date().toISOString(),
-        );
-      }).toThrow();
+        ),
+      ).not.toThrow();
     });
   });
 

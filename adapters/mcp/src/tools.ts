@@ -4,7 +4,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import type { IMemoryEngine, RelationType } from '@memrosetta/types';
+import type { IMemoryEngine, RelationType, SourceAttestation } from '@memrosetta/types';
 import type { SyncRecorder } from './sync-recorder.js';
 import { z } from 'zod';
 
@@ -15,6 +15,7 @@ import { z } from 'zod';
  * even when the OS username does not match the user's chosen identity.
  */
 let canonicalUserId: string = userInfo().username;
+let defaultSourceKind = 'mcp';
 
 function getDefaultUserId(): string {
   return canonicalUserId;
@@ -31,12 +32,28 @@ const storeSchema = z.object({
   keywords: z.array(z.string().max(100)).max(50).optional(),
   namespace: z.string().max(256).optional(),
   confidence: z.number().min(0).max(1).optional(),
+  source_kind: z.string().min(1).max(100).optional(),
+  sourceKind: z.string().min(1).max(100).optional(),
+  source_ref: z.string().min(1).max(512).optional(),
+  sourceRef: z.string().min(1).max(512).optional(),
+  sources: z
+    .array(
+      z.object({
+        sourceKind: z.string().min(1).max(100),
+        sourceRef: z.string().min(1).max(512),
+        sourceSpeaker: z.string().max(100).optional(),
+        confidence: z.number().min(0).max(1).optional(),
+      }),
+    )
+    .max(10)
+    .optional(),
 });
 
 const searchSchema = z.object({
   userId: z.string().min(1).max(256).optional(),
   query: z.string().min(1).max(1_000),
   limit: z.number().int().min(1).max(100).optional(),
+  includeSource: z.boolean().optional(),
 });
 
 const relateSchema = z.object({
@@ -358,7 +375,7 @@ export function registerTools(
   server: Server,
   engine: IMemoryEngine,
   syncRecorder?: SyncRecorder,
-  options: { readonly canonicalUserId?: string } = {},
+  options: { readonly canonicalUserId?: string; readonly sourceKind?: string } = {},
 ): void {
   // Pin the canonical user for this server instance. All tool handlers
   // default to this id when the caller did not supply `userId`
@@ -366,6 +383,9 @@ export function registerTools(
   // where the OS username differs from the user's chosen id.
   if (options.canonicalUserId && options.canonicalUserId.trim().length > 0) {
     canonicalUserId = options.canonicalUserId.trim();
+  }
+  if (options.sourceKind && options.sourceKind.trim().length > 0) {
+    defaultSourceKind = options.sourceKind.trim();
   }
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -395,6 +415,13 @@ export function registerTools(
   });
 }
 
+function sourcesForStore(validated: z.infer<typeof storeSchema>): readonly SourceAttestation[] {
+  if (validated.sources && validated.sources.length > 0) return validated.sources;
+  const sourceKind = validated.source_kind ?? validated.sourceKind ?? defaultSourceKind;
+  const sourceRef = validated.source_ref ?? validated.sourceRef ?? 'memrosetta_store';
+  return [{ sourceKind, sourceRef }];
+}
+
 /**
  * Dispatch a tool call to the appropriate engine method.
  * Exported for direct testing without MCP server infrastructure.
@@ -415,6 +442,7 @@ export async function handleToolCall(
         keywords: validated.keywords,
         namespace: validated.namespace,
         confidence: validated.confidence,
+        sources: sourcesForStore(validated),
       });
       syncRecorder?.recordMemoryCreated(memory);
       return {
@@ -428,8 +456,14 @@ export async function handleToolCall(
         userId: validated.userId ?? getDefaultUserId(),
         query: validated.query,
         limit: validated.limit ?? 5,
+        ...(validated.includeSource ? { includeSource: true } : {}),
         filters: { onlyLatest: true },
       });
+      if (validated.includeSource) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(response) }],
+        };
+      }
       const text = response.results
         .map(
           (r) =>

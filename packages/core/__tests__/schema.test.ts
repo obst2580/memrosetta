@@ -57,11 +57,11 @@ describe('ensureSchema', () => {
     expect(indexNames).toContain('idx_memories_activation');
   });
 
-  it('sets schema version to 18 for fresh database', () => {
+  it('sets schema version to 19 for fresh database', () => {
     ensureSchema(db);
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(18);
+    expect(row.version).toBe(19);
   });
 
   it('creates consolidation_jobs at v17', () => {
@@ -130,7 +130,23 @@ describe('ensureSchema', () => {
     expect(() => ensureSchema(db)).not.toThrow();
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(18);
+    expect(row.version).toBe(19);
+  });
+
+  it('does not CHECK-gate source_kind labels', () => {
+    ensureSchema(db);
+
+    db.prepare(`
+      INSERT INTO memories (memory_id, user_id, memory_type, content, learned_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run('mem-source', 'user-1', 'fact', 'Memory A', '2025-01-01T00:00:00.000Z');
+
+    expect(() => {
+      db.prepare(`
+        INSERT INTO source_attestations (memory_id, source_kind, source_ref, attested_at)
+        VALUES (?, ?, ?, ?)
+      `).run('mem-source', 'mcp', 'memrosetta_store', '2025-01-01T00:00:00.000Z');
+    }).not.toThrow();
   });
 
   it('FTS5 syncs with memories table on insert', () => {

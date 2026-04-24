@@ -229,7 +229,10 @@ async function main(): Promise<void> {
       ? config.syncUserId.trim()
       : (process.env.USER ?? process.env.USERNAME ?? 'unknown');
 
-  registerTools(server, engine, syncRecorder, { canonicalUserId });
+  registerTools(server, engine, syncRecorder, {
+    canonicalUserId,
+    sourceKind: process.env.MEMROSETTA_SOURCE_KIND,
+  });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

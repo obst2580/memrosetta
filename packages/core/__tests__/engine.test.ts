@@ -243,6 +243,36 @@ describe('SqliteMemoryEngine', () => {
     });
   });
 
+  describe('search with source hydration', () => {
+    it('includes source attestations only when requested', async () => {
+      await engine.store(
+        makeInput({
+          content: 'Source monitoring is exposed in retrieval',
+          keywords: ['source'],
+          sources: [{ sourceKind: 'mcp', sourceRef: 'memrosetta_store' }],
+        }),
+      );
+
+      const withoutSources = await engine.search({
+        userId: 'user-1',
+        query: 'source monitoring',
+      });
+      const withSources = await engine.search({
+        userId: 'user-1',
+        query: 'source monitoring',
+        includeSource: true,
+      });
+
+      expect(withoutSources.results[0]).not.toHaveProperty('sources');
+      expect(withSources.results[0].sources).toEqual([
+        expect.objectContaining({
+          sourceKind: 'mcp',
+          sourceRef: 'memrosetta_store',
+        }),
+      ]);
+    });
+  });
+
   // -----------------------------------------------------------------------
   // Relate
   // -----------------------------------------------------------------------

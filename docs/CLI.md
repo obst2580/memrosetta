@@ -131,6 +131,7 @@ Store an atomic memory.
 | `--keywords` | string | No | - | Comma-separated search keywords |
 | `--confidence` | number | No | - | Confidence score (0.0 - 1.0) |
 | `--source-id` | string | No | - | Source identifier for provenance tracking |
+| `--source-kind` | string | No | `cli` | Recommended well-known source label (`cli`, `codex`, `mcp`, etc.) |
 | `--event-start` | string | No | - | Event start date (ISO 8601) |
 | `--event-end` | string | No | - | Event end date (ISO 8601) |
 | `--stdin` | flag | No | - | Read JSON input from stdin instead of flags |
@@ -219,6 +220,7 @@ Search across memories using hybrid retrieval (FTS5 + vector + RRF).
 | `--namespace` | string | No | - | Filter by namespace |
 | `--types` | string | No | - | Comma-separated memory type filter (e.g., `fact,decision`) |
 | `--min-confidence` | number | No | - | Minimum confidence threshold (0.0 - 1.0) |
+| `--include-source` | flag | No | - | Include source attestations in search results |
 
 **Examples:**
 

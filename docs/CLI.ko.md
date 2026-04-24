@@ -131,6 +131,7 @@ memrosetta init --claude-code --cursor
 | `--keywords` | string | 아니오 | - | 쉼표로 구분된 검색 키워드 |
 | `--confidence` | number | 아니오 | - | 신뢰도 점수 (0.0 - 1.0) |
 | `--source-id` | string | 아니오 | - | 출처 추적을 위한 소스 식별자 |
+| `--source-kind` | string | 아니오 | `cli` | 권장 well-known source label (`cli`, `codex`, `mcp` 등) |
 | `--event-start` | string | 아니오 | - | 이벤트 시작 날짜 (ISO 8601) |
 | `--event-end` | string | 아니오 | - | 이벤트 종료 날짜 (ISO 8601) |
 | `--stdin` | flag | 아니오 | - | 플래그 대신 stdin에서 JSON 입력 읽기 |
@@ -219,6 +220,7 @@ memrosetta store --user alice --content "스프린트 12 회고 완료" --type e
 | `--namespace` | string | 아니오 | - | 네임스페이스로 필터링 |
 | `--types` | string | 아니오 | - | 쉼표로 구분된 기억 유형 필터 (예: `fact,decision`) |
 | `--min-confidence` | number | 아니오 | - | 최소 신뢰도 임계값 (0.0 - 1.0) |
+| `--include-source` | flag | 아니오 | - | 검색 결과에 source attestation 포함 |
 
 **예제:**
 

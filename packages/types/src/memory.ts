@@ -1,4 +1,5 @@
 import type { CuePolarity, FeatureFamily } from './hippocampal.js';
+import type { WellKnownSourceKind } from './source.js';
 
 export type MemoryType = 'fact' | 'preference' | 'decision' | 'event';
 
@@ -62,7 +63,9 @@ export type SourceKind =
   | 'document'
   | 'observation'
   | 'reflection'
-  | 'tool_output';
+  | 'tool_output'
+  | WellKnownSourceKind
+  | (string & Record<never, never>);
 
 /**
  * Structured provenance record for a memory (v4 reconstructive-memory spec).

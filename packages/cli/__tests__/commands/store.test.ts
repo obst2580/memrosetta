@@ -64,6 +64,11 @@ describe('store command', () => {
     expect(parsed.memoryId).toBe('mem-test-123');
     expect(parsed.userId).toBe('obst');
     expect(parsed.content).toBe('test content');
+    expect(mockStore).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sources: [{ sourceKind: 'cli', sourceRef: 'cli-store' }],
+      }),
+    );
   });
 
   it('should reject invalid memory type', async () => {
@@ -121,6 +126,32 @@ describe('store command', () => {
         memoryType: 'fact',
         keywords: ['ts', 'project'],
         namespace: 'work',
+      }),
+    );
+  });
+
+  it('should preserve explicit source kind over CLI default', async () => {
+    await run({
+      args: [
+        '--user',
+        'obst',
+        '--content',
+        'test content',
+        '--type',
+        'fact',
+        '--source-kind',
+        'codex',
+        '--source-id',
+        'turn-1',
+      ],
+      format: 'json',
+      noEmbeddings: true,
+    });
+
+    expect(mockStore).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'turn-1',
+        sources: [{ sourceKind: 'codex', sourceRef: 'turn-1' }],
       }),
     );
   });

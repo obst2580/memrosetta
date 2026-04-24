@@ -221,6 +221,7 @@ describe('MCP tools', () => {
           keywords: ['test'],
           namespace: 'testing',
           confidence: 0.9,
+          sources: [{ sourceKind: 'mcp', sourceRef: 'memrosetta_store' }],
         });
         expect(result.isError).toBeUndefined();
         expect(result.content[0].type).toBe('text');
@@ -243,7 +244,24 @@ describe('MCP tools', () => {
           keywords: undefined,
           namespace: undefined,
           confidence: undefined,
+          sources: [{ sourceKind: 'mcp', sourceRef: 'memrosetta_store' }],
         });
+      });
+
+      it('preserves explicit source_kind over MCP default', async () => {
+        await handleToolCall(engine, 'memrosetta_store', {
+          userId: 'user-1',
+          content: 'Codex memory',
+          memoryType: 'fact',
+          source_kind: 'codex',
+          source_ref: 'turn-1',
+        });
+
+        expect(engine.store).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sources: [{ sourceKind: 'codex', sourceRef: 'turn-1' }],
+          }),
+        );
       });
     });
 
@@ -263,6 +281,35 @@ describe('MCP tools', () => {
         });
         expect(result.content[0].text).toContain('0.95');
         expect(result.content[0].text).toContain('TypeScript');
+      });
+
+      it('returns JSON with sources when includeSource is true', async () => {
+        (engine.search as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+          results: [
+            {
+              memory: createMockMemory(),
+              score: 0.95,
+              matchType: 'hybrid' as const,
+              sources: [{ sourceKind: 'mcp', sourceRef: 'memrosetta_store' }],
+            },
+          ],
+          totalCount: 1,
+          queryTimeMs: 5,
+        });
+
+        const result = await handleToolCall(engine, 'memrosetta_search', {
+          userId: 'user-1',
+          query: 'typescript',
+          includeSource: true,
+        });
+
+        expect(engine.search).toHaveBeenCalledWith(
+          expect.objectContaining({ includeSource: true }),
+        );
+        const parsed = JSON.parse(result.content[0].text);
+        expect(parsed.results[0].sources).toEqual([
+          { sourceKind: 'mcp', sourceRef: 'memrosetta_store' },
+        ]);
       });
 
       it('defaults limit to 5', async () => {
