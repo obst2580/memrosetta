@@ -61,6 +61,20 @@ describe('Persistent ConsolidationQueue', () => {
     expect(q.pending('abstraction')).toHaveLength(1);
   });
 
+  it('persists relation_discovery jobs in the maintenance queue', () => {
+    const q = new ConsolidationQueue(db);
+    q.enqueue({
+      userId: 'u1',
+      kind: 'relation_discovery',
+      dedupKey: 'relation_discovery:u1',
+      payload: { recentDays: 7, threshold: 2 },
+    });
+
+    const pending = q.pending('maintenance');
+    expect(pending).toHaveLength(1);
+    expect(pending[0].kind).toBe('relation_discovery');
+  });
+
   it('retries failed jobs up to max attempts', async () => {
     const q = new ConsolidationQueue(db);
     q.register('gist_refinement', async () => {

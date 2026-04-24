@@ -134,3 +134,11 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+## MemRosetta Analysis Vault
+
+MemRosetta 관련 분석, 디자인 리뷰, 비교 연구, 세션 정리는 repo `docs/`나 `/tmp`에 저장하지 말고 다음 Obsidian vault에 저장한다:
+
+`/Users/obst2580/Documents/obst/개인프로젝트/memrosetta/`
+
+파일명은 `YYYY-MM-DD-HHMM-<topic>.md` 형식을 사용한다. repo `docs/`는 출시된 spec 또는 공개 문서 전용이다.

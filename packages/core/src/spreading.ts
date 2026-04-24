@@ -17,9 +17,13 @@
  *
  * Relation type weights (tunable):
  *   supports:    +0.35
+ *   decided:     +0.30
+ *   prefers:     +0.28
+ *   uses:        +0.25
  *   extends:     +0.25
  *   derives:     +0.20
  *   updates:     +0.10
+ *   invalidates: -0.35
  *   contradicts: -0.40  (negative = suppression)
  *
  * Hop decay:
@@ -34,9 +38,13 @@ import type Database from 'better-sqlite3';
 
 const RELATION_WEIGHTS: Record<string, number> = {
   supports: 0.35,
+  decided: 0.30,
+  prefers: 0.28,
+  uses: 0.25,
   extends: 0.25,
   derives: 0.20,
   updates: 0.10,
+  invalidates: -0.35,
   contradicts: -0.40,
 };
 

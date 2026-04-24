@@ -57,11 +57,11 @@ describe('ensureSchema', () => {
     expect(indexNames).toContain('idx_memories_activation');
   });
 
-  it('sets schema version to 17 for fresh database', () => {
+  it('sets schema version to 18 for fresh database', () => {
     ensureSchema(db);
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(17);
+    expect(row.version).toBe(18);
   });
 
   it('creates consolidation_jobs at v17', () => {
@@ -130,7 +130,7 @@ describe('ensureSchema', () => {
     expect(() => ensureSchema(db)).not.toThrow();
 
     const row = db.prepare('SELECT version FROM schema_version').get() as { version: number };
-    expect(row.version).toBe(17);
+    expect(row.version).toBe(18);
   });
 
   it('FTS5 syncs with memories table on insert', () => {
@@ -214,6 +214,24 @@ describe('ensureSchema', () => {
         VALUES (?, ?, ?, ?)
       `).run('mem-a', 'mem-b', 'invalid_relation', '2025-01-01T00:00:00.000Z');
     }).toThrow();
+  });
+
+  it('relation_type CHECK constraint accepts deterministic graph relation types', () => {
+    ensureSchema(db);
+
+    const insert = db.prepare(`
+      INSERT INTO memories (memory_id, user_id, memory_type, content, learned_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    insert.run('mem-a', 'user-1', 'fact', 'Memory A', '2025-01-01T00:00:00.000Z');
+    insert.run('mem-b', 'user-1', 'fact', 'Memory B', '2025-01-01T00:00:00.000Z');
+
+    expect(() => {
+      db.prepare(`
+        INSERT INTO memory_relations (src_memory_id, dst_memory_id, relation_type, created_at)
+        VALUES (?, ?, ?, ?)
+      `).run('mem-a', 'mem-b', 'uses', '2025-01-01T00:00:00.000Z');
+    }).not.toThrow();
   });
 
   // v0.11: embedding_dimension column removed along with vec_memories

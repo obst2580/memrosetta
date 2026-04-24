@@ -13,9 +13,9 @@ import { nowIso } from './utils.js';
  *     or heavy heuristics. Run only on close-episode / idle / nightly
  *     triggers.
  *
- *   - Maintenance queue: novelty rescoring, Hebbian reinforcement,
- *     stale construct detection, cue-alias learning, pattern-separation
- *     cleanup. Cheap, can run every hour.
+ *   - Maintenance queue: novelty rescoring, relation discovery,
+ *     Hebbian reinforcement, stale construct detection, cue-alias
+ *     learning, pattern-separation cleanup. Cheap, can run every hour.
  *
  * Layer B flag-gates enqueue and explicit maintenance execution.
  * This module provides the persistent queue, job-shape types, and
@@ -33,7 +33,8 @@ export type MaintenanceJobKind =
   | 'hebbian_reinforcement'
   | 'stale_construct_detection'
   | 'cue_alias_learning'
-  | 'pattern_separation_cleanup';
+  | 'pattern_separation_cleanup'
+  | 'relation_discovery';
 
 export type JobKind = AbstractionJobKind | MaintenanceJobKind;
 
@@ -299,7 +300,8 @@ function isMaintenanceKind(kind: JobKind): kind is MaintenanceJobKind {
     kind === 'hebbian_reinforcement' ||
     kind === 'stale_construct_detection' ||
     kind === 'cue_alias_learning' ||
-    kind === 'pattern_separation_cleanup'
+    kind === 'pattern_separation_cleanup' ||
+    kind === 'relation_discovery'
   );
 }
 
@@ -325,6 +327,7 @@ function queueKinds(queue: 'abstraction' | 'maintenance'): readonly JobKind[] {
         'stale_construct_detection',
         'cue_alias_learning',
         'pattern_separation_cleanup',
+        'relation_discovery',
       ]
     : [
         'gist_refinement',

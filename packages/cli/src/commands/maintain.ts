@@ -19,6 +19,8 @@ interface ConsolidationCapableEngine {
     readonly done: number;
     readonly failed: number;
     readonly retried: number;
+    readonly orphanRecent: number;
+    readonly orphanRatio: number;
     readonly jobs: readonly unknown[];
   }>;
 }
@@ -94,10 +96,17 @@ export async function run(options: MaintainOptions): Promise<void> {
       process.stdout.write(`  Jobs done:      ${result.done}\n`);
       process.stdout.write(`  Jobs retried:   ${result.retried}\n`);
       process.stdout.write(`  Jobs failed:    ${result.failed}\n`);
+      process.stdout.write(`  Orphan recent:  ${result.orphanRecent}\n`);
+      process.stdout.write(`  Orphan ratio:   ${result.orphanRatio.toFixed(3)}\n`);
       return;
     }
 
-    output({ userId, ...result }, format);
+    output({
+      userId,
+      ...result,
+      orphan_recent: result.orphanRecent,
+      orphan_ratio: result.orphanRatio,
+    }, format);
     return;
   }
 

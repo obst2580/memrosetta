@@ -452,6 +452,102 @@ describe('Auto-relate on store (keyword overlap)', () => {
     expect(extends_[0].reason).toContain('shared keywords');
   });
 
+  it('infers uses relation from English verb patterns', async () => {
+    const sqlite = await engine.store(
+      makeInput({
+        content: 'SQLite stores local queue data for durable jobs',
+        keywords: ['sqlite', 'queue', 'durable'],
+      }),
+    );
+    const usage = await engine.store(
+      makeInput({
+        content: 'MemRosetta uses SQLite for durable queue storage',
+        keywords: ['memrosetta', 'sqlite', 'queue', 'durable'],
+      }),
+    );
+
+    const relations = await engine.getRelations(usage.memoryId);
+    expect(relations).toContainEqual(
+      expect.objectContaining({
+        srcMemoryId: usage.memoryId,
+        dstMemoryId: sqlite.memoryId,
+        relationType: 'uses',
+      }),
+    );
+  });
+
+  it('infers decided relation before generic uses', async () => {
+    const sqlite = await engine.store(
+      makeInput({
+        content: 'SQLite queue persistence proposal',
+        keywords: ['sqlite', 'queue', 'persistence'],
+      }),
+    );
+    const decision = await engine.store(
+      makeInput({
+        content: 'We decided to use SQLite for queue persistence',
+        keywords: ['sqlite', 'queue', 'persistence'],
+      }),
+    );
+
+    const relations = await engine.getRelations(decision.memoryId);
+    expect(relations).toContainEqual(
+      expect.objectContaining({
+        srcMemoryId: decision.memoryId,
+        dstMemoryId: sqlite.memoryId,
+        relationType: 'decided',
+      }),
+    );
+  });
+
+  it('infers prefers relation from Korean verb patterns', async () => {
+    const pnpm = await engine.store(
+      makeInput({
+        content: 'pnpm workspace package manager configuration',
+        keywords: ['pnpm', 'workspace', 'package-manager'],
+      }),
+    );
+    const preference = await engine.store(
+      makeInput({
+        content: 'memrosetta는 workspace 관리에 pnpm을 선호한다',
+        keywords: ['memrosetta', 'pnpm', 'workspace'],
+      }),
+    );
+
+    const relations = await engine.getRelations(preference.memoryId);
+    expect(relations).toContainEqual(
+      expect.objectContaining({
+        srcMemoryId: preference.memoryId,
+        dstMemoryId: pnpm.memoryId,
+        relationType: 'prefers',
+      }),
+    );
+  });
+
+  it('infers invalidates relation from Korean replacement patterns', async () => {
+    const oldQueue = await engine.store(
+      makeInput({
+        content: '기존 in-memory consolidation queue 방식',
+        keywords: ['consolidation', 'queue', 'memory'],
+      }),
+    );
+    const replacement = await engine.store(
+      makeInput({
+        content: 'SQLite 영속 큐가 기존 in-memory consolidation queue 방식을 대체한다',
+        keywords: ['consolidation', 'queue', 'memory', 'sqlite'],
+      }),
+    );
+
+    const relations = await engine.getRelations(replacement.memoryId);
+    expect(relations).toContainEqual(
+      expect.objectContaining({
+        srcMemoryId: replacement.memoryId,
+        dstMemoryId: oldQueue.memoryId,
+        relationType: 'invalidates',
+      }),
+    );
+  });
+
   it('does not auto-create relation for fewer than 2 shared keywords', async () => {
     const m1 = await engine.store(
       makeInput({

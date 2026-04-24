@@ -29,6 +29,7 @@ import {
   createRelationStatements,
   createRelation,
   getRelationsByMemory,
+  inferDeterministicRelation,
   type RelationStatements,
 } from './relations.js';
 import { rowToMemory, type MemoryRow } from './mapper.js';
@@ -37,6 +38,10 @@ import { computeActivation, computeEbbinghaus } from './activation.js';
 import { determineTier, estimateTokens } from './tiers.js';
 import { computeNoveltyScore } from './novelty.js';
 import { ConsolidationQueue, type ConsolidationJob } from './consolidation.js';
+import {
+  discoverReplayRelations,
+  type RelationDiscoveryCursor,
+} from './replay.js';
 import {
   reconstructRecall as reconstructRecallInternal,
   RecallHookRegistry,
@@ -92,6 +97,10 @@ export interface LayerBConfig {
    * semantics as NoveltyInput.similarityThreshold.
    */
   readonly noveltySimilarityThreshold?: number;
+  /** Recent replay window for relation discovery jobs. Default 7, max 30. */
+  readonly relationDiscoveryRecentDays?: number;
+  /** Minimum co-access count before replay can infer a relation. Default 2. */
+  readonly relationDiscoveryCoAccessThreshold?: number;
 }
 
 export interface SqliteEngineOptions {
@@ -106,11 +115,20 @@ export interface ConsolidationRunResult {
   readonly failed: number;
   readonly retried: number;
   readonly jobs: readonly ConsolidationJob[];
+  readonly orphanRecent: number;
+  readonly orphanRatio: number;
 }
 
 interface AutoRelateCandidateRow {
   readonly memory_id: string;
   readonly keywords: string | null;
+}
+
+interface RelationDiscoveryJobPayload extends Record<string, unknown> {
+  readonly recentDays?: number;
+  readonly threshold?: number;
+  readonly maxPairs?: number;
+  readonly cursor?: RelationDiscoveryCursor;
 }
 
 export class SqliteMemoryEngine implements IMemoryEngine {
@@ -161,6 +179,9 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     this.relStmts = createRelationStatements(this.db);
     this.constructStmts = createConstructStatements(this.db);
     this.consolidation.attach(this.db);
+    this.consolidation.register('relation_discovery', async (_db, job) => {
+      this.runRelationDiscoveryJob(job as ConsolidationJob<RelationDiscoveryJobPayload>);
+    });
   }
 
   async close(): Promise<void> {
@@ -629,6 +650,8 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     let retried = 0;
     const jobs: ConsolidationJob[] = [];
 
+    this.enqueueRelationDiscoveryJob(userId);
+
     while (processed < limit) {
       const job =
         (await this.consolidation.runNext(db, 'abstraction', { userId, maxAttempts })) ??
@@ -642,7 +665,97 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       else if (job.status === 'pending') retried++;
     }
 
-    return { processed, done, failed, retried, jobs };
+    const orphanMetrics = this.computeRecentOrphanMetrics(userId);
+    return { processed, done, failed, retried, jobs, ...orphanMetrics };
+  }
+
+  private enqueueRelationDiscoveryJob(
+    userId: string,
+    payload: RelationDiscoveryJobPayload = this.defaultRelationDiscoveryPayload(),
+  ): void {
+    if (!this.options.layerB?.enableConsolidation) return;
+
+    const cursor = payload.cursor;
+    const cursorKey = cursor
+      ? `${cursor.coAccessCount}:${cursor.memoryAId}:${cursor.memoryBId}`
+      : 'default';
+    this.consolidation.enqueue({
+      userId,
+      kind: 'relation_discovery',
+      dedupKey: `relation_discovery:${userId}:${cursorKey}`,
+      payload,
+    });
+  }
+
+  private runRelationDiscoveryJob(
+    job: ConsolidationJob<RelationDiscoveryJobPayload>,
+  ): void {
+    const payload = {
+      ...this.defaultRelationDiscoveryPayload(),
+      ...job.payload,
+    };
+    const result = discoverReplayRelations(this.db!, {
+      userId: job.userId,
+      recentDays: payload.recentDays,
+      coAccessThreshold: payload.threshold,
+      maxPairs: payload.maxPairs,
+      cursor: payload.cursor,
+    });
+
+    if (result.nextCursor) {
+      this.enqueueRelationDiscoveryJob(job.userId, {
+        ...payload,
+        cursor: result.nextCursor,
+      });
+    }
+  }
+
+  private defaultRelationDiscoveryPayload(): RelationDiscoveryJobPayload {
+    const layerB = this.options.layerB;
+    return {
+      recentDays: clampInt(layerB?.relationDiscoveryRecentDays ?? 7, 1, 30),
+      threshold: Math.max(
+        1,
+        Math.floor(layerB?.relationDiscoveryCoAccessThreshold ?? 2),
+      ),
+      maxPairs: 100,
+    };
+  }
+
+  private computeRecentOrphanMetrics(userId: string): {
+    readonly orphanRecent: number;
+    readonly orphanRatio: number;
+  } {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const total = (
+      this.db!.prepare(
+        `SELECT COUNT(*) AS count
+         FROM memories
+         WHERE user_id = ?
+           AND learned_at >= ?
+           AND invalidated_at IS NULL`,
+      ).get(userId, cutoff) as { count: number }
+    ).count;
+    const orphanRecent = (
+      this.db!.prepare(
+        `SELECT COUNT(*) AS count
+         FROM memories m
+         WHERE m.user_id = ?
+           AND m.learned_at >= ?
+           AND m.invalidated_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1
+             FROM memory_relations r
+             WHERE r.src_memory_id = m.memory_id
+                OR r.dst_memory_id = m.memory_id
+           )`,
+      ).get(userId, cutoff) as { count: number }
+    ).count;
+
+    return {
+      orphanRecent,
+      orphanRatio: total === 0 ? 0 : orphanRecent / total,
+    };
   }
 
   /**
@@ -986,6 +1099,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
 
     try {
       const keywordList = newMemory.keywords.map((keyword) => keyword.toLowerCase());
+      const inferredAutoRelation = inferDeterministicRelation(newMemory.content);
 
       const existing = newMemory.namespace
         ? this.db!.prepare(`
@@ -1023,11 +1137,15 @@ export class SqliteMemoryEngine implements IMemoryEngine {
           if (existingRelation) continue;
 
           try {
+            const relationType = inferredAutoRelation?.relationType ?? 'extends';
+            const reason = inferredAutoRelation
+              ? `${inferredAutoRelation.reason}; ${overlap.length} shared keywords (${overlap.join(', ')})`
+              : `Auto: ${overlap.length} shared keywords (${overlap.join(', ')})`;
             await this.relate(
               newMemory.memoryId,
               row.memory_id,
-              'extends',
-              `Auto: ${overlap.length} shared keywords (${overlap.join(', ')})`,
+              relationType,
+              reason,
             );
           } catch {
             // Relation may already exist
@@ -1124,4 +1242,9 @@ function indexBackfillCues(
   }
 
   return count;
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  const n = Number.isFinite(value) ? Math.floor(value) : min;
+  return Math.max(min, Math.min(max, n));
 }

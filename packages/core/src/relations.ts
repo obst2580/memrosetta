@@ -10,6 +10,65 @@ export interface RelationStatements {
   readonly getRelationsByMemory: Database.Statement;
 }
 
+export interface DeterministicRelationInference {
+  readonly relationType: RelationType;
+  readonly reason: string;
+}
+
+const DETERMINISTIC_RELATION_RULES: readonly {
+  readonly relationType: RelationType;
+  readonly label: string;
+  readonly patterns: readonly RegExp[];
+}[] = [
+  {
+    relationType: 'invalidates',
+    label: 'invalidates',
+    patterns: [
+      /\b(invalidates?|replaces?|supersedes?|deprecates?|cancels?|cancelled|canceled|retires?|removes?|drops?)\b/u,
+      /\bno longer\b/u,
+      /(무효|폐기|취소|대체|철회|더 이상|사용하지 않|중단)/u,
+    ],
+  },
+  {
+    relationType: 'decided',
+    label: 'decided',
+    patterns: [
+      /\b(decided|decision|settled on|chose|chosen|adopted|agreed to|we will|will use)\b/u,
+      /(결정|하기로|채택|합의|정했다|정함)/u,
+    ],
+  },
+  {
+    relationType: 'prefers',
+    label: 'prefers',
+    patterns: [
+      /\b(prefers?|preferred|favor(?:s|ed)?|rather than|default to)\b/u,
+      /(선호|우선|prefer)/u,
+    ],
+  },
+  {
+    relationType: 'uses',
+    label: 'uses',
+    patterns: [
+      /\b(uses?|using|built with|powered by|depends on|integrates? with|based on|leverages?)\b/u,
+      /(사용|활용|쓴다|쓰고|기반|연동|의존)/u,
+    ],
+  },
+];
+
+export function inferDeterministicRelation(
+  content: string,
+): DeterministicRelationInference | null {
+  const normalized = content.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+  const rule = DETERMINISTIC_RELATION_RULES.find((candidate) =>
+    candidate.patterns.some((pattern) => pattern.test(normalized)),
+  );
+  if (!rule) return null;
+  return {
+    relationType: rule.relationType,
+    reason: `Auto: deterministic ${rule.label} verb pattern`,
+  };
+}
+
 export function createRelationStatements(db: Database.Database): RelationStatements {
   return {
     insertRelation: db.prepare(`

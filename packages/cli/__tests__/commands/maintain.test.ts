@@ -229,6 +229,8 @@ describe('maintain command', () => {
         done: 1,
         failed: 1,
         retried: 0,
+        orphanRecent: 3,
+        orphanRatio: 0.25,
         jobs: [],
       });
 
@@ -247,6 +249,29 @@ describe('maintain command', () => {
       expect(parsed.processed).toBe(2);
       expect(parsed.done).toBe(1);
       expect(parsed.failed).toBe(1);
+      expect(parsed.orphan_recent).toBe(3);
+      expect(parsed.orphan_ratio).toBe(0.25);
+    });
+
+    it('prints orphan metrics in text output', async () => {
+      mockRunConsolidation.mockResolvedValue({
+        processed: 0,
+        done: 0,
+        failed: 0,
+        retried: 0,
+        orphanRecent: 2,
+        orphanRatio: 0.5,
+        jobs: [],
+      });
+
+      await run({
+        args: ['--consolidate', '--user', 'obst'],
+        format: 'text',
+        noEmbeddings: true,
+      });
+
+      expect(stdoutSpy).toHaveBeenCalledWith('  Orphan recent:  2\n');
+      expect(stdoutSpy).toHaveBeenCalledWith('  Orphan ratio:   0.500\n');
     });
   });
 });

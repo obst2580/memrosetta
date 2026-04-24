@@ -1,4 +1,14 @@
-export type RelationType = 'updates' | 'extends' | 'derives' | 'contradicts' | 'supports' | 'duplicates';
+export type RelationType =
+  | 'updates'
+  | 'extends'
+  | 'derives'
+  | 'contradicts'
+  | 'supports'
+  | 'duplicates'
+  | 'uses'
+  | 'prefers'
+  | 'decided'
+  | 'invalidates';
 
 export interface MemoryRelation {
   readonly srcMemoryId: string;
