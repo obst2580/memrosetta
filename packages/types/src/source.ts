@@ -11,6 +11,7 @@ export const WELL_KNOWN_SOURCE_KINDS = [
   'mcp',
   'rest-api',
   'external',
+  'induction',
 ] as const;
 
 export type WellKnownSourceKind = (typeof WELL_KNOWN_SOURCE_KINDS)[number];

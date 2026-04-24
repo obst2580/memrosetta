@@ -134,6 +134,16 @@ export type {
 export { computeNoveltyScore } from './novelty.js';
 export type { NoveltyInput } from './novelty.js';
 export {
+  extractVerbObjectPattern,
+  findPrototypeCandidates,
+  runPrototypeInduction,
+} from './induction.js';
+export type {
+  PrototypeCandidate,
+  PrototypeInductionOptions,
+  PrototypeInductionResult,
+} from './induction.js';
+export {
   classifyAsExemplar,
   applyPatternSeparationOutcomes,
 } from './pattern-separation.js';

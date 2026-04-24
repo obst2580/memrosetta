@@ -75,6 +75,20 @@ describe('Persistent ConsolidationQueue', () => {
     expect(pending[0].kind).toBe('relation_discovery');
   });
 
+  it('persists prototype_induction jobs in the abstraction queue', () => {
+    const q = new ConsolidationQueue(db);
+    q.enqueue({
+      userId: 'u1',
+      kind: 'prototype_induction',
+      dedupKey: 'prototype_induction:u1',
+      payload: { minClusterSize: 5 },
+    });
+
+    const pending = q.pending('abstraction');
+    expect(pending).toHaveLength(1);
+    expect(pending[0].kind).toBe('prototype_induction');
+  });
+
   it('retries failed jobs up to max attempts', async () => {
     const q = new ConsolidationQueue(db);
     q.register('gist_refinement', async () => {

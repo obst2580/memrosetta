@@ -43,6 +43,7 @@ import {
   discoverReplayRelations,
   type RelationDiscoveryCursor,
 } from './replay.js';
+import { findPrototypeCandidates, runPrototypeInduction } from './induction.js';
 import {
   reconstructRecall as reconstructRecallInternal,
   RecallHookRegistry,
@@ -132,6 +133,12 @@ interface RelationDiscoveryJobPayload extends Record<string, unknown> {
   readonly cursor?: RelationDiscoveryCursor;
 }
 
+interface PrototypeInductionJobPayload extends Record<string, unknown> {
+  readonly minClusterSize?: number;
+  readonly agreementThreshold?: number;
+  readonly maxPrototypes?: number;
+}
+
 export class SqliteMemoryEngine implements IMemoryEngine {
   private db: Database.Database | null = null;
   private stmts: PreparedStatements | null = null;
@@ -182,6 +189,9 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     this.consolidation.attach(this.db);
     this.consolidation.register('relation_discovery', async (_db, job) => {
       this.runRelationDiscoveryJob(job as ConsolidationJob<RelationDiscoveryJobPayload>);
+    });
+    this.consolidation.register('prototype_induction', async (_db, job) => {
+      this.runPrototypeInductionJob(job as ConsolidationJob<PrototypeInductionJobPayload>);
     });
   }
 
@@ -660,6 +670,7 @@ export class SqliteMemoryEngine implements IMemoryEngine {
     let retried = 0;
     const jobs: ConsolidationJob[] = [];
 
+    this.enqueuePrototypeInductionJob(userId);
     this.enqueueRelationDiscoveryJob(userId);
 
     while (processed < limit) {
@@ -695,6 +706,38 @@ export class SqliteMemoryEngine implements IMemoryEngine {
       dedupKey: `relation_discovery:${userId}:${cursorKey}`,
       payload,
     });
+  }
+
+  private enqueuePrototypeInductionJob(
+    userId: string,
+    payload: PrototypeInductionJobPayload = this.defaultPrototypeInductionPayload(),
+  ): void {
+    if (!this.options.layerB?.enableConsolidation) return;
+    if (findPrototypeCandidates(this.db!, { userId, ...payload }).length === 0) return;
+    this.consolidation.enqueue({
+      userId,
+      kind: 'prototype_induction',
+      dedupKey: `prototype_induction:${userId}`,
+      payload,
+    });
+  }
+
+  private runPrototypeInductionJob(
+    job: ConsolidationJob<PrototypeInductionJobPayload>,
+  ): void {
+    runPrototypeInduction(this.db!, this.stmts!, this.relStmts!, {
+      userId: job.userId,
+      ...this.defaultPrototypeInductionPayload(),
+      ...job.payload,
+    });
+  }
+
+  private defaultPrototypeInductionPayload(): PrototypeInductionJobPayload {
+    return {
+      minClusterSize: 5,
+      agreementThreshold: 0.8,
+      maxPrototypes: 5,
+    };
   }
 
   private runRelationDiscoveryJob(
