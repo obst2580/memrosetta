@@ -29,6 +29,7 @@ import {
   reinforceEpisodicCue,
   type HippocampalStatements,
 } from './hippocampal.js';
+import { resolveStoreSalience } from './salience.js';
 
 export interface PreparedStatements {
   readonly insertMemory: Database.Statement;
@@ -168,6 +169,7 @@ export function storeMemory(
   const learnedAt = nowIso();
   const keywords = keywordsToString(input.keywords);
   const axes = resolveMemoryAxes(input);
+  const salience = resolveStoreSalience(input);
 
   // Atomic: memory row, source attestations, and episodic binding must
   // persist together so the audit trail cannot diverge if the process
@@ -184,7 +186,7 @@ export function storeMemory(
       learnedAt,
       input.sourceId ?? null,
       input.confidence ?? 1.0,
-      input.salience ?? 1.0,
+      salience,
       1, // is_latest
       keywords,
       input.eventDateStart ?? null,
