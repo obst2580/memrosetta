@@ -25,11 +25,33 @@ function getDefaultUserId(): string {
 // Input validation schemas
 // ---------------------------------------------------------------------------
 
+/**
+ * Coerce keywords input into a string array.
+ *
+ * Some MCP clients (notably ones that flatten tool arguments through JSON
+ * pipelines that don't preserve array shape) deliver `keywords` as a single
+ * string -- comma-, semicolon-, or whitespace-separated -- instead of the
+ * declared array. Reject those silently and the user just sees an opaque
+ * "Expected array, received string" zod error. Coerce instead so calls
+ * succeed regardless of which serialization the client picked.
+ */
+function coerceKeywords(value: unknown): unknown {
+  if (value === undefined || value === null) return value;
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    return value
+      .split(/[,;\n]+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+  }
+  return value;
+}
+
 const storeSchema = z.object({
   userId: z.string().min(1).max(256).optional(),
   content: z.string().min(1).max(10_000),
   memoryType: z.enum(['fact', 'preference', 'decision', 'event']),
-  keywords: z.array(z.string().max(100)).max(50).optional(),
+  keywords: z.preprocess(coerceKeywords, z.array(z.string().max(100)).max(50).optional()),
   namespace: z.string().max(256).optional(),
   confidence: z.number().min(0).max(1).optional(),
   source_kind: z.string().min(1).max(100).optional(),
@@ -177,9 +199,16 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
           description: 'Type of memory',
         },
         keywords: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Search keywords',
+          oneOf: [
+            { type: 'array', items: { type: 'string' } },
+            {
+              type: 'string',
+              description:
+                'Comma- or semicolon-separated keywords (auto-split server-side).',
+            },
+          ],
+          description:
+            'Search keywords. Prefer an array of strings; a single string with comma/semicolon separators is also accepted for clients that flatten arrays.',
         },
         namespace: {
           type: 'string',

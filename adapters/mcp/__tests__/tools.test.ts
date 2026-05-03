@@ -248,6 +248,51 @@ describe('MCP tools', () => {
         });
       });
 
+      it('coerces comma-separated keywords string to array', async () => {
+        await handleToolCall(engine, 'memrosetta_store', {
+          userId: 'user-1',
+          content: 'Test memory from string keywords',
+          memoryType: 'fact',
+          keywords: 'typescript, javascript, ; node\nrust',
+        });
+
+        expect(engine.store).toHaveBeenCalledWith(
+          expect.objectContaining({
+            keywords: ['typescript', 'javascript', 'node', 'rust'],
+          }),
+        );
+      });
+
+      it('preserves array keywords without coercion', async () => {
+        await handleToolCall(engine, 'memrosetta_store', {
+          userId: 'user-1',
+          content: 'Test memory with array keywords',
+          memoryType: 'fact',
+          keywords: ['alpha', 'beta'],
+        });
+
+        expect(engine.store).toHaveBeenCalledWith(
+          expect.objectContaining({
+            keywords: ['alpha', 'beta'],
+          }),
+        );
+      });
+
+      it('treats empty keywords string as no keywords', async () => {
+        await handleToolCall(engine, 'memrosetta_store', {
+          userId: 'user-1',
+          content: 'Test memory with empty keywords string',
+          memoryType: 'fact',
+          keywords: '   ',
+        });
+
+        expect(engine.store).toHaveBeenCalledWith(
+          expect.objectContaining({
+            keywords: [],
+          }),
+        );
+      });
+
       it('preserves explicit source_kind over MCP default', async () => {
         await handleToolCall(engine, 'memrosetta_store', {
           userId: 'user-1',
