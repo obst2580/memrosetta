@@ -338,7 +338,29 @@ separation / completion.
 
 **Memory Tiers** -- Hot (working memory, ~3K tokens), Warm (last 30 days), Cold (compressed long-term).
 
-**Relations** -- `updates`, `extends`, `derives`, `contradicts`, `supports`. Memories form a graph, not a flat list.
+**Relations** -- `updates`, `extends`, `derives`, `contradicts`, `supports`,
+plus deterministic verb-pattern relations (`uses`, `prefers`, `decided`,
+`invalidates`) inferred at store time without an LLM (v0.13+). Each edge
+records why it was created in `memory_relations.reason`.
+
+**Background Consolidation (v0.13+)** -- SQLite-backed `consolidation_jobs`
+queue. `memrosetta maintain --consolidate` runs replay-based relation
+discovery (deterministic only) and minimum-viable prototype induction over
+recent memories, with orphan and ratio metrics surfaced in the output.
+Gated by `layerB.enableConsolidation`.
+
+**Context-Aware Retrieval (v0.13+)** -- Stores capture a deterministic
+context signature (namespace + recent keywords + episode + time bucket).
+Search optionally takes a `currentContext` and gives matching contexts a
+small Jaccard-similarity boost. No embeddings.
+
+**Source Provenance (v0.13+)** -- Standardized `WELL_KNOWN_SOURCE_KINDS`
+auto-injected by MCP server (`mcp`) and CLI (`cli`). `--include-source`
+exposes attestation in retrieval output.
+
+**Auto Salience (v0.13+)** -- Heuristic salience score from role-aware
+keywords + length penalty when the caller does not supply one
+(range 0.5–2.0).
 
 **Time Model** -- Four timestamps: `learnedAt`, `documentDate`, `eventDateStart/End`, `invalidatedAt`.
 
@@ -797,6 +819,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 - [x] **Hugging Face removal — Core is 100% LLM-free + offline, 1.5 GB → 30 MB install** (v0.11.0)
 - [x] Recall self-healing empty episodic layer (v0.12.0)
 - [x] Status readiness scoring with user-scoped counts (v0.12.1 – v0.12.2)
+- [x] **Persistent SQLite consolidation queue + `maintain --consolidate` (Layer B Item 9)** (v0.13.0)
+- [x] **Deterministic `autoRelate` with `uses` / `prefers` / `decided` / `invalidates` + `reason` column** (v0.13.0)
+- [x] **Replay-based relation discovery** (background job, deterministic-only) (v0.13.0)
+- [x] **Heuristic salience auto-estimation at store time** (v0.13.0)
+- [x] **Standardized source labels + `--include-source` on retrieval** (v0.13.0)
+- [x] **Deterministic context signature + retrieval boost** (v0.13.0)
+- [x] **Minimum-viable prototype induction (Layer B Item 11 first cut)** (v0.13.0)
+- [x] **Orphan metric in `maintain --consolidate`** (v0.13.0)
 - [ ] Sync server 1.0 (promotion from 0.1.x after production validation)
 - [ ] Profile builder (stable + dynamic user profiles)
 - [ ] Stable/volatile memory classification

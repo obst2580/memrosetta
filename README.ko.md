@@ -333,7 +333,28 @@ memrosetta maintain
 
 **기억 계층** -- Hot (작업 기억, ~3K 토큰), Warm (최근 30일), Cold (압축된 장기 기억).
 
-**관계** -- `updates`, `extends`, `derives`, `contradicts`, `supports`. 기억은 평면 목록이 아니라 그래프를 형성합니다.
+**관계** -- `updates`, `extends`, `derives`, `contradicts`, `supports`,
+그리고 LLM 호출 없이 저장 시점에 추론되는 verb-pattern 관계 `uses`,
+`prefers`, `decided`, `invalidates` (v0.13+). 각 edge는 어떤 추론 경로로
+만들어졌는지 `memory_relations.reason` 에 기록됩니다.
+
+**Background Consolidation (v0.13+)** -- SQLite 영속 `consolidation_jobs` 큐.
+`memrosetta maintain --consolidate` 가 replay 기반 relation discovery
+(deterministic only) 와 minimum-viable prototype induction 을 최근 메모리
+범위에서 실행합니다. orphan / orphan_ratio metric 도 같이 출력. 동작은
+`layerB.enableConsolidation` flag 로 게이트.
+
+**Context-Aware 검색 (v0.13+)** -- 저장 시 deterministic context signature
+(namespace + 최근 키워드 + episode + 시간 bucket) 캡처. 검색 시 옵션으로
+`currentContext` 를 받으면 일치 정도(Jaccard)에 비례한 작은 부스트 적용.
+임베딩 사용 안 함.
+
+**Source Provenance (v0.13+)** -- MCP server 와 CLI 가 well-known source
+kind (`mcp`, `cli`, `claude-code`, `codex` 등) 를 자동 주입합니다. 검색
+결과에 `--include-source` 로 출처 attestation 을 노출.
+
+**Auto Salience (v0.13+)** -- 호출자가 명시 안 했을 때 role-aware 키워드 +
+길이 패널티로 자동 salience 점수 (범위 0.5–2.0) 산출.
 
 **시간 모델** -- 4개 타임스탬프: `learnedAt`, `documentDate`, `eventDateStart/End`, `invalidatedAt`.
 
@@ -748,6 +769,14 @@ pnpm bench:mock        # 빠른 벤치마크 (LLM 불필요)
 - [x] **Hugging Face 제거 — 코어 100% LLM-free + 오프라인, 1.5 GB → 30 MB 설치** (v0.11.0)
 - [x] Recall self-healing empty episodic layer (v0.12.0)
 - [x] Status readiness 스코어링 + user-scoped 카운트 (v0.12.1 – v0.12.2)
+- [x] **SQLite 영속 consolidation 큐 + `maintain --consolidate` (Layer B Item 9)** (v0.13.0)
+- [x] **Deterministic `autoRelate`: `uses` / `prefers` / `decided` / `invalidates` + `reason` 컬럼** (v0.13.0)
+- [x] **Replay 기반 relation discovery (background job, deterministic-only)** (v0.13.0)
+- [x] **저장 시 휴리스틱 salience 자동 추정** (v0.13.0)
+- [x] **표준화된 source label + 검색 결과 `--include-source` 노출** (v0.13.0)
+- [x] **Deterministic context signature + 검색 부스트** (v0.13.0)
+- [x] **최소 동작 prototype induction (Layer B Item 11 1차)** (v0.13.0)
+- [x] **`maintain --consolidate` 결과에 orphan metric** (v0.13.0)
 - [ ] Sync server 1.0 (프로덕션 검증 후 0.1.x → 1.0 승격)
 - [ ] 프로필 빌더 (stable + dynamic 사용자 프로필)
 - [ ] Stable/volatile 기억 분류

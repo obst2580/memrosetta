@@ -344,6 +344,30 @@ memrosetta maintain`,
             'The hippocampal layer stores bindings rather than raw chunks. `memrosetta recall` (CLI) and `memrosetta_reconstruct_recall` (MCP) return an episode + gist reassembled on demand -- modeled on pattern separation / pattern completion in the human brain.',
         },
         {
+          badge: 'v0.13',
+          title: 'Background Consolidation Queue',
+          description:
+            'SQLite-backed `consolidation_jobs` survives restarts. `memrosetta maintain --consolidate` runs deterministic replay-based relation discovery and minimum-viable prototype induction over recent memories, plus orphan ratio metrics. Layer B Items 9 + 11 first cut.',
+        },
+        {
+          badge: 'v0.13',
+          title: 'Deterministic autoRelate + Verb Patterns',
+          description:
+            'Four new relation types — `uses`, `prefers`, `decided`, `invalidates` — inferred at store time from verb patterns. Zero LLM calls. Each edge records its inference path in `memory_relations.reason`. Replay job uses this same deterministic helper to discover missing edges between co-accessed memories.',
+        },
+        {
+          badge: 'v0.13',
+          title: 'Context-Aware Retrieval + Auto Salience',
+          description:
+            'Stores capture a deterministic context signature (namespace + recent keywords + episode + time bucket); search optionally takes a `currentContext` and gives matching contexts a Jaccard boost (no embeddings). When the caller omits `salience`, a role-aware heuristic estimates it from keywords and length.',
+        },
+        {
+          badge: 'v0.13',
+          title: 'Source Provenance + `--include-source`',
+          description:
+            'Standardized well-known source kinds (`claude-code`, `codex`, `cursor`, `cli`, `mcp`, …) auto-injected by the MCP server and CLI. Search exposes attestation lists via `includeSource` (MCP) or `--include-source` (CLI).',
+        },
+        {
           title: 'Adaptive Forgetting',
           description:
             'Based on the ACT-R cognitive architecture. Activation = sigmoid(ln(sum(t_j^-0.5)) + salience). Frequently accessed memories keep high activation. Unused memories decay over time but are never deleted -- they just rank lower in search results.',
@@ -862,6 +886,30 @@ memrosetta maintain`,
           title: '재구성 회상 (Reconstructive Recall)',
           description:
             '해마(hippocampal) 레이어가 원시 청크 대신 binding 을 저장합니다. `memrosetta recall` (CLI) 과 `memrosetta_reconstruct_recall` (MCP) 이 필요할 때 episode + gist 를 재조립해서 반환합니다 — 인간 뇌의 패턴 분리/완성을 모델링한 구조.',
+        },
+        {
+          badge: 'v0.13',
+          title: 'Background Consolidation 큐',
+          description:
+            'SQLite 영속 `consolidation_jobs` 가 재시작 후에도 살아남습니다. `memrosetta maintain --consolidate` 가 deterministic replay 기반 relation discovery 와 minimum-viable prototype induction 을 최근 메모리 범위에서 실행하고 orphan 비율 metric 도 출력합니다. Layer B Item 9 + 11 1차.',
+        },
+        {
+          badge: 'v0.13',
+          title: 'Deterministic autoRelate + Verb Pattern',
+          description:
+            '저장 시 verb pattern 으로부터 4가지 신규 관계 — `uses`, `prefers`, `decided`, `invalidates` — 추론. LLM 호출 0회. 각 edge 의 추론 경로는 `memory_relations.reason` 에 기록. Replay job 도 같은 deterministic helper 로 co-access 된 메모리 사이의 누락 edge 를 발견.',
+        },
+        {
+          badge: 'v0.13',
+          title: 'Context-Aware 검색 + Auto Salience',
+          description:
+            '저장 시 deterministic context signature (namespace + 최근 키워드 + episode + 시간 bucket) 캡처. 검색 시 옵션 `currentContext` 입력하면 일치 정도(Jaccard) 부스트 (임베딩 사용 안 함). 호출자가 `salience` 생략하면 role-aware 휴리스틱이 키워드 + 길이 기반으로 자동 추정.',
+        },
+        {
+          badge: 'v0.13',
+          title: 'Source Provenance + `--include-source`',
+          description:
+            '표준화된 well-known source kind (`claude-code`, `codex`, `cursor`, `cli`, `mcp`, …) 를 MCP 서버와 CLI 가 자동 주입. `includeSource` (MCP) 또는 `--include-source` (CLI) 로 검색 결과에 attestation 노출.',
         },
         {
           title: '적응형 망각',
