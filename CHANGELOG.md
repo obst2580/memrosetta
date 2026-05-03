@@ -2,6 +2,93 @@
 
 All notable changes to MemRosetta will be documented in this file.
 
+## [0.13.0] - 2026-04-24
+
+**Layer B Items 9 & 11 + brain-inspired upgrades.**
+
+A batch of brain-inspired retrieval and consolidation features land on top of
+v0.12.x's reconstructive-recall kernel, plus a defensive MCP fix for clients
+that flatten array arguments into strings.
+
+### Added
+
+- **Persistent consolidation queue (Layer B Item 9).** `ConsolidationQueue`
+  was rewritten from in-memory `Map` to durable SQLite (`consolidation_jobs`
+  table + migration). Dedupe by `(user, kind, payload digest)`, retry with
+  attempts cap, and the new `memrosetta maintain --consolidate` flag drains
+  pending jobs. Existing `layerB.enableConsolidation` flag still gates
+  enqueue.
+- **Deterministic `autoRelate` strengthening.** New relation types
+  (`uses`, `prefers`, `decided`, `invalidates`) and a verb-pattern
+  inference helper that runs on every store. LLM-free: regex + lemma
+  lookup. Falls back to `extends` when no verb pattern matches. New
+  `reason` column on `memory_relations` records which inference path
+  created the edge.
+- **Replay-based relation discovery.** New `consolidation_jobs` kind
+  `relation_discovery`. `maintain --consolidate` enqueues a job that
+  scans recent (default 7 days) episode pairs, finds memories with
+  high co-access count and no explicit relation, and runs `autoRelate`
+  (deterministic helper only). Caps at 100 pair operations per job.
+- **Orphan metric.** `maintain --consolidate` now reports
+  `orphan_recent` (last 7 days, relation-less) and `orphan_ratio`.
+- **Heuristic salience auto-estimation.** `packages/core/src/salience.ts`
+  computes a deterministic salience score at store time from role-aware
+  keywords (`decision`, `error`, `blocked`, `critical`, `fixed`,
+  `broke`, `important`), `memoryType`, and a length penalty for
+  log-style content. Range `[0.5, 2.0]`. Caller-supplied `salience`
+  always wins.
+- **Standardized source labels.** `WELL_KNOWN_SOURCE_KINDS` constant
+  (`claude-code`, `codex`, `cursor`, `gemini`, `windsurf`, `cline`,
+  `continue`, `claude-desktop`, `cli`, `mcp`, `rest-api`, `external`,
+  `induction`). MCP server auto-injects `mcp` and CLI auto-injects
+  `cli` when the caller does not specify. DB CHECK is intentionally
+  not tightened so existing free-form values still pass.
+- **`memrosetta_search` — `includeSource` option** (MCP) and
+  **`memrosetta search --include-source`** (CLI) expose the source
+  list alongside results.
+- **Deterministic context signature + retrieval boost.** New
+  `memories.context_signature` column (migration). Captures namespace,
+  recent keyword union, episode id, and a coarse time-bucket at store
+  time. `SearchInput.currentContext` is optional; when provided,
+  ranking receives a small Jaccard-similarity boost (0.05–0.15). No
+  embeddings introduced.
+- **Minimum-viable prototype induction (Layer B Item 11 first cut).**
+  New `consolidation_jobs` kind `prototype_induction`. Clusters recent
+  `preference` + `decision` memories by shared keyword, extracts the
+  common verb/object pattern, and emits a low-salience prototype
+  memory with `derived` relations back to its exemplars (`reason:
+  induction_prototype`). Caps at 5 prototypes per run, dedupes by
+  cluster signature. Anti-pattern collection deferred.
+
+### Fixed
+
+- **MCP `keywords` accepts string or array.** Some MCP clients flatten
+  tool arguments through JSON pipelines that destroy array shape, so
+  `keywords` arrived as a comma- or semicolon-separated string and the
+  server returned an opaque "Expected array, received string" zod
+  error. `storeSchema` now uses `z.preprocess` to split string input
+  on `,`, `;`, or `\n` (whitespace-trimmed, empty tokens dropped) and
+  pass arrays through unchanged. JSON tool definition advertises both
+  shapes via `oneOf`.
+
+### Documentation
+
+- README + landing copy was earlier resynced with v0.12.x reality
+  (HF removal, `reconstruct_recall`, MCP tool count 6 → 8) and remains
+  current.
+- Project guidance: analysis, comparison studies, and session reviews
+  live in the Obsidian vault at
+  `/Users/obst2580/Documents/obst/개인프로젝트/memrosetta/`, not in
+  repo `docs/` or `/tmp`. See `AGENTS.md` and `CLAUDE.md`.
+
+### Versions bumped
+
+- `@memrosetta/types` 0.12.0 → 0.13.0
+- `@memrosetta/core` 0.12.0 → 0.13.0
+- `@memrosetta/mcp` 0.12.0 → 0.13.0
+- `@memrosetta/cli` 0.12.2 → 0.13.0
+- `memrosetta` 0.12.2 → 0.13.0
+
 ## [0.12.2] - 2026-04-17
 
 **Fix: `status` now scopes to the current user, matching `recall` and `maintain`.**

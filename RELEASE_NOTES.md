@@ -5,6 +5,57 @@ For the full machine-readable history see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## v0.13.0 — 2026-04-24
+
+**Layer B Items 9 & 11 + brain-inspired retrieval upgrades.**
+
+### What's new
+
+- **Persistent consolidation queue.** SQLite-backed `consolidation_jobs`
+  survives restarts; new `memrosetta maintain --consolidate` drains
+  pending jobs. Gated by `layerB.enableConsolidation`.
+- **Smarter `autoRelate`.** Four new relation types (`uses`, `prefers`,
+  `decided`, `invalidates`) created deterministically from verb
+  patterns. `memory_relations.reason` now records the inference path.
+  Zero LLM calls.
+- **Replay-based relation discovery.** Background job scans recent
+  episodes, finds memory pairs with high co-access but no explicit
+  edge, and creates relations through the deterministic helper.
+- **Heuristic salience auto-estimation.** Stored memories without an
+  explicit `salience` get a deterministic score from role-aware
+  keywords + length penalty (range 0.5–2.0).
+- **Standardized source labels + `--include-source`.** Well-known
+  source kinds (`claude-code`, `codex`, `cursor`, `cli`, `mcp`, …)
+  with auto-injection from the MCP server and CLI. Search can now
+  return source attestations via `includeSource` (MCP) or
+  `--include-source` (CLI).
+- **Context-signature retrieval boost.** Stores capture a
+  deterministic context signature (namespace + recent keyword union +
+  episode + time bucket) and search ranking gives matching contexts a
+  small Jaccard-similarity boost. No embeddings.
+- **Prototype induction (Layer B Item 11, first cut).** Background job
+  clusters preference/decision memories by shared keyword and emits a
+  low-salience prototype with `derived` links back to its exemplars.
+  Caps at 5 per run.
+- **Orphan metric** in `maintain --consolidate` output:
+  `orphan_recent`, `orphan_ratio`.
+
+### Fixed
+
+- MCP `memrosetta_store` now accepts `keywords` as either an array or
+  a comma/semicolon/newline-separated string (clients that flatten
+  arrays through JSON no longer hit a zod error).
+
+### Versions
+
+- `memrosetta` 0.12.2 → 0.13.0
+- `@memrosetta/cli` 0.12.2 → 0.13.0
+- `@memrosetta/mcp` 0.12.0 → 0.13.0
+- `@memrosetta/core` 0.12.0 → 0.13.0
+- `@memrosetta/types` 0.12.0 → 0.13.0
+
+---
+
 ## v0.12.2 — 2026-04-17
 
 **Fix: `status` scope now matches the rest of the CLI.**
